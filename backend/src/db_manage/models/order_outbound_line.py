@@ -74,6 +74,12 @@ class OrderOutboundLineModel(BaseModel):
                 "not_null": False,
                 "default": None,
             },
+            # 1=创建待出库时已预扣减库存（手动添加场景）；出库确认时不再重复扣减
+            "stock_deducted": {
+                "type": "INTEGER",
+                "not_null": True,
+                "default": 0,
+            },
         }
 
     @classmethod
@@ -101,6 +107,7 @@ class OrderOutboundLineModel(BaseModel):
                 l.sort_index,
                 COALESCE(l.is_stocked_out, 0) AS is_stocked_out,
                 l.stocked_out_at,
+                COALESCE(l.stock_deducted, 0) AS stock_deducted,
                 p.name AS product_name,
                 p.barcode AS product_barcode,
                 p.sku AS product_sku,
@@ -127,6 +134,7 @@ class OrderOutboundLineModel(BaseModel):
             "sort_index",
             "is_stocked_out",
             "stocked_out_at",
+            "stock_deducted",
             "product_name",
             "product_barcode",
             "product_sku",

@@ -388,6 +388,7 @@ def sync_outbound_lines_for_order(order_no: str, description: Optional[str]) -> 
         if r.inventory_id is not None and str(r.inventory_id).strip() != ""
     }
     old_state = {}
+    old_manual_rows = []
     for r in old_rows:
         key = (
             str(r.line_kind or "").strip(),
@@ -398,23 +399,58 @@ def sync_outbound_lines_for_order(order_no: str, description: Optional[str]) -> 
         old_state[key] = (
             int(r.is_stocked_out or 0),
             int(r.stocked_out_at) if r.stocked_out_at is not None else None,
+            int(r.stock_deducted or 0),
         )
+        if str(r.line_kind or "").strip() == "manual":
+            old_manual_rows.append(r)
 
     OrderOutboundLineModel.delete_all("[order_no] = ?", (ono,))
     tokens = parse_order_description_outbound_tokens_with_quantity(description)
     if not tokens:
         if not _is_bundle_order_description(description):
-            refresh_inventory_pending_outbound_qty(list(old_inv_ids))
+            touched_inv_ids = set(old_inv_ids)
+            for idx, mr in enumerate(old_manual_rows):
+                line = OrderOutboundLineModel(
+                    order_no=ono,
+                    inventory_id=mr.inventory_id,
+                    management_id=str(mr.management_id or f"manual_{idx + 1}"),
+                    line_kind="manual",
+                    quantity=max(1, int(mr.quantity or 1)),
+                    sort_index=idx,
+                    is_stocked_out=int(mr.is_stocked_out or 0),
+                    stocked_out_at=mr.stocked_out_at,
+                    stock_deducted=int(mr.stock_deducted or 0),
+                )
+                line.save()
+                if mr.inventory_id is not None:
+                    touched_inv_ids.add(int(mr.inventory_id))
+            refresh_inventory_pending_outbound_qty(list(touched_inv_ids))
             return
         titles = _extract_bundle_product_titles(description)
         if not titles:
-            refresh_inventory_pending_outbound_qty(list(old_inv_ids))
+            touched_inv_ids = set(old_inv_ids)
+            for idx, mr in enumerate(old_manual_rows):
+                line = OrderOutboundLineModel(
+                    order_no=ono,
+                    inventory_id=mr.inventory_id,
+                    management_id=str(mr.management_id or f"manual_{idx + 1}"),
+                    line_kind="manual",
+                    quantity=max(1, int(mr.quantity or 1)),
+                    sort_index=idx,
+                    is_stocked_out=int(mr.is_stocked_out or 0),
+                    stocked_out_at=mr.stocked_out_at,
+                    stock_deducted=int(mr.stock_deducted or 0),
+                )
+                line.save()
+                if mr.inventory_id is not None:
+                    touched_inv_ids.add(int(mr.inventory_id))
+            refresh_inventory_pending_outbound_qty(list(touched_inv_ids))
             return
         touched_inv_ids = set(old_inv_ids)
         for idx, title in enumerate(titles):
             inv_id = _resolve_inventory_id_by_bundle_title(title)
             key = ("bundle_title", title, 1, idx)
-            stocked, stocked_at = old_state.get(key, (0, None))
+            stocked, stocked_at, deducted = old_state.get(key, (0, None, 0))
             line = OrderOutboundLineModel(
                 order_no=ono,
                 inventory_id=inv_id,
@@ -424,10 +460,27 @@ def sync_outbound_lines_for_order(order_no: str, description: Optional[str]) -> 
                 sort_index=idx,
                 is_stocked_out=stocked,
                 stocked_out_at=stocked_at,
+                stock_deducted=deducted,
             )
             line.save()
             if inv_id is not None:
                 touched_inv_ids.add(int(inv_id))
+        base_idx = len(titles)
+        for off, mr in enumerate(old_manual_rows):
+            line = OrderOutboundLineModel(
+                order_no=ono,
+                inventory_id=mr.inventory_id,
+                management_id=str(mr.management_id or f"manual_{off + 1}"),
+                line_kind="manual",
+                quantity=max(1, int(mr.quantity or 1)),
+                sort_index=base_idx + off,
+                is_stocked_out=int(mr.is_stocked_out or 0),
+                stocked_out_at=mr.stocked_out_at,
+                stock_deducted=int(mr.stock_deducted or 0),
+            )
+            line.save()
+            if mr.inventory_id is not None:
+                touched_inv_ids.add(int(mr.inventory_id))
         refresh_inventory_pending_outbound_qty(list(touched_inv_ids))
         return
 
@@ -437,7 +490,7 @@ def sync_outbound_lines_for_order(order_no: str, description: Optional[str]) -> 
             mid = int(val)
             exists = _inventory_id_exists(mid)
             key = ("mgmt_id", str(mid), max(1, int(qty or 1)), idx)
-            stocked, stocked_at = old_state.get(key, (0, None))
+            stocked, stocked_at, deducted = old_state.get(key, (0, None, 0))
             line = OrderOutboundLineModel(
                 order_no=ono,
                 inventory_id=mid if exists else None,
@@ -447,12 +500,13 @@ def sync_outbound_lines_for_order(order_no: str, description: Optional[str]) -> 
                 sort_index=idx,
                 is_stocked_out=stocked,
                 stocked_out_at=stocked_at,
+                stock_deducted=deducted,
             )
         else:
             bc = str(val).strip()
             inv_id = _inventory_id_by_barcode(bc)
             key = ("barcode", bc, max(1, int(qty or 1)), idx)
-            stocked, stocked_at = old_state.get(key, (0, None))
+            stocked, stocked_at, deducted = old_state.get(key, (0, None, 0))
             line = OrderOutboundLineModel(
                 order_no=ono,
                 inventory_id=inv_id,
@@ -462,10 +516,27 @@ def sync_outbound_lines_for_order(order_no: str, description: Optional[str]) -> 
                 sort_index=idx,
                 is_stocked_out=stocked,
                 stocked_out_at=stocked_at,
+                stock_deducted=deducted,
             )
         line.save()
         if line.inventory_id is not None:
             touched_inv_ids.add(int(line.inventory_id))
+    base_idx = len(tokens)
+    for off, mr in enumerate(old_manual_rows):
+        line = OrderOutboundLineModel(
+            order_no=ono,
+            inventory_id=mr.inventory_id,
+            management_id=str(mr.management_id or f"manual_{off + 1}"),
+            line_kind="manual",
+            quantity=max(1, int(mr.quantity or 1)),
+            sort_index=base_idx + off,
+            is_stocked_out=int(mr.is_stocked_out or 0),
+            stocked_out_at=mr.stocked_out_at,
+            stock_deducted=int(mr.stock_deducted or 0),
+        )
+        line.save()
+        if mr.inventory_id is not None:
+            touched_inv_ids.add(int(mr.inventory_id))
     refresh_inventory_pending_outbound_qty(list(touched_inv_ids))
 
 

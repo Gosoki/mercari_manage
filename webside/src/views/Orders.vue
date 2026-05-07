@@ -166,7 +166,16 @@
                   v-else
                   description="暂无出库明细（说明中无「管理ID:」「バーコード:」或尚未保存/同步）"
                   :image-size="64"
-                />
+                >
+                  <template #default>
+                    <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+                      <span>暂无出库明细（说明中无「管理ID:」「バーコード:」或尚未保存/同步）</span>
+                      <el-button size="small" type="primary" @click="openManualOutboundDialog(row)">
+                        手动添加出库
+                      </el-button>
+                    </div>
+                  </template>
+                </el-empty>
               </template>
             </div>
           </template>
@@ -420,6 +429,51 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="manualOutboundDialogVisible"
+      title="手动添加出库"
+      width="520px"
+      destroy-on-close
+    >
+      <el-form label-width="90px">
+        <el-form-item label="订单号">
+          <el-input :model-value="manualOutboundForm.order_no" disabled />
+        </el-form-item>
+        <el-form-item label="库存商品">
+          <el-select
+            v-model="manualOutboundForm.inventory_id"
+            filterable
+            clearable
+            style="width: 100%"
+            placeholder="请选择库存商品"
+            :loading="manualInventoryLoading"
+          >
+            <el-option
+              v-for="it in manualInventoryOptions"
+              :key="it.id"
+              :label="`${it.name || '-'}（库存:${Number(it.quantity || 0)}）`"
+              :value="it.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="数量">
+          <el-input-number
+            v-model="manualOutboundForm.quantity"
+            :min="1"
+            :precision="0"
+            :controls="false"
+            style="width:100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="manualOutboundDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="manualOutboundSaving" @click="submitManualOutbound">
+          确认添加
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -427,7 +481,7 @@
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { RefreshRight, Refresh } from '@element-plus/icons-vue'
-import { orderApi, mercariApi, meiluAccountApi } from '@/api/index.js'
+import { orderApi, mercariApi, meiluAccountApi, inventoryApi } from '@/api/index.js'
 import {
   localYmdToDayStartTs,
   localYmdToDayEndTs,
@@ -443,6 +497,15 @@ const submitting = ref(false)
 const refreshingId = ref(null)
 /** 二级列表：正在执行出库的明细键 order_no:line_id */
 const lineStockingKey = ref('')
+const manualOutboundDialogVisible = ref(false)
+const manualOutboundSaving = ref(false)
+const manualInventoryLoading = ref(false)
+const manualInventoryOptions = ref([])
+const manualOutboundForm = ref({
+  order_no: '',
+  inventory_id: null,
+  quantity: 1,
+})
 const stats = ref({
   total_count: 0,
   sum_amount: 0,
@@ -1000,6 +1063,49 @@ async function onOrderExpandChange(row, expandedRows) {
   }
 }
 
+async function openManualOutboundDialog(orderRow) {
+  const orderNo = String(orderRow?.order_no || '').trim()
+  if (!orderNo) return
+  manualOutboundForm.value = {
+    order_no: orderNo,
+    inventory_id: null,
+    quantity: 1,
+  }
+  manualOutboundDialogVisible.value = true
+  manualInventoryLoading.value = true
+  try {
+    const res = await inventoryApi.list({})
+    manualInventoryOptions.value = Array.isArray(res) ? res : []
+  } finally {
+    manualInventoryLoading.value = false
+  }
+}
+
+async function submitManualOutbound() {
+  const orderNo = String(manualOutboundForm.value.order_no || '').trim()
+  const inventoryId = Number(manualOutboundForm.value.inventory_id || 0)
+  const qty = Math.max(1, Number(manualOutboundForm.value.quantity || 1))
+  if (!orderNo) return
+  if (!inventoryId) {
+    ElMessage.warning('请选择库存商品')
+    return
+  }
+  manualOutboundSaving.value = true
+  try {
+    await orderApi.addManualOutboundLine({
+      order_no: orderNo,
+      inventory_id: inventoryId,
+      quantity: qty,
+    })
+    ElMessage.success('已添加手动出库明细')
+    manualOutboundDialogVisible.value = false
+    clearOutboundExpandCache(orderNo)
+    await load()
+  } finally {
+    manualOutboundSaving.value = false
+  }
+}
+
 async function stockOutLine(orderRow, line) {
   const orderNo = String(orderRow?.order_no || '').trim()
   const lineId = Number(line?.id || 0)
@@ -1014,7 +1120,10 @@ async function stockOutLine(orderRow, line) {
     if (cur?.loaded) {
       const nextRows = (cur.rows || []).map((r) => {
         if (Number(r.id) !== lineId) return r
-        const newStock = Math.max(0, Number(r.stock_quantity || 0) - Math.max(1, Number(r.quantity || 1)))
+        const deducted = Number(r.stock_deducted || 0) === 1
+        const newStock = deducted
+          ? Number(r.stock_quantity || 0)
+          : Math.max(0, Number(r.stock_quantity || 0) - Math.max(1, Number(r.quantity || 1)))
         return {
           ...r,
           is_stocked_out: 1,
