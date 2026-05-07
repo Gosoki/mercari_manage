@@ -37,8 +37,13 @@
         <el-input v-model="form.name" placeholder="请输入商品名" clearable />
       </el-form-item>
       <el-form-item label="商品类别">
-        <el-select v-model="form.category_id" clearable placeholder="请选择商品类别" style="width: 100%">
-          <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
+        <el-select v-model="form.category_mapping_id" clearable placeholder="请选择商品类别" style="width: 100%">
+          <el-option
+            v-for="m in categoryMappings"
+            :key="m.mapping_id"
+            :label="`${m.product_type || '-'} / ${m.mapping_id}`"
+            :value="m.mapping_id"
+          />
         </el-select>
       </el-form-item>
       <el-form-item label="商品状态">
@@ -88,7 +93,7 @@ import { ElMessage } from 'element-plus'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-  categories: { type: Array, default: () => [] },
+  categoryMappings: { type: Array, default: () => [] },
   initialData: { type: Object, default: null },
   isMobile: { type: Boolean, default: false }
 })
@@ -134,7 +139,7 @@ watch(
       ...getDefaultForm(),
       image: seed.image || '',
       name: seed.name || '',
-      category_id: seed.category_id ?? null,
+      category_mapping_id: seed.category_mapping_id ?? null,
       description: seed.description || ''
     }
   }
@@ -144,7 +149,7 @@ function getDefaultForm() {
   return {
     image: '',
     name: '',
-    category_id: null,
+    category_mapping_id: null,
     status: 'new_unused',
     description: '',
     shipping_payer: 'seller',

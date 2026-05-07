@@ -487,7 +487,7 @@
 
     <ListingFormDialog
       v-model="listingDialogVisible"
-      :categories="categories"
+      :category-mappings="listingCategoryMappings"
       :initial-data="listingSeedData"
       :is-mobile="isMobile"
     />
@@ -731,7 +731,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { inventoryApi, categoryApi, warehouseApi, productTypeApi, authApi, scanApi, ocrApi, transactionApi } from '@/api/index.js'
+import { inventoryApi, categoryApi, warehouseApi, productTypeApi, authApi, scanApi, ocrApi, transactionApi, productTypeCategoryMappingApi } from '@/api/index.js'
 import { warehouseShelfLabel } from '@/utils/warehouseLabel.js'
 import ListingFormDialog from '@/components/ListingFormDialog.vue'
 
@@ -766,6 +766,7 @@ const fileInputFront = ref()
 const fileInputBack = ref()
 const listingDialogVisible = ref(false)
 const listingSeedData = ref(null)
+const listingCategoryMappings = ref([])
 
 const scanVisible = ref(false)
 const scanning = ref(false)
@@ -1540,7 +1541,7 @@ function listProductStub(row) {
     ? {
         image: source.image_front || source.image || '',
         name: source.name || '',
-        category_id: source.category_id ?? null,
+        category_mapping_id: source.category_mapping_id ?? null,
         description: source.description || ''
       }
     : null
@@ -2023,11 +2024,18 @@ onBeforeUnmount(stopLookupScan)
 onMounted(async () => {
   updateViewportState()
   window.addEventListener('resize', updateViewportState)
-  const [cats, whs, types, users] = await Promise.all([categoryApi.list(), warehouseApi.list(), productTypeApi.list(), authApi.listUsers()])
+  const [cats, whs, types, users, mappings] = await Promise.all([
+    categoryApi.list(),
+    warehouseApi.list(),
+    productTypeApi.list(),
+    authApi.listUsers(),
+    productTypeCategoryMappingApi.list()
+  ])
   categories.value = cats
   warehouses.value = whs
   productTypes.value = types
   ownerUsers.value = users
+  listingCategoryMappings.value = mappings
   await Promise.all([load(), loadInventoryStats()])
 })
 

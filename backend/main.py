@@ -17,6 +17,7 @@ from src.routes.scan import router as scan_router
 from src.routes.auth import router as auth_router
 from src.routes.ocr import router as ocr_router
 from src.routes.cost_records import router as cost_records_router
+from src.routes.cost_expenses import router as cost_expenses_router
 from src.routes.orders import router as orders_router
 from src.routes.meilu_accounts import router as meilu_accounts_router
 from src.routes.on_sale_items import router as on_sale_items_router
@@ -48,6 +49,7 @@ app.include_router(transactions_router, dependencies=auth_required)
 app.include_router(scan_router, dependencies=auth_required)
 app.include_router(ocr_router, dependencies=auth_required)
 app.include_router(cost_records_router, dependencies=auth_required)
+app.include_router(cost_expenses_router, dependencies=auth_required)
 app.include_router(orders_router, dependencies=auth_required)
 app.include_router(meilu_accounts_router, dependencies=auth_required)
 app.include_router(mercari_router, dependencies=auth_required)

@@ -22,6 +22,21 @@ class ProductTypeCategoryMappingModel(BaseModel):
                 'primary_key': True,
                 'not_null': True,
             },
+            'category_level1': {
+                'type': 'TEXT',
+                'not_null': False,
+                'default': None,
+            },
+            'category_level2': {
+                'type': 'TEXT',
+                'not_null': False,
+                'default': None,
+            },
+            'category_level3': {
+                'type': 'TEXT',
+                'not_null': False,
+                'default': None,
+            },
             'product_type': {
                 'type': 'TEXT',
                 'not_null': True,

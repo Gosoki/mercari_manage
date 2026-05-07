@@ -14,6 +14,7 @@ from .models import (
     TransactionModel,
     UserModel,
     CostRecordModel,
+    CostExpenseModel,
     OrderModel,
     OrderOutboundLineModel,
     MeiluAccountModel,
@@ -272,6 +273,7 @@ class DBManager:
             ProductModel,     # 依赖 categories
             TransactionModel, # 依赖 inventory, warehouses
             CostRecordModel,  # 依赖 warehouses（可为空）
+            CostExpenseModel,  # 成本支出
             OrderModel,       # 订单管理
             OrderOutboundLineModel,  # 订单解析出的待出库明细（依赖 orders / inventory 逻辑）
             MeiluAccountModel,  # 煤炉账号

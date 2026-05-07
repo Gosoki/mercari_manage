@@ -20,7 +20,7 @@
           />
         </el-col>
         <el-col :xs="24" :md="8" class="search-actions">
-          <el-button type="primary" @click="openCreate">新增记录</el-button>
+          <el-button type="primary" @click="openCreate">新增库存包材</el-button>
         </el-col>
       </el-row>
     </el-card>
@@ -105,7 +105,7 @@
 
     <el-dialog
       v-model="dialogVisible"
-      :title="form.id ? '编辑成本记录' : '新增成本记录'"
+      :title="form.id ? '编辑库存包材' : '新增库存包材'"
       width="520px"
       destroy-on-close
     >

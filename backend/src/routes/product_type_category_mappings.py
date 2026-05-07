@@ -10,12 +10,18 @@ router = APIRouter(prefix="/api/product-type-category-mappings", tags=["product-
 
 
 class MappingCreate(PydanticModel):
+    category_level1: Optional[str] = None
+    category_level2: Optional[str] = None
+    category_level3: Optional[str] = None
     product_type: str
     mapping_id: str
     description: Optional[str] = None
 
 
 class MappingUpdate(PydanticModel):
+    category_level1: Optional[str] = None
+    category_level2: Optional[str] = None
+    category_level3: Optional[str] = None
     product_type: Optional[str] = None
     mapping_id: Optional[str] = None
     description: Optional[str] = None
@@ -42,6 +48,9 @@ def create_mapping(data: MappingCreate):
     if not product_type:
         raise HTTPException(status_code=400, detail="商品类型不能为空")
     row = ProductTypeCategoryMappingModel(
+        category_level1=(data.category_level1 or "").strip() or None,
+        category_level2=(data.category_level2 or "").strip() or None,
+        category_level3=(data.category_level3 or "").strip() or None,
         product_type=product_type,
         mapping_id=mapping_id,
         description=data.description
@@ -69,6 +78,12 @@ def update_mapping(pk_mapping_id: str, data: MappingUpdate):
 
     if data.product_type is not None:
         row.product_type = data.product_type.strip()
+    if data.category_level1 is not None:
+        row.category_level1 = data.category_level1.strip() or None
+    if data.category_level2 is not None:
+        row.category_level2 = data.category_level2.strip() or None
+    if data.category_level3 is not None:
+        row.category_level3 = data.category_level3.strip() or None
     if data.mapping_id is not None:
         row.mapping_id = data.mapping_id.strip()
     if data.description is not None:

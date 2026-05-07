@@ -105,6 +105,14 @@ export const costRecordApi = {
   }
 }
 
+// 成本支出
+export const costExpenseApi = {
+  list: (params) => http.get('/cost-expenses', { params }),
+  create: (data) => http.post('/cost-expenses', data),
+  update: (id, data) => http.put(`/cost-expenses/${id}`, data),
+  remove: (id) => http.delete(`/cost-expenses/${id}`)
+}
+
 // 订单管理
 export const orderApi = {
   list: (params) => http.get('/orders', { params }),

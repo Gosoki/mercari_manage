@@ -10,7 +10,10 @@
 
     <el-card shadow="never" class="table-card">
       <el-table :data="list" v-loading="loading" stripe>
-        <el-table-column label="映射ID" prop="mapping_id" min-width="180" />
+        <el-table-column label="映射ID" prop="mapping_id" width="100" />
+        <el-table-column label="一级分类" prop="category_level1" min-width="140" />
+        <el-table-column label="二级分类" prop="category_level2" min-width="140" />
+        <el-table-column label="三级分类" prop="category_level3" min-width="140" />
         <el-table-column label="商品类型" prop="product_type" min-width="180" />
         <el-table-column label="说明" prop="description" show-overflow-tooltip />
         <el-table-column label="操作" width="140" fixed="right">
@@ -28,6 +31,15 @@
 
     <el-dialog v-model="dialogVisible" :title="form.original_mapping_id ? '编辑映射' : '新增映射'" width="460px" destroy-on-close>
       <el-form :model="form" :rules="rules" ref="formRef" label-width="90px">
+        <el-form-item label="一级分类" prop="category_level1">
+          <el-input v-model="form.category_level1" placeholder="请输入一级分类（可选）" />
+        </el-form-item>
+        <el-form-item label="二级分类" prop="category_level2">
+          <el-input v-model="form.category_level2" placeholder="请输入二级分类（可选）" />
+        </el-form-item>
+        <el-form-item label="三级分类" prop="category_level3">
+          <el-input v-model="form.category_level3" placeholder="请输入三级分类（可选）" />
+        </el-form-item>
         <el-form-item label="商品类型" prop="product_type">
           <el-input v-model="form.product_type" placeholder="请输入商品类型（如：手办、卡牌）" />
         </el-form-item>
@@ -56,7 +68,15 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const formRef = ref()
-const form = ref({ original_mapping_id: null, product_type: '', mapping_id: '', description: '' })
+const form = ref({
+  original_mapping_id: null,
+  category_level1: '',
+  category_level2: '',
+  category_level3: '',
+  product_type: '',
+  mapping_id: '',
+  description: ''
+})
 const rules = {
   product_type: [{ required: true, message: '请输入商品类型', trigger: 'blur' }],
   mapping_id: [{ required: true, message: '请输入映射ID', trigger: 'blur' }],
@@ -71,11 +91,22 @@ function openDialog(row = null) {
   form.value = row
     ? {
         original_mapping_id: row.mapping_id || null,
+        category_level1: row.category_level1 || '',
+        category_level2: row.category_level2 || '',
+        category_level3: row.category_level3 || '',
         product_type: row.product_type || '',
         mapping_id: row.mapping_id || '',
         description: row.description || ''
       }
-    : { original_mapping_id: null, product_type: '', mapping_id: '', description: '' }
+    : {
+        original_mapping_id: null,
+        category_level1: '',
+        category_level2: '',
+        category_level3: '',
+        product_type: '',
+        mapping_id: '',
+        description: ''
+      }
   dialogVisible.value = true
 }
 
@@ -84,6 +115,9 @@ async function submit() {
   submitting.value = true
   try {
     const payload = {
+      category_level1: String(form.value.category_level1 || '').trim() || null,
+      category_level2: String(form.value.category_level2 || '').trim() || null,
+      category_level3: String(form.value.category_level3 || '').trim() || null,
       product_type: String(form.value.product_type || '').trim(),
       mapping_id: String(form.value.mapping_id || '').trim(),
       description: form.value.description

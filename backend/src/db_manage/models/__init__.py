@@ -6,6 +6,7 @@ from .product import ProductModel
 from .transaction import TransactionModel
 from .user import UserModel
 from .cost_record import CostRecordModel
+from .cost_expense import CostExpenseModel
 from .order import OrderModel
 from .meilu_account import MeiluAccountModel
 from .on_sale_item import OnSaleItemModel
@@ -20,6 +21,7 @@ __all__ = [
     'TransactionModel',
     'UserModel',
     'CostRecordModel',
+    'CostExpenseModel',
     'OrderModel',
     'MeiluAccountModel',
     'OnSaleItemModel',
