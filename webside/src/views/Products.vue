@@ -791,7 +791,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { inventoryApi, categoryApi, warehouseApi, authApi, scanApi, ocrApi, transactionApi, productTypeCategoryMappingApi, onSaleItemApi } from '@/api/index.js'
+import { inventoryApi, categoryApi, warehouseApi, authApi, scanApi, ocrApi, transactionApi, productTypeCategoryMappingApi, onSaleItemApi, listingApi } from '@/api/index.js'
 import { warehouseShelfLabel } from '@/utils/warehouseLabel.js'
 import SingleListingFormDialog from '@/components/SingleListingFormDialog.vue'
 import CombinedListingFormDialog from '@/components/CombinedListingFormDialog.vue'
@@ -1870,16 +1870,67 @@ async function onListingFormSaved(data) {
   const listing_body = data.description != null ? String(data.description) : ''
   const price = Math.round(Number(data.price ?? 0))
   const safePrice = Number.isFinite(price) && price >= 0 ? price : 0
+
+  // ── 1. 写回库存 listing_body 与 price ────────────────────────────────── //
   try {
     for (const id of ids) {
       await inventoryApi.update(id, { listing_body, price: safePrice })
     }
-    ElMessage.success('商品说明与单价已保存到库存')
-    await load({ resetPage: false })
-    loadInventoryStats()
   } catch {
     // 错误提示由拦截器处理
+    return
   }
+
+  // ── 2. 派发出品自动化（开启浏览器，填写 Mercari 出品页） ─────────────── //
+  const accountId = data.meilu_account_id
+  if (!accountId) {
+    ElMessage.success('商品说明与单价已保存到库存（未选出品账号，跳过自动化）')
+    await load({ resetPage: false })
+    loadInventoryStats()
+    return
+  }
+
+  // account_key 规则：meilu_{id}，与 webdrive profile 目录名一致
+  const accountKey = `meilu_${accountId}`
+
+  // 收集图片 URL：正面在前、背面在后；组合出品取所有 combined_images 的正面
+  const imageUrls = []
+  if (data.combined_images && Array.isArray(data.combined_images)) {
+    for (const block of data.combined_images) {
+      if (block.front) imageUrls.push(block.front)
+      if (block.back) imageUrls.push(block.back)
+    }
+  } else {
+    if (data.image) imageUrls.push(data.image)
+    if (data.image_back) imageUrls.push(data.image_back)
+  }
+
+  ElMessage.info('正在启动浏览器并填写出品页，请稍候…')
+  try {
+    const res = await listingApi.postToMarket({
+      account_key: accountKey,
+      name: data.name || '',
+      description: listing_body,
+      image_urls: imageUrls,
+      use_mitm_proxy: true
+    })
+    if (res?.success) {
+      const d = res.data || {}
+      const parts = []
+      if (d.images_uploaded) parts.push(`已上传 ${d.images_uploaded} 张图片`)
+      if (d.name_filled) parts.push('商品名已填写')
+      if (d.description_filled) parts.push('商品说明已填写')
+      ElMessage.success(
+        parts.length ? `出品页填写完成：${parts.join('、')}` : '浏览器已打开出品页'
+      )
+    }
+  } catch {
+    // axios 拦截器已弹窗，此处仅记录
+  }
+
+  ElMessage.success('商品说明与单价已保存到库存')
+  await load({ resetPage: false })
+  loadInventoryStats()
 }
 
 /** 组合出品可选：库存大于 0 */

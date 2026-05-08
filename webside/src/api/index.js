@@ -183,6 +183,19 @@ export const webDriveApi = {
   profilesRoot: () => http.get('/web-drive/profiles-root')
 }
 
+/**
+ * 出品自动化：打开 Edge（SSL 中间人）→ 填写 Mercari 出品页
+ *   account_key  webdrive 账号标识（通常 meilu_{id}）
+ *   name         商品名称
+ *   description  商品说明（含管理番号）
+ *   image_urls   图片路径数组，如 ['/imges/xxx.jpg']
+ *   use_mitm_proxy 是否启用 MITM 代理（默认 true）
+ */
+export const listingApi = {
+  postToMarket: (data, axiosConfig = {}) =>
+    http.post('/web-drive/listing/post-to-market', data, { timeout: 0, ...axiosConfig })
+}
+
 // OCR 识别
 export const ocrApi = {
   ocrRegion: (base64Image) => http.post('/ocr-region', { image: base64Image })
