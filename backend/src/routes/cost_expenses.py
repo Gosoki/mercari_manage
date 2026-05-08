@@ -8,6 +8,7 @@ from pydantic import BaseModel as PydanticModel
 
 from ..db_manage.models.cost_expense import CostExpenseModel
 from ..db_manage.models.cost_record import CostRecordModel
+from ..db_manage.models.order import OrderModel
 
 router = APIRouter(prefix="/api/cost-expenses", tags=["cost-expenses"])
 ALLOWED_TYPES = {"快递费", "包装材料"}
@@ -19,6 +20,7 @@ class CostExpenseCreate(PydanticModel):
     quantity: int
     unit_price: int
     owner: Optional[str] = None
+    order_no: Optional[str] = None
     record_time: Optional[int] = None
 
 
@@ -28,6 +30,7 @@ class CostExpenseUpdate(PydanticModel):
     quantity: Optional[int] = None
     unit_price: Optional[int] = None
     owner: Optional[str] = None
+    order_no: Optional[str] = None
     record_time: Optional[int] = None
 
 
@@ -87,10 +90,40 @@ def _sync_expense_type_from_source(item_name: str) -> str:
     raise HTTPException(status_code=400, detail="该物品在库存包材中的类型不支持同步")
 
 
+def _normalize_order_no(value: Optional[str]) -> Optional[str]:
+    cleaned = (value or "").strip()
+    return cleaned or None
+
+
+def _ensure_order_exists(order_no: Optional[str]) -> Optional[str]:
+    normalized = _normalize_order_no(order_no)
+    if not normalized:
+        return None
+    rows = OrderModel.find_all(where="[order_no] = ?", params=(normalized,), limit=1)
+    if not rows:
+        raise HTTPException(status_code=404, detail="关联订单不存在")
+    return normalized
+
+
+def _apply_order_net_income_cost(order_no: Optional[str], expense_total: int):
+    normalized = _normalize_order_no(order_no)
+    if not normalized or expense_total <= 0:
+        return
+    rows = OrderModel.find_all(where="[order_no] = ?", params=(normalized,), limit=1)
+    if not rows:
+        raise HTTPException(status_code=404, detail="关联订单不存在")
+    order = rows[0]
+    current = int(order.net_income or 0)
+    order.net_income = current - int(expense_total)
+    if not order.save():
+        raise HTTPException(status_code=500, detail="更新订单净收益失败")
+
+
 @router.get("")
 def list_cost_expenses(
     type: Optional[str] = None,
     owner: Optional[str] = None,
+    order_no: Optional[str] = None,
     start_time: Optional[int] = None,
     end_time: Optional[int] = None,
     page: int = 1,
@@ -106,6 +139,9 @@ def list_cost_expenses(
     if owner:
         where_parts.append("[owner] = ?")
         params.append(owner.strip())
+    if order_no:
+        where_parts.append("[order_no] = ?")
+        params.append(order_no.strip())
     if start_time is not None:
         where_parts.append("[record_time] >= ?")
         params.append(int(start_time))
@@ -140,14 +176,17 @@ def create_cost_expense(data: CostExpenseCreate):
         raise HTTPException(status_code=400, detail="库存包材中不存在该物品名称")
     source_original_quantity = int(source.quantity or 0)
     synced_type = _sync_expense_type_from_source(item_name)
+    bound_order_no = _ensure_order_exists(data.order_no)
     row = CostExpenseModel(
         type=synced_type,
         item_name=item_name,
         quantity=expense_quantity,
         unit_price=_validate_positive_int(data.unit_price, "单价"),
         owner=(data.owner or "").strip() or None,
+        order_no=bound_order_no,
         record_time=int(data.record_time) if data.record_time is not None else _default_london_ts(),
     )
+    expense_total = int(row.quantity or 0) * int(row.unit_price or 0)
     source.quantity = source_original_quantity - expense_quantity
     if not source.save():
         raise HTTPException(status_code=500, detail="自动扣减库存包材失败")
@@ -155,6 +194,13 @@ def create_cost_expense(data: CostExpenseCreate):
         source.quantity = source_original_quantity
         source.save()
         raise HTTPException(status_code=500, detail="保存失败")
+    try:
+        _apply_order_net_income_cost(bound_order_no, expense_total)
+    except Exception:
+        row.delete()
+        source.quantity = source_original_quantity
+        source.save()
+        raise
     return row.to_dict()
 
 

@@ -118,6 +118,24 @@
                     </template>
                   </el-table-column>
                   <el-table-column label="本单件数" prop="quantity" width="96" align="center" />
+                  <el-table-column label="商品原价格" width="120" align="center">
+                    <template #default="{ row: line }">
+                      <span v-if="line.line_kind === 'bundle_title'">{{ orderMoneyField(line.original_price) ?? '-' }}</span>
+                      <span v-else class="cell-dash">-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="货物比例" width="120" align="center">
+                    <template #default="{ row: line }">
+                      <span v-if="line.line_kind === 'bundle_title' && line.goods_ratio != null">{{ formatGoodsRatio(line.goods_ratio) }}</span>
+                      <span v-else class="cell-dash">-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="比例价格" width="120" align="center">
+                    <template #default="{ row: line }">
+                      <span v-if="line.line_kind === 'bundle_title'">{{ orderMoneyField(line.ratio_price) ?? '-' }}</span>
+                      <span v-else class="cell-dash">-</span>
+                    </template>
+                  </el-table-column>
                   <el-table-column label="待出库" width="88" align="center">
                     <template #default="{ row: line }">
                       <el-tag
@@ -176,6 +194,48 @@
                     </div>
                   </template>
                 </el-empty>
+                <div class="order-packaging-wrap" v-loading="packagingState[row.order_no]?.loading">
+                  <div class="order-packaging-head">
+                    <div class="order-packaging-title">
+                      包装材料
+                      <span class="order-packaging-total">
+                        （成本合计：{{ Math.round(Number(packagingState[row.order_no]?.total_amount || 0)) }}）
+                      </span>
+                    </div>
+                    <el-button size="small" type="primary" @click="openPackagingDialog(row)">
+                      添加包装材料
+                    </el-button>
+                  </div>
+                  <el-table
+                    v-if="(packagingState[row.order_no]?.rows || []).length"
+                    :data="packagingState[row.order_no].rows"
+                    size="small"
+                    border
+                  >
+                    <el-table-column label="物品名称" prop="item_name" min-width="180" show-overflow-tooltip />
+                    <el-table-column label="数量" prop="quantity" width="90" align="center" />
+                    <el-table-column label="单价" width="100" align="center">
+                      <template #default="{ row: expense }">
+                        {{ Math.round(Number(expense.unit_price || 0)) }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="金额" width="100" align="center">
+                      <template #default="{ row: expense }">
+                        {{ Math.round(expenseAmount(expense)) }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="记录时间" width="168" align="center">
+                      <template #default="{ row: expense }">
+                        {{ formatExpenseTs(expense.record_time) }}
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                  <el-empty
+                    v-else-if="packagingState[row.order_no]?.loaded"
+                    description="暂无包装材料记录"
+                    class="order-empty-compact"
+                  />
+                </div>
               </template>
             </div>
           </template>
@@ -523,6 +583,69 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="packagingDialogVisible"
+      title="添加包装材料"
+      width="520px"
+      destroy-on-close
+    >
+      <el-form label-width="96px">
+        <el-form-item label="订单号">
+          <el-input :model-value="packagingForm.order_no" disabled />
+        </el-form-item>
+        <el-form-item label="包材名称" required>
+          <el-select
+            v-model="packagingForm.item_name"
+            filterable
+            clearable
+            style="width: 100%"
+            placeholder="请选择库存包材"
+            @change="onPackagingItemChange"
+          >
+            <el-option
+              v-for="item in packagingItemsOptions"
+              :key="item.item_name"
+              :label="`${item.item_name}（库存:${Number(item.quantity || 0)}）`"
+              :value="item.item_name"
+            />
+          </el-select>
+        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="数量" required>
+              <el-input-number
+                v-model="packagingForm.quantity"
+                :min="1"
+                :precision="0"
+                :controls="false"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="单价" required>
+              <el-input-number
+                v-model="packagingForm.unit_price"
+                :min="1"
+                :precision="0"
+                :controls="false"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="成本金额">
+          <el-input :model-value="String(Math.round(expenseAmount(packagingForm)))" disabled />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="packagingDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="packagingSubmitting" @click="submitPackagingExpense">
+          确认添加
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -530,7 +653,7 @@
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { RefreshRight, Refresh } from '@element-plus/icons-vue'
-import { orderApi, mercariApi, meiluAccountApi, inventoryApi } from '@/api/index.js'
+import { orderApi, mercariApi, meiluAccountApi, inventoryApi, costExpenseApi, costRecordApi } from '@/api/index.js'
 import {
   localYmdToDayStartTs,
   localYmdToDayEndTs,
@@ -551,6 +674,9 @@ const manualOutboundSaving = ref(false)
 const manualInventoryLoading = ref(false)
 const manualInventoryOptions = ref([])
 const manualOwnerFilter = ref('')
+const packagingDialogVisible = ref(false)
+const packagingSubmitting = ref(false)
+const packagingItemsOptions = ref([])
 const manualOutboundForm = ref({
   order_no: '',
   inventory_ids: [],
@@ -585,6 +711,14 @@ const stats = ref({
   today_sum_service_fee: 0,
   today_sum_shipping_fee: 0,
   today_sum_net_income: 0,
+})
+
+const packagingState = ref({})
+const packagingForm = ref({
+  order_no: '',
+  item_name: '',
+  quantity: 1,
+  unit_price: null,
 })
 
 /** 与列表相同条件：keyword、状态、购入时间区间；今日新增为本地当日购入且仍满足相同 keyword/状态。汇总不含 status=cancelled（后端 stats 排除已取消）。 */
@@ -1094,8 +1228,25 @@ function outboundLineKey(orderNo, lineId) {
   return `${String(orderNo || '').trim()}:${Number(lineId || 0)}`
 }
 
+function expenseAmount(line) {
+  return Math.max(0, Number(line?.quantity || 0)) * Math.max(0, Number(line?.unit_price || 0))
+}
+
+function formatExpenseTs(ts) {
+  if (!ts) return '-'
+  const dt = new Date(Number(ts) * 1000)
+  if (Number.isNaN(dt.getTime())) return '-'
+  return formatLocalWallToStr(dt)
+}
+
 function outboundPendingQty(line) {
   return Number(line?.is_stocked_out || 0) === 1 ? 0 : Math.max(0, Number(line?.quantity || 0))
+}
+
+function formatGoodsRatio(v) {
+  const n = Number(v)
+  if (v == null || v === '' || Number.isNaN(n)) return '-'
+  return `${(n * 100).toFixed(2)}%`
 }
 
 function canStockOutLine(line) {
@@ -1129,6 +1280,109 @@ async function onOrderExpandChange(row, expandedRows) {
       ...expandState.value,
       [ono]: { loading: false, loaded: true, rows: [] },
     }
+  }
+  await loadPackagingExpenses(ono)
+}
+
+async function loadPackagingItemOptions() {
+  const res = await costRecordApi.listPackagingItems()
+  packagingItemsOptions.value = Array.isArray(res?.items) ? res.items : []
+}
+
+function selectedPackagingMeta(itemName) {
+  return (packagingItemsOptions.value || []).find((it) => it.item_name === itemName) || null
+}
+
+function onPackagingItemChange(itemName) {
+  const meta = selectedPackagingMeta(itemName)
+  if (!meta) return
+  packagingForm.value.unit_price = Number(meta.amount || 0)
+}
+
+async function loadPackagingExpenses(orderNo) {
+  const ono = String(orderNo || '').trim()
+  if (!ono) return
+  packagingState.value = {
+    ...packagingState.value,
+    [ono]: {
+      loading: true,
+      loaded: false,
+      rows: [],
+      total_amount: 0,
+    },
+  }
+  try {
+    const res = await costExpenseApi.list({
+      order_no: ono,
+      type: '包装材料',
+      page: 1,
+      page_size: 200,
+    })
+    const rows = Array.isArray(res?.items) ? res.items : []
+    const totalAmount = rows.reduce((sum, it) => sum + expenseAmount(it), 0)
+    packagingState.value = {
+      ...packagingState.value,
+      [ono]: {
+        loading: false,
+        loaded: true,
+        rows,
+        total_amount: totalAmount,
+      },
+    }
+  } catch {
+    packagingState.value = {
+      ...packagingState.value,
+      [ono]: {
+        loading: false,
+        loaded: true,
+        rows: [],
+        total_amount: 0,
+      },
+    }
+  }
+}
+
+function openPackagingDialog(orderRow) {
+  const orderNo = String(orderRow?.order_no || '').trim()
+  if (!orderNo) return
+  packagingForm.value = {
+    order_no: orderNo,
+    item_name: '',
+    quantity: 1,
+    unit_price: null,
+  }
+  packagingDialogVisible.value = true
+}
+
+async function submitPackagingExpense() {
+  const orderNo = String(packagingForm.value.order_no || '').trim()
+  const itemName = String(packagingForm.value.item_name || '').trim()
+  const qty = Math.max(1, Number(packagingForm.value.quantity || 1))
+  const unitPrice = Math.max(1, Number(packagingForm.value.unit_price || 0))
+  if (!orderNo) return
+  if (!itemName) {
+    ElMessage.warning('请选择包材物品')
+    return
+  }
+  if (unitPrice <= 0) {
+    ElMessage.warning('请填写有效单价')
+    return
+  }
+  packagingSubmitting.value = true
+  try {
+    await costExpenseApi.create({
+      order_no: orderNo,
+      item_name: itemName,
+      quantity: qty,
+      unit_price: unitPrice,
+    })
+    ElMessage.success('已添加包装材料并扣减库存')
+    packagingDialogVisible.value = false
+    await loadPackagingExpenses(orderNo)
+    await load()
+    await loadStats()
+  } finally {
+    packagingSubmitting.value = false
   }
 }
 
@@ -1347,6 +1601,7 @@ onMounted(() => {
   window.addEventListener('resize', updateViewportState)
   load()
   loadStats()
+  loadPackagingItemOptions()
 })
 
 onBeforeUnmount(() => {
@@ -1491,6 +1746,24 @@ onBeforeUnmount(() => {
 }
 .order-empty-compact :deep(.el-empty__description) {
   display: none;
+}
+.order-packaging-wrap {
+  margin-top: 10px;
+}
+.order-packaging-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.order-packaging-title {
+  font-size: 13px;
+  color: #cfd8e6;
+  font-weight: 600;
+}
+.order-packaging-total {
+  color: #f56c6c;
 }
 .form-hint {
   font-size: 12px;

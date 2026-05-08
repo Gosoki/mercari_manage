@@ -53,6 +53,11 @@ class CostExpenseModel(BaseModel):
                 'not_null': False,
                 'default': None,
             },
+            'order_no': {
+                'type': 'TEXT',
+                'not_null': False,
+                'default': None,
+            },
             'record_time': {
                 'type': 'INTEGER',
                 'not_null': True,
@@ -71,4 +76,5 @@ class CostExpenseModel(BaseModel):
             {'name': 'idx_cost_expenses_record_time', 'columns': ['record_time']},
             {'name': 'idx_cost_expenses_type', 'columns': ['type']},
             {'name': 'idx_cost_expenses_owner', 'columns': ['owner']},
+            {'name': 'idx_cost_expenses_order_no', 'columns': ['order_no']},
         ]

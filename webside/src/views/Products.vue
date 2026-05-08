@@ -101,7 +101,13 @@
                 <el-table-column label="价格¥" width="90" align="center">
                   <template #default="{ row: r }">{{ Number(r.price || 0) }}</template>
                 </el-table-column>
-                <el-table-column label="状态" prop="status" width="110" align="center" />
+                <el-table-column label="状态" width="110" align="center">
+                  <template #default="{ row: r }">
+                    <el-tag :type="onSaleStatusTagType(r.status)" size="small" effect="light">
+                      {{ displayOnSaleStatus(r.status) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
                 <el-table-column label="更新" width="150" align="center">
                   <template #default="{ row: r }">{{ formatUnixTs(r.updated) }}</template>
                 </el-table-column>
@@ -755,6 +761,21 @@ const inventoryStatCards = [
   { key: 'today_in', label: '今日入库', icon: 'Top', color: '#67C23A' },
   { key: 'today_out', label: '今日出库', icon: 'Bottom', color: '#F56C6C' },
 ]
+const onSaleStatusMap = {
+  on_sale: { label: '出售中', tag: 'success' },
+  stop: { label: '暂停出售', tag: 'warning' },
+  trading: { label: '交易中', tag: 'primary' },
+  wait_payment: { label: '待支付', tag: 'warning' },
+  wait_shipping: { label: '待发货', tag: 'warning' },
+  wait_review: { label: '待评价', tag: 'primary' },
+  sold_out: { label: '已售完', tag: 'info' },
+  done: { label: '已完成', tag: 'success' },
+  cancelled: { label: '已取消', tag: 'info' },
+  cancel_request: { label: '取消申请中', tag: 'danger' },
+  deleted: { label: '已删除', tag: 'danger' },
+  private: { label: '非公开', tag: 'info' },
+  pending: { label: '待处理', tag: 'info' },
+}
 const categories = ref([])
 const warehouses = ref([])
 const productTypes = ref([])
@@ -1571,6 +1592,17 @@ function formatUnixTs(sec) {
   if (Number.isNaN(d.getTime())) return '-'
   const p2 = (x) => String(x).padStart(2, '0')
   return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`
+}
+
+function displayOnSaleStatus(status) {
+  const key = String(status ?? '').trim()
+  if (!key) return '-'
+  return onSaleStatusMap[key]?.label || key
+}
+
+function onSaleStatusTagType(status) {
+  const key = String(status ?? '').trim()
+  return onSaleStatusMap[key]?.tag || 'info'
 }
 
 async function ensureInventoryExpandLoaded(row) {
