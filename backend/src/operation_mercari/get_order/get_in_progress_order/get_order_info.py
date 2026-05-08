@@ -13,7 +13,8 @@ HTTP 头 DPoP：账号 JSON 的 ``dpop_info`` 须针对上述 URL（与方法 GE
 remark <- item_name；description <- description；order_updated_at/purchase_time <- Unix 秒（原始时间戳）；
 承运：shipping_class_carrier_display_name；运费：seller_shipping_fee / buyer_shipping_fee；
 金额口径均为日元（整数，无小数）；手续费：售价日元 ×10% 向下取整到日元整数（例 6999→699）；
-净收益：运费合计 > 0 时为 售价日元 − 手续费日元 − 运费日元（均为整数运算）。
+净收益：售价 − 手续费 − 运费（整数）。接口运费缺失或为 0 时仍计算净收益（快递成本可走包装材料扣减）。
+若 seller_shipping_fee 为 0 且 data 无 shipping_class_carrier，则不覆盖库内快递费，用已保存运费参与计算。
 """
 
 import json
@@ -22,6 +23,7 @@ from urllib.parse import quote
 
 from ...mercari_req_scheduling import DPOP_FOR_ITEM_INFO, send_request
 from ....db_manage.models.order import OrderModel
+from ....routes.cost_expenses import deduct_packaging_total_from_order_net_income
 
 _TRANSACTION_EVIDENCE_GET_PATH = "https://api.mercari.jp/transaction_evidences/get"
 
@@ -96,6 +98,16 @@ def _float_str_or_num(v: Any) -> Optional[float]:
         return None
 
 
+def _seller_shipping_fee_explicitly_zero(v: Any) -> bool:
+    """仅当接口明确给出卖家运费且数值为 0 时返回 True（缺省字段不视为 0）。"""
+    if v is None:
+        return False
+    try:
+        return float(v) == 0.0
+    except (TypeError, ValueError):
+        return False
+
+
 def fetch_item_info(item_id: str, account_id: Optional[int] = None) -> Dict[str, Any]:
     """
     GET transaction_evidences/get（非 items/get），返回完整 JSON（含 result / data）。
@@ -130,16 +142,24 @@ def extract_order_info_fields(response: Dict[str, Any]) -> Dict[str, Any]:
     carrier_raw = (d.get("shipping_class_carrier_display_name") or "").strip()
     carrier_display_name: Optional[str] = carrier_raw or None
 
-    ss = _float_str_or_num(d.get("seller_shipping_fee"))
-    bs = _float_str_or_num(d.get("buyer_shipping_fee"))
-    ship_parts = [x for x in (ss, bs) if x is not None]
-    shipping_fee: Optional[int] = None
-    if ship_parts:
-        shipping_fee = int(round(sum(ship_parts)))
+    # 无承运信息且卖家运费为 0：不采用接口运费（由订单手动维护 shipping_fee）
+    skip_shipping_fee_sync = _seller_shipping_fee_explicitly_zero(
+        d.get("seller_shipping_fee")
+    ) and ("shipping_class_carrier" not in d)
 
+    shipping_fee: Optional[int] = None
+    if not skip_shipping_fee_sync:
+        ss = _float_str_or_num(d.get("seller_shipping_fee"))
+        bs = _float_str_or_num(d.get("buyer_shipping_fee"))
+        ship_parts = [x for x in (ss, bs) if x is not None]
+        if ship_parts:
+            shipping_fee = int(round(sum(ship_parts)))
+
+    # 净收益：始终在有手续费时计算；运费缺失按 0（快递费可能在包装材料中体现）
     net_income: Optional[int] = None
-    if shipping_fee is not None and shipping_fee > 0 and fee_yen is not None:
-        net_income = price_yen - fee_yen - shipping_fee
+    if not skip_shipping_fee_sync and fee_yen is not None and price_yen > 0:
+        ship_for_net = int(shipping_fee) if shipping_fee is not None else 0
+        net_income = price_yen - fee_yen - ship_for_net
 
     te = d.get("transaction_evidence") if isinstance(d.get("transaction_evidence"), dict) else {}
     tracking_no = _tracking_no_from_evidence(te, d)
@@ -179,6 +199,7 @@ def extract_order_info_fields(response: Dict[str, Any]) -> Dict[str, Any]:
         "carrier_display_name": carrier_display_name,
         "request_class_display_name": None,
         "shipping_fee": shipping_fee,
+        "skip_shipping_fee_sync": skip_shipping_fee_sync,
         "tracking_no": tracking_no,
         "transaction_evidence_id": transaction_evidence_id,
         "status": status_val,
@@ -227,15 +248,17 @@ def apply_item_info_to_order(
         return "order_not_found"
 
     o = rows[0]
+    skip_ship = bool(fields.get("skip_shipping_fee_sync"))
+
     if fields.get("service_fee") is not None:
         o.service_fee = fields["service_fee"]
-    if "net_income" in fields:
+    if "net_income" in fields and not skip_ship:
         o.net_income = fields["net_income"]
     if fields.get("carrier_display_name"):
         o.carrier_display_name = fields["carrier_display_name"]
     if fields.get("request_class_display_name"):
         o.request_class_display_name = fields["request_class_display_name"]
-    if fields.get("shipping_fee") is not None:
+    if fields.get("shipping_fee") is not None and not skip_ship:
         o.shipping_fee = fields["shipping_fee"]
     if fields.get("tracking_no"):
         o.tracking_no = fields["tracking_no"]
@@ -255,6 +278,16 @@ def apply_item_info_to_order(
         o.description = fields["description"]
     if fields.get("customer_name"):
         o.customer_name = fields["customer_name"]
+
+    # 接口未提供承运且卖家运费为 0：保留库内快递费，用售价/手续费与已录入运费计算净收益
+    if skip_ship:
+        fee_use = o.service_fee
+        if fee_use is not None:
+            ship_use = int(o.shipping_fee or 0)
+            o.net_income = int(o.amount or 0) - int(fee_use) - ship_use
+
+    # 刷新后 net_income 以煤炉为准，再统一扣除本订单已记录的包装材料合计
+    deduct_packaging_total_from_order_net_income(o)
 
     if not o.save():
         return "save_failed"

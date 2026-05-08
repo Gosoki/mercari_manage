@@ -9,6 +9,7 @@ from pydantic import BaseModel as PydanticModel
 from ..db_manage.models.cost_expense import CostExpenseModel
 from ..db_manage.models.cost_record import CostRecordModel
 from ..db_manage.models.order import OrderModel
+from ..order_goods_ratio import owner_weights_from_order_goods_ratio
 
 router = APIRouter(prefix="/api/cost-expenses", tags=["cost-expenses"])
 ALLOWED_TYPES = {"快递费", "包装材料"}
@@ -119,19 +120,64 @@ def _apply_order_net_income_cost(order_no: Optional[str], expense_total: int):
         raise HTTPException(status_code=500, detail="更新订单净收益失败")
 
 
+def total_packaging_expense_yen_for_order(order_no: Optional[str]) -> int:
+    """本订单已保存的「包装材料」支出合计（日元整数）。"""
+    ono = _normalize_order_no(order_no)
+    if not ono:
+        return 0
+    rows = CostExpenseModel().db.execute_query(
+        """
+        SELECT COALESCE(SUM(COALESCE([quantity], 0) * COALESCE([unit_price], 0)), 0)
+        FROM [cost_expenses]
+        WHERE [order_no] = ? AND [type] = ?
+        """,
+        (ono, "包装材料"),
+    )
+    if not rows:
+        return 0
+    try:
+        return max(0, int(rows[0][0] or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def deduct_packaging_total_from_order_net_income(order) -> None:
+    """
+    煤炉回填的 net_income 为「售价−手续费−运费」；再减去本订单包材合计，
+    与新增包材时累计扣减一致。订单页「刷新」会覆盖 net_income，须在此处重算包材扣减。
+    """
+    if order is None:
+        return
+    base = getattr(order, "net_income", None)
+    if base is None:
+        return
+    total = total_packaging_expense_yen_for_order(getattr(order, "order_no", None))
+    if total <= 0:
+        return
+    order.net_income = int(base) - int(total)
+
+
 def _resolve_order_owner_value_weights(order_no: str):
     """
-    根据订单出库明细解析「归属人 -> 商品价值权重」。
-    权重口径：inventory.price * outbound_line.quantity（仅统计 inventory_id 有效行）。
-    owner 统一使用 users.username，便于前端按用户名筛选。
+    根据订单解析「归属人 -> 权重」用于包材分摊：
+    1) 与订单二级表一致：组合标题 + 在售原价权重 → 比例价格，按归属汇总（货物比例）；
+    2) 否则：inventory.price * 件数；
+    3) 再否则：按件数均分权重。
     """
     ono = (order_no or "").strip()
     if not ono:
         return []
+    ratio_weights = owner_weights_from_order_goods_ratio(ono)
+    if ratio_weights:
+        return ratio_weights
     rows = CostExpenseModel().db.execute_query(
         """
         SELECT
-            COALESCE(NULLIF(TRIM(u.[username]), ''), '') AS owner_username,
+            COALESCE(
+                NULLIF(TRIM(u.[display_name]), ''),
+                NULLIF(TRIM(u.[username]), ''),
+                ''
+            ) AS owner_key,
             COALESCE(p.[price], 0) AS product_price,
             COALESCE(l.[quantity], 1) AS line_qty
         FROM [order_outbound_lines] l
@@ -142,7 +188,8 @@ def _resolve_order_owner_value_weights(order_no: str):
         """,
         (ono,),
     )
-    grouped = {}
+    grouped_price_weight = {}
+    grouped_qty_weight = {}
     for owner_raw, price_raw, qty_raw in rows:
         owner = str(owner_raw or "").strip()
         if not owner:
@@ -155,11 +202,24 @@ def _resolve_order_owner_value_weights(order_no: str):
             qty = int(qty_raw or 1)
         except (TypeError, ValueError):
             qty = 1
-        weight = max(0, price) * max(1, qty)
-        if weight <= 0:
-            continue
-        grouped[owner] = int(grouped.get(owner, 0)) + int(weight)
-    return [{"owner": k, "weight": int(v)} for k, v in grouped.items() if int(v) > 0]
+        safe_qty = max(1, qty)
+        grouped_qty_weight[owner] = int(grouped_qty_weight.get(owner, 0)) + int(safe_qty)
+        price_weight = max(0, price) * safe_qty
+        grouped_price_weight[owner] = int(grouped_price_weight.get(owner, 0)) + int(price_weight)
+
+    # 优先按商品价值（price * qty）；若订单内价格缺失/为0导致总权重为0，则回退按数量分配。
+    sum_price_weight = sum(int(v) for v in grouped_price_weight.values())
+    if sum_price_weight > 0:
+        return [
+            {"owner": k, "weight": int(v)}
+            for k, v in grouped_price_weight.items()
+            if int(v) > 0
+        ]
+    return [
+        {"owner": k, "weight": int(v)}
+        for k, v in grouped_qty_weight.items()
+        if int(v) > 0
+    ]
 
 
 def _split_int_by_weights(total: int, owner_weights):
@@ -260,19 +320,31 @@ def create_cost_expense(data: CostExpenseCreate):
     owner_rows = []
     if bound_order_no:
         owner_weights = _resolve_order_owner_value_weights(bound_order_no)
-        qty_split_rows = _split_int_by_weights(expense_quantity, owner_weights)
-        owner_rows = [
-            {
-                "owner": it.get("owner"),
-                "quantity": int(it.get("share") or 0),
-            }
-            for it in qty_split_rows
-            if int(it.get("share") or 0) > 0
-        ]
+        if len(owner_weights) > 1:
+            # 包材件数为整数时，按「件数」无法在多人之间公平拆分（例如仅 1 件会整件判给一人）。
+            # 多人归属时改为按「总成本 expense_total」日元比例拆成多行：
+            # 每行 quantity=1，unit_price=该人分摊金额（行金额之和仍等于原总价）。
+            amt_split_rows = _split_int_by_weights(expense_total, owner_weights)
+            owner_rows = [
+                {
+                    "owner": str(it.get("owner") or "").strip() or None,
+                    "quantity": 1,
+                    "unit_price": int(it.get("share") or 0),
+                }
+                for it in amt_split_rows
+                if int(it.get("share") or 0) > 0
+            ]
+        elif len(owner_weights) == 1:
+            owner_rows = [{
+                "owner": str(owner_weights[0].get("owner") or "").strip() or None,
+                "quantity": expense_quantity,
+                "unit_price": unit_price,
+            }]
     if not owner_rows:
         owner_rows = [{
             "owner": (data.owner or "").strip() or None,
             "quantity": expense_quantity,
+            "unit_price": unit_price,
         }]
 
     created_rows = []
@@ -282,14 +354,14 @@ def create_cost_expense(data: CostExpenseCreate):
     try:
         for owner_item in owner_rows:
             share_qty = int(owner_item.get("quantity") or 0)
-            if share_qty <= 0:
+            line_unit = int(owner_item.get("unit_price") if owner_item.get("unit_price") is not None else unit_price)
+            if share_qty <= 0 or line_unit <= 0:
                 continue
             row = CostExpenseModel(
                 type=synced_type,
                 item_name=item_name,
-                # quantity 按归属价值比例拆分；unit_price 保持原单价
                 quantity=share_qty,
-                unit_price=unit_price,
+                unit_price=line_unit,
                 owner=owner_item.get("owner"),
                 order_no=bound_order_no,
                 record_time=record_time,
