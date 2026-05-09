@@ -64,12 +64,12 @@
           </div>
         </div>
       </el-form-item>
-      <el-form-item label="商品名" prop="name" class="listing-form-item--name">
+      <el-form-item label="出品标题" prop="listing_title" class="listing-form-item--name">
         <div class="listing-field-full">
           <el-input
-            v-model="form.name"
+            v-model="form.listing_title"
             class="listing-name-input"
-            placeholder="请输入商品名"
+            placeholder="请输入出品标题"
             clearable
           />
         </div>
@@ -164,14 +164,14 @@
         </el-select>
       </el-form-item>
       <el-form-item label="出售方法" prop="sale_type">
-        <div style="display:flex;gap:8px;width:100%">
-          <el-select v-model="form.sale_type" placeholder="请选择出售方法" style="flex:1">
+        <div class="listing-compact-row">
+          <el-select v-model="form.sale_type" placeholder="请选择出售方法" class="listing-compact-control">
             <el-option v-for="s in saleTypeOptions" :key="s.value" :label="s.label" :value="s.value" />
           </el-select>
           <el-select
             v-if="form.sale_type === 'auction'"
             v-model="form.auction_duration"
-            style="width:110px"
+            class="listing-auction-duration-control"
           >
             <el-option label="通常" value="normal" />
             <el-option label="三小时" value="3hours" />
@@ -179,11 +179,11 @@
         </div>
       </el-form-item>
       <el-form-item label="单价" prop="price" class="listing-form-item--price">
-        <div class="listing-field-full">
+        <div class="listing-compact-row">
           <el-input
             v-model="listingPriceEdit"
             placeholder="整数（将同步到所选各条库存）"
-            class="listing-price-input"
+            class="listing-price-input listing-compact-control"
             inputmode="numeric"
             @blur="applyListingPriceToForm"
           />
@@ -255,10 +255,10 @@ const listingFormRules = {
       trigger: 'change'
     }
   ],
-  name: [
+  listing_title: [
     {
       validator: (_, val, cb) => {
-        if (!String(val ?? '').trim()) cb(new Error('请输入商品名'))
+        if (!String(val ?? '').trim()) cb(new Error('请输入出品标题'))
         else cb()
       },
       trigger: 'blur'
@@ -505,7 +505,7 @@ watch(
       ...getDefaultForm(),
       image: '',
       image_back: '',
-      name: '',
+      listing_title: seed.listing_title || seed.name || '',
       category_mapping_id: seedMappingId,
       category_mapping_path: seedPath,
       description: '',
@@ -527,7 +527,7 @@ function getDefaultForm() {
     meilu_account_id: null,
     image: '',
     image_back: '',
-    name: '',
+    listing_title: '',
     category_mapping_id: null,
     category_mapping_path: [],
     status: 'new_unused',
@@ -722,6 +722,19 @@ async function submitStub() {
   font-size: 13px;
   color: #8ea0bf;
   padding: 12px 0;
+}
+.listing-compact-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 220px;
+  max-width: 100%;
+}
+.listing-compact-control {
+  width: 100%;
+}
+.listing-auction-duration-control {
+  width: 110px;
 }
 .dialog-footer {
   display: flex;

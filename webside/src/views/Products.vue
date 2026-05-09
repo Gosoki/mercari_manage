@@ -337,6 +337,9 @@
             </template>
           </el-input>
         </el-form-item>
+        <el-form-item label="商品名称">
+          <el-input v-model="form.name" class="listing-field-fullwidth" type="text" clearable />
+        </el-form-item>
         <el-form-item label="游戏分类" prop="category_id">
           <div class="product-field-inline">
             <template v-if="!categoryCreateMode">
@@ -484,7 +487,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item label="标题">
+        <el-form-item label="出品标题">
           <el-input v-model="form.listing_title" class="listing-field-fullwidth" type="text" clearable />
         </el-form-item>
         <el-form-item label="商品说明">
@@ -1816,6 +1819,10 @@ function buildListingSeedFromInventoryRows(rows) {
   const names = rows.map((r) => String(r.name || '').trim()).filter(Boolean)
   let name = names.join('、')
   if (name.length > 200) name = `${name.slice(0, 197)}…`
+  const listingTitles = rows.map((r) => String(r.listing_title || '').trim()).filter(Boolean)
+  let listingTitle = listingTitles.join('、')
+  if (!listingTitle) listingTitle = name
+  if (listingTitle.length > 200) listingTitle = `${listingTitle.slice(0, 197)}…`
   const sameType = rows.every((r) => r.product_type_id === first.product_type_id)
   const mappingId =
     sameType && first.product_type_id != null ? String(first.product_type_id) : null
@@ -1831,6 +1838,7 @@ function buildListingSeedFromInventoryRows(rows) {
     image: first.image_front || first.image || '',
     image_back: imageBack,
     name: name || String(first.name || '').trim() || '',
+    listing_title: listingTitle || '',
     category_mapping_id: mappingId,
     description: descParts.join('\n---\n') || '',
     price: Math.round(Number(first.price ?? 0)),
@@ -1854,6 +1862,7 @@ function buildCombinedListingSeedFromInventoryRows(rows) {
     image: '',
     image_back: '',
     name: '',
+    listing_title: String(first.listing_title || '').trim(),
     category_mapping_id: mappingId,
     description: '',
     /** 组合出品：取首条库存单价为初始值，保存时写回所选全部条目 */
@@ -1863,18 +1872,19 @@ function buildCombinedListingSeedFromInventoryRows(rows) {
   }
 }
 
-/** 出品表单保存：写回所选库存的 listing_body、price（与编辑商品一致） */
+/** 出品表单保存：写回所选库存的出品标题、listing_body、price（与编辑商品一致） */
 async function onListingFormSaved(data) {
   const ids = (data.inventory_ids || []).map((id) => Number(id)).filter((x) => Number.isFinite(x))
   if (!ids.length) return
+  const listing_title = data.listing_title != null ? String(data.listing_title).trim() : ''
   const listing_body = data.description != null ? String(data.description) : ''
   const price = Math.round(Number(data.price ?? 0))
   const safePrice = Number.isFinite(price) && price >= 0 ? price : 0
 
-  // ── 1. 写回库存 listing_body 与 price ────────────────────────────────── //
+  // ── 1. 写回库存 出品标题、listing_body 与 price ───────────────────────── //
   try {
     for (const id of ids) {
-      await inventoryApi.update(id, { listing_body, price: safePrice })
+      await inventoryApi.update(id, { listing_title, listing_body, price: safePrice })
     }
   } catch {
     // 错误提示由拦截器处理
@@ -1884,7 +1894,7 @@ async function onListingFormSaved(data) {
   // ── 2. 派发出品自动化（开启浏览器，填写 Mercari 出品页） ─────────────── //
   const accountId = data.meilu_account_id
   if (!accountId) {
-    ElMessage.success('商品说明与单价已保存到库存（未选出品账号，跳过自动化）')
+    ElMessage.success('出品标题、商品说明与单价已保存到库存（未选出品账号，跳过自动化）')
     await load({ resetPage: false })
     loadInventoryStats()
     return
@@ -1909,7 +1919,7 @@ async function onListingFormSaved(data) {
   try {
     const res = await listingApi.postToMarket({
       account_key: accountKey,
-      name: data.name || '',
+      name: listing_title,
       description: listing_body,
       image_urls: imageUrls,
       category_mapping_id: data.category_mapping_id != null
@@ -1929,7 +1939,7 @@ async function onListingFormSaved(data) {
       const d = res.data || {}
       const parts = []
       if (d.images_uploaded) parts.push(`已上传 ${d.images_uploaded} 张图片`)
-      if (d.name_filled) parts.push('商品名已填写')
+      if (d.name_filled) parts.push('出品标题已填写')
       if (d.description_filled) parts.push('商品说明已填写')
       if (d.category_selected) parts.push('商品类型已选择')
       if (d.condition_set) parts.push('商品状态已选择')
@@ -1954,7 +1964,7 @@ async function onListingFormSaved(data) {
     // axios 拦截器已弹窗，此处仅记录
   }
 
-  ElMessage.success('商品说明与单价已保存到库存')
+  ElMessage.success('出品标题、商品说明与单价已保存到库存')
   await load({ resetPage: false })
   loadInventoryStats()
 }
