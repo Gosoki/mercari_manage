@@ -27,7 +27,7 @@ class SyncOrdersRequest(PydanticModel):
 @router.post("/sync-new-data")
 def api_sync_new_data(data: SyncOrdersRequest):
     """
-    订单页「更新列表」：仅增量入库当前 API 页中尚未存在的出售中订单，倒序写入。
+    订单页「更新列表」：WebDriver 打开取引中一覧 + MITM 截获 trading 列表；仅增量入库尚未存在的出售中单，倒序写入。
     """
     try:
         result = sync_new_data(account_id=data.account_id)
@@ -42,8 +42,8 @@ def api_sync_new_data(data: SyncOrdersRequest):
 @router.post("/batch-refresh-info")
 def api_batch_refresh_info(data: SyncOrdersRequest):
     """
-    订单页「更新状态」：从数据库读取未完成订单号与 data_user，逐条 transaction_evidences/get 回填（与单行刷新一致）。
-    - account_id：可选；指定则只处理该账号 seller_id 对应的订单。
+    订单页「更新状态」：逐条打开取引页并由 MITM 截获 transaction_evidences/get 回填（与单行刷新一致）。
+    account_id：可选；指定则只处理该账号 seller_id 对应的订单。
     """
     try:
         result = batch_refresh_orders_info(account_id=data.account_id)

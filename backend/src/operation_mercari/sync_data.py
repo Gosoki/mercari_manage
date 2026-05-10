@@ -142,11 +142,10 @@ def sync_open_orders(
 
 def sync_new_data(account_id: Optional[int] = None) -> Dict[str, Any]:
     """
-    增量同步出售中订单：先查本地该卖家「最新一条」订单号（水印），再拉 Mercari 列表，
-    只对尚未入库的 item 入库；入库顺序与接口列表顺序相反（倒序入库：较早的新单先写入）。
-    每条成功写入后调用 get_order_info.apply_item_info_to_order（transaction_evidences/get）解析并回填扩展字段。
+    增量同步出售中订单：WebDriver 打开取引中一覧 + MITM 截获 trading 列表；按本地水印只对尚未入库的 item 入库；
+    入库顺序与列表顺序相反（倒序入库）。每条成功写入后 ``apply_item_info_to_order`` 打开取引页截获详情并回填扩展字段。
 
-    - 仅处理当前 API 返回的这一页 trading 数据（与全量 sync_open_orders 中 open 段一致）。
+    - 仅处理当前页 trading 数据（与全量 sync_open_orders 中 open 段一致）。
     - 依赖订单表 data_user 与当前卖家 ID 一致；筛选水印时也按 data_user 限定。
     """
     aid, sid = _resolve_account_and_seller(account_id)
@@ -228,8 +227,7 @@ def sync_new_data(account_id: Optional[int] = None) -> Dict[str, Any]:
 
 def batch_refresh_orders_info(account_id: Optional[int] = None) -> Dict[str, Any]:
     """
-    从订单表选出未完成（非 done / confirmed / cancelled / sold_out）且 data_user 非空的行，
-    逐条调用 apply_item_info_to_order（与列表「刷新」相同）。
+    从订单表选出未完成且 data_user 非空的行，逐条 WebDriver 打开取引页 + MITM 截获 transaction_evidences/get（与列表「刷新」相同）。
 
     :param account_id: 指定煤炉账号时，仅刷新该账号 seller_id 与 orders.data_user 一致的行；
                        不传则扫描库内所有符合条件的订单（逐条按 data_user 解析账号）。

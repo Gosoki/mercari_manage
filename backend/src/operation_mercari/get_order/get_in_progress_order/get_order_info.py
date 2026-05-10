@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Mercari 单笔订单详情回填：仅调用 transaction_evidences/get（按 item_id）。
+Mercari 单笔订单详情回填：经 WebDriver 打开 ``https://jp.mercari.com/transaction/m…``（MITM），
+截获 ``GET https://api.mercari.jp/transaction_evidences/get?item_id=…`` 响应。
 
-实际请求形如::
-  GET https://api.mercari.jp/transaction_evidences/get?_datetime_format=U&item_id=<m...>
-
-HTTP 头 DPoP：账号 JSON 的 ``dpop_info`` 须针对上述 URL（与方法 GET）生成绑定；调度层使用 ``DPOP_FOR_ITEM_INFO``；``dpop_info`` 为空时请求层直接抛错，不回退 ``dpop_list``。
-
+接口 URL 形态仍见 ``build_transaction_evidence_url``，便于对照抓包；不再直连 API / DPoP。
 本模块不调用 items/get（例如含 id=、include_auction= 等参数的商品详情接口）。
 
 若传入 expected_seller_id，校验 data.seller_id 一致。
@@ -17,12 +14,23 @@ remark <- item_name；description <- description；order_updated_at/purchase_tim
 若 seller_shipping_fee 为 0 且 data 无 shipping_class_carrier，则不覆盖库内快递费，用已保存运费参与计算。
 """
 
+from __future__ import annotations
+
+import asyncio
 import json
+import os
+import time
 from typing import Any, Dict, Optional
 from urllib.parse import quote
 
-from ...mercari_req_scheduling import DPOP_FOR_ITEM_INFO, send_request
 from ....db_manage.models.order import OrderModel
+from ....ssl_mitm_proxy.capture_config import (
+    canonical_mercari_item_id,
+    clear_transaction_evidence_response_file,
+    read_transaction_evidence_response,
+)
+from ....ssl_mitm_proxy.runner import default_mitm_proxy_url, start_mitm_proxy
+from ....web_drive import get_web_drive_manager
 from ....routes.cost_expenses import deduct_packaging_total_from_order_net_income
 
 _TRANSACTION_EVIDENCE_GET_PATH = "https://api.mercari.jp/transaction_evidences/get"
@@ -31,6 +39,93 @@ _TRANSACTION_EVIDENCE_GET_PATH = "https://api.mercari.jp/transaction_evidences/g
 def build_transaction_evidence_url(item_id: str) -> str:
     qid = quote(str(item_id).strip(), safe="")
     return f"{_TRANSACTION_EVIDENCE_GET_PATH}?_datetime_format=U&item_id={qid}"
+
+
+def mercari_transaction_page_url(item_id: str) -> str:
+    """取引画面，例如 ``https://jp.mercari.com/transaction/m72517493244``。"""
+    cid = canonical_mercari_item_id(str(item_id or "").strip())
+    if not cid:
+        raise ValueError("item_id 不能为空")
+    return f"https://jp.mercari.com/transaction/{cid}"
+
+
+def _mitm_browser_headless() -> bool:
+    v = (
+        os.environ.get("WEB_DRIVE_MERCARI_HEADLESS")
+        or os.environ.get("WEB_DRIVE_ON_SALE_SYNC_HEADLESS")
+        or "1"
+    ).strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+async def _wait_transaction_evidence_mitm(
+    *,
+    item_id: str,
+    since_ms: int,
+    wait_seconds: int,
+) -> Dict[str, Any]:
+    cid = canonical_mercari_item_id(item_id)
+    if not cid:
+        raise RuntimeError("item_id 不能为空")
+    deadline = time.monotonic() + wait_seconds
+    while time.monotonic() < deadline:
+        data = read_transaction_evidence_response(cid)
+        if data and int(data.get("ts") or 0) >= since_ms:
+            return data
+        await asyncio.sleep(0.35)
+    raise RuntimeError(
+        f"{wait_seconds}s 内未截获 transaction_evidences/get（请确认 MITM 已启动、"
+        f"账号已登录，订单/商品 id={cid}）"
+    )
+
+
+async def _fetch_item_info_via_browser_impl(
+    item_id: str,
+    account_id: int,
+    *,
+    timeout: int,
+) -> Dict[str, Any]:
+    r = start_mitm_proxy()
+    if r.get("error"):
+        raise RuntimeError(f"MITM 代理不可用: {r['error']}")
+
+    cid = canonical_mercari_item_id(str(item_id).strip())
+    if not cid:
+        raise RuntimeError("item_id 不能为空")
+
+    clear_transaction_evidence_response_file(cid)
+    since_ms = int(time.time() * 1000)
+
+    mgr = get_web_drive_manager()
+    key = f"meilu_{account_id}"
+    proxy = default_mitm_proxy_url()
+    headless = _mitm_browser_headless()
+    page_url = mercari_transaction_page_url(cid)
+
+    try:
+        await mgr.close_session(key)
+        await mgr.open_session(
+            key,
+            headless=headless,
+            start_url=page_url,
+            proxy_server=proxy,
+        )
+        await _wait_transaction_evidence_mitm(
+            item_id=cid,
+            since_ms=since_ms,
+            wait_seconds=timeout,
+        )
+    finally:
+        try:
+            await mgr.close_session(key)
+        except Exception:
+            pass
+
+    wrapped = read_transaction_evidence_response(cid) or {}
+    body = wrapped.get("body")
+    if not isinstance(body, dict):
+        raise RuntimeError(f"截获的取引详情格式异常: {wrapped!r}")
+    return body
 
 
 def _mercari_response_ok(resp: Any) -> bool:
@@ -108,19 +203,31 @@ def _seller_shipping_fee_explicitly_zero(v: Any) -> bool:
         return False
 
 
-def fetch_item_info(item_id: str, account_id: Optional[int] = None) -> Dict[str, Any]:
+def fetch_item_info(
+    item_id: str,
+    account_id: Optional[int] = None,
+    *,
+    timeout: int = 90,
+) -> Dict[str, Any]:
     """
-    GET transaction_evidences/get（非 items/get），返回完整 JSON（含 result / data）。
-
-    DPoP：仅 ``dpop_info``（``dpop_for=DPOP_FOR_ITEM_INFO``），须与完整请求 URL 一致；缺失时 ``build_headers`` 抛 ``RuntimeError``。
+    使用 ``meilu_{account_id}`` 打开取引页面并由 MITM 截获 transaction_evidences/get，返回完整 JSON（含 result / data）。
     """
-    url = build_transaction_evidence_url(item_id)
-    return send_request(
-        "GET",
-        url,
-        account_id=account_id,
-        dpop_for=DPOP_FOR_ITEM_INFO,
-        timeout=60,
+    if account_id is None:
+        raise RuntimeError(
+            "订单详情改为网页+MITM 截获后，必须提供 account_id（刷新接口会解析煤炉账号主键）"
+        )
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(
+            _fetch_item_info_via_browser_impl(
+                str(item_id).strip(),
+                int(account_id),
+                timeout=int(timeout),
+            )
+        )
+    raise RuntimeError(
+        "fetch_item_info 须在无运行中 event loop 的线程内调用（例如 FastAPI 同步路由）"
     )
 
 

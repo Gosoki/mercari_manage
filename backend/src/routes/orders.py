@@ -548,7 +548,7 @@ def list_orders(
 
 @router.post("/refresh-info")
 def refresh_order_info(data: RefreshOrderInfoBody):
-    """调用 Mercari transaction_evidences/get，更新状态、金额、说明、手续费、快递费、净收益、承运等字段。"""
+    """WebDriver 打开 jp.mercari.com/transaction/m{订单号}，MITM 截获 transaction_evidences/get 后更新状态、金额等字段。"""
     order_no = (data.order_no or "").strip()
     if not order_no:
         raise HTTPException(status_code=400, detail="订单号不能为空")

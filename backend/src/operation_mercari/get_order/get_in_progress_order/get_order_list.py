@@ -2,11 +2,10 @@
 """
 获取 Mercari 出售中（trading）订单列表并同步到本地订单管理表。
 
-调用接口:
-  GET https://api.mercari.jp/items/get_items
-  参数: order_by=desc & seller_id=<seller_id> & sort_type=updated
-        & status=trading & with_auction=true & with_enhanced_hints=false
-        & with_impression_boost=true & with_total_item_count=true
+列表数据：使用账号 WebDriver 打开 ``https://jp.mercari.com/mypage/listings/in_progress``（MITM），
+截获 ``GET https://api.mercari.jp/items/get_items``（status=trading）响应，不再直连 API。
+
+页面触发的查询参数与下方 ``_API_URL`` / ``_API_PARAMS`` 一致，便于对照抓包。
 
 数据映射（item -> orders 表）:
   order_no         <- item["id"]                    (唯一单号, 如 m12550594804)
@@ -20,12 +19,21 @@
   thumbnails       <- item["thumbnails"]            (URL 列表 JSON 存库)
 """
 
+from __future__ import annotations
+
+import asyncio
 import json
+import os
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from ...mercari_req_scheduling import DPOP_FOR_ITEMS_LIST, send_request
 from ....db_manage.models.order import OrderModel
+from ....ssl_mitm_proxy.capture_config import (
+    clear_trading_list_response_file,
+    read_trading_list_response,
+)
+from ....ssl_mitm_proxy.runner import default_mitm_proxy_url, start_mitm_proxy
+from ....web_drive import get_web_drive_manager
 from .get_order_info import apply_item_info_to_order
 
 _API_URL = "https://api.mercari.jp/items/get_items"
@@ -38,6 +46,85 @@ _API_PARAMS = (
     "&with_impression_boost=true"
     "&with_total_item_count=true"
 )
+
+IN_PROGRESS_PAGE_URL = "https://jp.mercari.com/mypage/listings/in_progress"
+
+
+def _mitm_browser_headless() -> bool:
+    v = (
+        os.environ.get("WEB_DRIVE_MERCARI_HEADLESS")
+        or os.environ.get("WEB_DRIVE_ON_SALE_SYNC_HEADLESS")
+        or "1"
+    ).strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+async def _wait_trading_mitm_response(
+    *,
+    seller_key: str,
+    since_ms: int,
+    wait_seconds: int,
+) -> Dict[str, Any]:
+    deadline = time.monotonic() + wait_seconds
+    while time.monotonic() < deadline:
+        data = read_trading_list_response(seller_key)
+        if data and int(data.get("ts") or 0) >= since_ms:
+            return data
+        await asyncio.sleep(0.35)
+    raise RuntimeError(
+        f"{wait_seconds}s 内未截获出售中列表 items/get_items（trading）（请确认 MITM 已启动、"
+        f"账号已登录且 seller_id={seller_key}）"
+    )
+
+
+async def _fetch_trading_list_via_browser_impl(
+    account_id: int,
+    seller_id: int,
+    *,
+    timeout: int,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    r = start_mitm_proxy()
+    if r.get("error"):
+        raise RuntimeError(f"MITM 代理不可用: {r['error']}")
+
+    seller_key = str(int(seller_id))
+    clear_trading_list_response_file(seller_key)
+    since_ms = int(time.time() * 1000)
+
+    mgr = get_web_drive_manager()
+    key = f"meilu_{account_id}"
+    proxy = default_mitm_proxy_url()
+    headless = _mitm_browser_headless()
+
+    try:
+        await mgr.close_session(key)
+        await mgr.open_session(
+            key,
+            headless=headless,
+            start_url=IN_PROGRESS_PAGE_URL,
+            proxy_server=proxy,
+        )
+        await _wait_trading_mitm_response(
+            seller_key=seller_key,
+            since_ms=since_ms,
+            wait_seconds=timeout,
+        )
+    finally:
+        try:
+            await mgr.close_session(key)
+        except Exception:
+            pass
+
+    wrapped = read_trading_list_response(seller_key) or {}
+    body = wrapped.get("body")
+    if not isinstance(body, dict):
+        raise RuntimeError(f"截获的出售中列表格式异常: {wrapped!r}")
+    if body.get("result") != "OK":
+        raise RuntimeError(f"API 返回异常: {body}")
+
+    items: List[Dict[str, Any]] = body.get("data") or []
+    meta: Dict[str, Any] = body.get("meta") or {}
+    return items, meta
 
 
 def _unix_seconds(ts: Any) -> int:
@@ -120,23 +207,28 @@ def _upsert_order(order_data: Dict[str, Any]) -> str:
 def fetch_open_order_items(
     seller_id: int,
     account_id: Optional[int] = None,
+    timeout: int = 90,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
-    仅请求 Mercari 出售中（trading）列表，不写数据库。
-    与 fetch_and_sync_open_orders 使用同一 URL / 参数。
+    使用 ``meilu_{account_id}`` Edge（MITM）打开取引中一覧页，从截获的 items/get_items（trading）解析列表。
     """
-    url = f"{_API_URL}?{_API_PARAMS}&seller_id={seller_id}"
-
-    response = send_request(
-        "GET", url, account_id=account_id, dpop_for=DPOP_FOR_ITEMS_LIST
+    if account_id is None:
+        raise RuntimeError(
+            "出售中列表改为网页+MITM 截获后，必须提供 account_id（同步入口会传入煤炉账号主键）"
+        )
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(
+            _fetch_trading_list_via_browser_impl(
+                int(account_id),
+                int(seller_id),
+                timeout=int(timeout),
+            )
+        )
+    raise RuntimeError(
+        "fetch_open_order_items 须在无运行中 event loop 的线程内调用（例如 FastAPI 同步路由）"
     )
-
-    if response.get("result") != "OK":
-        raise RuntimeError(f"API 返回异常: {response}")
-
-    items: List[Dict[str, Any]] = response.get("data") or []
-    meta: Dict[str, Any] = response.get("meta") or {}
-    return items, meta
 
 
 def fetch_and_sync_open_orders(
@@ -144,10 +236,10 @@ def fetch_and_sync_open_orders(
     account_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
-    从 Mercari API 获取出售中订单列表，并同步到本地订单管理表。
+    从 Mercari 取引中一覧（网页 + MITM 截获）获取出售中订单列表，并同步到本地订单管理表。
 
     :param seller_id:  Mercari 卖家 ID（从账号配置读取后传入）。
-    :param account_id: 指定请求头账号 ID；为 None 时自动选取 active 账号。
+    :param account_id: 指定煤炉账号 ID；为 None 时自动选取 active 账号（WebDriver profile ``meilu_{id}``）。
     :return: 同步结果统计字典，包含 total / inserted / updated / skipped / errors。
     """
     items: List[Dict[str, Any]]

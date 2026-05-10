@@ -19,6 +19,8 @@ from src.ssl_mitm_proxy.capture_config import (  # noqa: E402
     atomic_write_capture_file,
     atomic_write_item_get_response,
     atomic_write_on_sale_list_response,
+    atomic_write_trading_list_response,
+    atomic_write_transaction_evidence_response,
     canonical_mercari_item_id,
     headers_to_value_dict,
     parse_capture_target,
@@ -146,6 +148,46 @@ class MercariCapture:
                 )
                 return
 
+            if ctype == "items_get_items" and dpop == "dpop_list":
+                sid = str(meta.get("seller_id") or "").strip()
+                if not sid.isdigit():
+                    return
+                atomic_write_trading_list_response(
+                    sid,
+                    {
+                        "ts": int(time.time() * 1000),
+                        "seller_id": sid,
+                        "request_url": str(meta.get("full_url") or url),
+                        "http_status": code,
+                        "body": body_json,
+                    },
+                )
+                _log_line(
+                    f"[MITM] items/get_items 出售中(trading)响应已写入 seller_id={sid} "
+                    f"result={body_json.get('result') if isinstance(body_json, dict) else '?'}"
+                )
+                return
+
+            if ctype == "transaction_evidences_get" and dpop == "dpop_info":
+                iid = canonical_mercari_item_id(str(meta.get("item_id") or ""))
+                if not iid:
+                    return
+                atomic_write_transaction_evidence_response(
+                    iid,
+                    {
+                        "ts": int(time.time() * 1000),
+                        "item_id": iid,
+                        "request_url": str(meta.get("full_url") or url),
+                        "http_status": code,
+                        "body": body_json,
+                    },
+                )
+                _log_line(
+                    f"[MITM] transaction_evidences/get 已写入 item_id={iid} "
+                    f"result={body_json.get('result') if isinstance(body_json, dict) else '?'}"
+                )
+                return
+
             if ctype == "items_get" and dpop == "dpop_item_get_info":
                 iid = canonical_mercari_item_id(str(meta.get("item_id") or ""))
                 if not iid:
@@ -164,6 +206,7 @@ class MercariCapture:
                     f"[MITM] items/get 商品详情响应已写入 item_id={iid} "
                     f"result={body_json.get('result') if isinstance(body_json, dict) else '?'}"
                 )
+                return
         except Exception:
             pass
 

@@ -322,8 +322,9 @@ async def post_to_market(
         proxy_server=ps,
     )
 
-    async with manager._lock:
-        ctx = manager._contexts.get(account_key)
+    s = manager._prepare_async()
+    async with s.lock:  # type: ignore[union-attr]
+        ctx = s.contexts.get(account_key)
         if ctx is None or not manager._is_context_alive(ctx):
             raise RuntimeError(f"会话启动失败: {account_key}")
         page = ctx.pages[-1] if ctx.pages else await ctx.new_page()

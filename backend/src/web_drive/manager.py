@@ -2,6 +2,12 @@
 """
 按 account_key 使用独立 user_data_dir 启动 Microsoft Edge（Playwright channel=msedge），
 Cookie 与站点数据随目录持久化；不同账号对应不同子浏览器配置目录。
+
+Playwright 异步驱动绑定到「当前线程 + 当前 event loop」：
+- FastAPI 的 async 路由跑在 uvicorn 主事件循环；sync 路由在线程池里 ``asyncio.run()``，每次都会新建并关闭 loop。
+- 若在线程间共享同一个 Playwright 实例，或复用已随 loop 关闭而失效的实例，会触发
+  ``'NoneType' object has no attribute 'send'``。
+因此每个 **操作系统线程** 使用独立的 Playwright / contexts（``threading.local()``）。
 """
 
 from __future__ import annotations
@@ -9,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import threading
 from typing import Any, Dict, List, Optional
 
 from .paths import profile_dir_for, profiles_root, validate_account_key
@@ -23,13 +30,37 @@ def get_web_drive_manager() -> "EdgeWebDriveManager":
     return _manager
 
 
+class _DriveThreadState:
+    """单个 OS 线程内的浏览器状态（Lock / Playwright / 会话表）。"""
+
+    __slots__ = ("lock", "playwright", "playwright_loop", "contexts")
+
+    def __init__(self) -> None:
+        self.lock: Optional[asyncio.Lock] = None
+        self.playwright: Any = None
+        self.playwright_loop: Optional[asyncio.AbstractEventLoop] = None
+        self.contexts: Dict[str, Any] = {}
+
+
 class EdgeWebDriveManager:
     """管理多账号 Edge 持久化会话（每账号独立 profile 目录）。"""
 
     def __init__(self) -> None:
-        self._lock = asyncio.Lock()
-        self._playwright: Any = None
-        self._contexts: Dict[str, Any] = {}
+        self._tls = threading.local()
+
+    def _ts(self) -> _DriveThreadState:
+        s = getattr(self._tls, "state", None)
+        if s is None:
+            s = _DriveThreadState()
+            self._tls.state = s
+        return s
+
+    def _prepare_async(self) -> _DriveThreadState:
+        """在 async 方法开头调用：确保本线程有 asyncio.Lock（绑定当前运行中的 loop）。"""
+        s = self._ts()
+        if s.lock is None:
+            s.lock = asyncio.Lock()
+        return s
 
     @staticmethod
     async def _navigate_one_tab(
@@ -62,16 +93,32 @@ class EdgeWebDriveManager:
                     pass
             await asyncio.sleep(0.15)
 
-    async def _ensure_playwright(self) -> Any:
-        if self._playwright is None:
+    @staticmethod
+    def _drop_stale_playwright(s: _DriveThreadState, running: asyncio.AbstractEventLoop) -> None:
+        """本线程内：当前 loop 与创建 Playwright 时不一致则丢弃缓存（常见于连续多次 asyncio.run）。"""
+        if s.playwright is None:
+            s.playwright_loop = None
+            return
+        if s.playwright_loop is running:
+            return
+        s.playwright = None
+        s.playwright_loop = None
+
+    async def _ensure_playwright(self, s: _DriveThreadState) -> Any:
+        running = asyncio.get_running_loop()
+        self._drop_stale_playwright(s, running)
+
+        if s.playwright is None:
             try:
                 from playwright.async_api import async_playwright
             except ImportError as exc:
                 raise RuntimeError(
                     "未安装 playwright，请在 backend 目录执行: pip install playwright && playwright install msedge"
                 ) from exc
-            self._playwright = await async_playwright().start()
-        return self._playwright
+            s.playwright = await async_playwright().start()
+            s.playwright_loop = running
+
+        return s.playwright
 
     @staticmethod
     def _purge_non_auth_cache(user_data_dir: str) -> None:
@@ -123,9 +170,10 @@ class EdgeWebDriveManager:
             return False
 
     def list_sessions(self) -> List[Dict[str, Any]]:
-        """仅列出仍存活的上下文；已手动关闭的条目由下次 open_session 时从缓存剔除。"""
+        """列出当前线程内仍存活的上下文（async 路由=主循环；sync+asyncio.run=线程池线程）。"""
+        s = self._ts()
         out: List[Dict[str, Any]] = []
-        for key, ctx in list(self._contexts.items()):
+        for key, ctx in list(s.contexts.items()):
             if not self._is_context_alive(ctx):
                 continue
             try:
@@ -150,20 +198,21 @@ class EdgeWebDriveManager:
         proxy_server: Optional[str] = None,
     ) -> Dict[str, Any]:
         key = validate_account_key(account_key)
-        async with self._lock:
-            for k in list(self._contexts.keys()):
-                c = self._contexts.get(k)
+        s = self._prepare_async()
+        async with s.lock:  # type: ignore[union-attr]
+            for k in list(s.contexts.keys()):
+                c = s.contexts.get(k)
                 if c is not None and not self._is_context_alive(c):
-                    self._contexts.pop(k, None)
+                    s.contexts.pop(k, None)
 
-            ctx = self._contexts.get(key)
+            ctx = s.contexts.get(key)
 
             if ctx is not None:
                 if start_url:
                     try:
                         await self._navigate_one_tab(ctx, start_url)
                     except Exception:
-                        self._contexts.pop(key, None)
+                        s.contexts.pop(key, None)
                         ctx = None
                 else:
                     return {
@@ -181,7 +230,7 @@ class EdgeWebDriveManager:
                     "profiles_root": profiles_root(),
                 }
 
-            pw = await self._ensure_playwright()
+            pw = await self._ensure_playwright(s)
             udir = profile_dir_for(key)
             launch_kw: Dict[str, Any] = {
                 "user_data_dir": udir,
@@ -208,7 +257,7 @@ class EdgeWebDriveManager:
                     f"启动 Edge 失败（请确认已安装 Microsoft Edge，并已执行 playwright install msedge）: {exc}"
                 ) from exc
 
-            self._contexts[key] = context
+            s.contexts[key] = context
             if start_url:
                 await self._navigate_one_tab(context, start_url)
 
@@ -222,8 +271,9 @@ class EdgeWebDriveManager:
 
     async def close_session(self, account_key: str) -> Dict[str, Any]:
         key = validate_account_key(account_key)
-        async with self._lock:
-            ctx = self._contexts.pop(key, None)
+        s = self._prepare_async()
+        async with s.lock:  # type: ignore[union-attr]
+            ctx = s.contexts.pop(key, None)
             if ctx is None:
                 return {"account_key": key, "closed": False}
             try:
@@ -244,8 +294,9 @@ class EdgeWebDriveManager:
         xp = (xpath or "").strip()
         if not xp:
             raise ValueError("xpath 不能为空")
-        async with self._lock:
-            ctx = self._contexts.get(key)
+        s = self._prepare_async()
+        async with s.lock:  # type: ignore[union-attr]
+            ctx = s.contexts.get(key)
             if ctx is None or not self._is_context_alive(ctx):
                 raise RuntimeError(f"会话未运行: {key}")
             # 始终操作最后打开的标签页：
@@ -273,8 +324,9 @@ class EdgeWebDriveManager:
         u = (url or "").strip()
         if not u:
             raise ValueError("url 不能为空")
-        async with self._lock:
-            ctx = self._contexts.get(key)
+        s = self._prepare_async()
+        async with s.lock:  # type: ignore[union-attr]
+            ctx = s.contexts.get(key)
             if ctx is None or not self._is_context_alive(ctx):
                 raise RuntimeError(f"会话未运行: {key}")
             page = await ctx.new_page()
@@ -282,17 +334,20 @@ class EdgeWebDriveManager:
             return {"account_key": key, "opened": True, "url": u}
 
     async def shutdown(self) -> None:
-        async with self._lock:
-            for key in list(self._contexts.keys()):
-                ctx = self._contexts.pop(key, None)
+        """关闭当前线程内的所有会话与 Playwright（仅影响调用方所在线程）。"""
+        s = self._prepare_async()
+        async with s.lock:  # type: ignore[union-attr]
+            for key in list(s.contexts.keys()):
+                ctx = s.contexts.pop(key, None)
                 if ctx is not None:
                     try:
                         await ctx.close()
                     except Exception:
                         pass
-            if self._playwright is not None:
+            if s.playwright is not None:
                 try:
-                    await self._playwright.stop()
+                    await s.playwright.stop()
                 except Exception:
                     pass
-                self._playwright = None
+                s.playwright = None
+                s.playwright_loop = None
