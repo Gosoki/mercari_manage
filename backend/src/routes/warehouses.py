@@ -25,6 +25,26 @@ class WarehouseUpdate(PydanticModel):
     description: Optional[str] = None
 
 
+class RenameWarehouseGroupBody(PydanticModel):
+    """将同一展示仓库名下的所有货架位批量改到新仓库名（仅改 warehouse 字段）"""
+    old_warehouse: str
+    new_warehouse: str
+
+
+class RenameShelfNameGroupBody(PydanticModel):
+    """同一仓库下、同一货架名称（shelf_name）分组批量改为新名称"""
+    warehouse: str
+    old_shelf_name: Optional[str] = None  # 空串 / None 表示「未设置货架名称」分组
+    new_shelf_name: Optional[str] = None  # 空串 / None 表示清空为未设置
+
+
+def _norm_shelf_name_key(s: Optional[str]) -> Optional[str]:
+    if s is None:
+        return None
+    t = str(s).strip()
+    return t if t else None
+
+
 def _serialize(wh: WarehouseModel) -> dict:
     d = wh.to_dict()
     d.update(WarehouseModel.get_stats(wh.id))
@@ -86,6 +106,60 @@ def create_warehouse(data: WarehouseCreate):
     if wh_key != default_key:
         _safe_remove_default_template_shelf(data.name, wh.id)
     return _serialize(wh)
+
+
+@router.put("/rename-group")
+def rename_warehouse_group(data: RenameWarehouseGroupBody):
+    old_key = WarehouseModel.normalize_warehouse_key(data.old_warehouse)
+    new_key = WarehouseModel.normalize_warehouse_key(data.new_warehouse)
+    if old_key == new_key:
+        raise HTTPException(status_code=400, detail="新仓库名称与当前相同")
+    all_rows = WarehouseModel.find_all(order_by="id ASC")
+
+    def row_wh_key(w: WarehouseModel) -> str:
+        return WarehouseModel.normalize_warehouse_key(w.warehouse)
+
+    targets = [w for w in all_rows if row_wh_key(w) == old_key]
+    if not targets:
+        raise HTTPException(status_code=404, detail="未找到该仓库")
+    target_ids = {w.id for w in targets}
+    for w in targets:
+        other = WarehouseModel.find_by_warehouse_and_name(new_key, w.name)
+        if other and other.id not in target_ids:
+            raise HTTPException(
+                status_code=400,
+                detail=f"目标仓库「{new_key}」下已存在货架号「{w.name}」，请先处理冲突后再改名",
+            )
+    for w in targets:
+        w.warehouse = new_key
+        if not w.save():
+            raise HTTPException(status_code=500, detail="保存失败")
+    return {"message": "仓库名称已更新", "updated": len(targets)}
+
+
+@router.put("/rename-shelf-name-group")
+def rename_shelf_name_group(data: RenameShelfNameGroupBody):
+    wh_key = WarehouseModel.normalize_warehouse_key(data.warehouse)
+    old_key = _norm_shelf_name_key(data.old_shelf_name)
+    new_key = _norm_shelf_name_key(data.new_shelf_name)
+    if old_key == new_key:
+        raise HTTPException(status_code=400, detail="新货架名称与当前相同")
+
+    def row_wh_key(w: WarehouseModel) -> str:
+        return WarehouseModel.normalize_warehouse_key(w.warehouse)
+
+    def row_sn_key(w: WarehouseModel) -> Optional[str]:
+        return _norm_shelf_name_key(w.shelf_name)
+
+    all_rows = WarehouseModel.find_all(order_by="id ASC")
+    targets = [w for w in all_rows if row_wh_key(w) == wh_key and row_sn_key(w) == old_key]
+    if not targets:
+        raise HTTPException(status_code=404, detail="未找到该货架名称分组")
+    for w in targets:
+        w.shelf_name = new_key
+        if not w.save():
+            raise HTTPException(status_code=500, detail="保存失败")
+    return {"message": "货架名称已更新", "updated": len(targets)}
 
 
 @router.put("/{wid}")

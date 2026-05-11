@@ -7,7 +7,7 @@ Mercari 出品自动化：打开 https://jp.mercari.com/sell/create 并填写表
    1.  图片上传（写真を追加）
    2.  填写商品名称
    3.  选择商品类型（按 DB position 逐级点击；若进入 /sell/wizard 则点击「出品画面に戻る」返回）
-   4.  选择商品状態（选完 li 后若进入 /sell/wizard 同样点击「出品画面に戻る」返回）
+   4.  选择商品状態（#main 内按日文文案点入口与选项；选完后若进入 /sell/wizard 则点「出品画面に戻る」）
    5.  填写商品说明
    6.  选择快递費負担
    7.  选择配送方法
@@ -15,7 +15,7 @@ Mercari 出品自动化：打开 https://jp.mercari.com/sell/create 并填写表
    9.  选择最大发货天数
   10.  选择出售类型（即购 / 拍卖；拍卖时同步选时长）
   11.  填写出售价格
-  12.  点击出品按钮提交
+  12.  点击出品按钮提交；若出品成功则自动 close_session 关闭该账号浏览器
 """
 from __future__ import annotations
 
@@ -58,19 +58,15 @@ CATEGORY_LINK_XPATH = '//*[@id="main"]/form/section[3]/div[2]/span/a'
 # 类别页面各级列表项（a[x] 中 x 来自 DB position 字段）
 CATEGORY_ITEM_XPATH_TPL = '//*[@id="main"]/a[{pos}]'
 
-# 商品状態 入口链接
-CONDITION_LINK_XPATH = '//*[@id="main"]/form/section[3]/div[4]/span/a'
-
-# 商品状態 选择页面列表项（li[x]，1-based）
-CONDITION_ITEM_XPATH_TPL = '//*[@id="main"]/ul/li[{pos}]'
-
-# 商品状態 → 列表位置映射
-CONDITION_POS: Dict[str, int] = {
-    "new_unused":    1,  # 新品、未使用
-    "almost_unused": 2,  # 未使用に近い
-    "good":          3,  # 目立った傷や汚れなし
-    "fair":          4,  # やや傷や汚れあり
-    "used":          5,  # 傷や汚れあり
+# 商品状態：入口与选项一律在 #main 内按日文文案定位（不用 XPath）
+CONDITION_ENTRY_TEXTS: Tuple[str, ...] = ("商品の状態を選択する", "商品の状態")
+# API status → メルカリ一覧表示文案
+CONDITION_ITEM_JA: Dict[str, str] = {
+    "new_unused": "新品、未使用",
+    "almost_unused": "未使用に近い",
+    "good": "目立った傷や汚れなし",
+    "fair": "やや傷や汚れあり",
+    "used": "傷や汚れあり",
 }
 
 # 快递費負担 select
@@ -745,6 +741,20 @@ async def post_to_market(
         log.error("[post_to_market] 点击出品按钮失败: %s", exc)
         result["submit_error"] = str(exc)
 
+    # 出品成功：关闭该账号 WebDriver 浏览器（释放 profile，下次再开干净会话）
+    if result.get("submitted") is True:
+        if report:
+            report("close_browser", "出品成功，正在关闭浏览器…")
+        try:
+            await manager.close_session(account_key)
+            result["browser_closed"] = True
+            log.info("[post_to_market] 出品成功，已关闭浏览器会话: %s", account_key)
+            print(f"[出品] 出品成功，已关闭浏览器: {account_key}", flush=True)
+        except Exception as exc:
+            result["browser_closed"] = False
+            result["browser_close_error"] = str(exc)
+            log.warning("[post_to_market] 出品成功后关闭浏览器失败: %s", exc)
+
     return result
 
 
@@ -1035,13 +1045,11 @@ async def _select_condition(
     report: Optional[Callable[[str, str], None]] = None,
 ) -> None:
     """
-    点击商品状態入口链接 → 在新页面中点击对应列表项。
-    status 映射到 li 位置（1-based）：
-      new_unused=1 / almost_unused=2 / good=3 / fair=4 / used=5
-    选完 li 后有时会进入 /sell/wizard（製品情報案内），与选类型后相同，须再点「出品画面に戻る」。
+    点击 #main 内「商品の状態…」入口 → 在列表页按日文选项文案点选。
+    选完选项后有时会进入 /sell/wizard，须再点「出品画面に戻る」。
     """
-    pos = CONDITION_POS.get(status)
-    if pos is None:
+    ja_label = CONDITION_ITEM_JA.get(status)
+    if not ja_label:
         log.warning("[condition] 未知状态值: %s，跳过", status)
         return
 
@@ -1052,36 +1060,50 @@ async def _select_condition(
         report=report,
     )
 
-    # 点击表单内的「商品の状態を選択する」/「商品の状態」入口
-    link_loc = page.locator(f"xpath={CONDITION_LINK_XPATH}")
-    try:
-        await link_loc.first.wait_for(state="visible", timeout=element_timeout_ms)
-        await link_loc.first.click(timeout=element_timeout_ms)
-    except Exception as first_exc:
-        log.info("[condition] 主 XPath 未找到: %s，尝试按文案定位链接", first_exc)
-        last_exc = first_exc
-        clicked = False
-        for text in ("商品の状態を選択する", "商品の状態"):
+    # 入口：#main 内 a / button / 可点 span，按文案（长文案优先）
+    main = page.locator("#main")
+    last_exc: Optional[BaseException] = None
+    clicked = False
+    for text in CONDITION_ENTRY_TEXTS:
+        try:
+            loc = main.locator("a, button, [role='button'], span").filter(has_text=text).first
+            await loc.wait_for(state="visible", timeout=element_timeout_ms)
+            await loc.scroll_into_view_if_needed()
+            await loc.click(timeout=element_timeout_ms)
+            clicked = True
+            log.info("[condition] 已通过文案「%s」打开商品状态", text)
+            break
+        except Exception as exc:
+            last_exc = exc
+            continue
+    if not clicked:
+        for text in CONDITION_ENTRY_TEXTS:
             try:
-                alt = page.locator("a, button").filter(has_text=text).first
-                await alt.wait_for(state="visible", timeout=min(15_000, element_timeout_ms))
-                await alt.click(timeout=element_timeout_ms)
+                loc = main.get_by_text(text, exact=False).first
+                await loc.wait_for(state="visible", timeout=element_timeout_ms)
+                await loc.click(timeout=element_timeout_ms)
                 clicked = True
-                log.info("[condition] 已通过文案「%s」点击状态入口", text)
+                log.info("[condition] get_by_text「%s」打开商品状态", text)
                 break
             except Exception as exc:
                 last_exc = exc
                 continue
-        if not clicked:
-            raise last_exc if last_exc else first_exc
+    if not clicked:
+        raise last_exc if last_exc else RuntimeError("未找到商品状态入口文案")
+
     await page.wait_for_load_state("domcontentloaded", timeout=page_load_timeout_ms)
 
-    # 点击对应 li
-    item_xpath = CONDITION_ITEM_XPATH_TPL.format(pos=pos)
-    item_loc = page.locator(f"xpath={item_xpath}")
-    await item_loc.first.wait_for(state="visible", timeout=element_timeout_ms)
-    await item_loc.first.click()
-    log.info("[condition] 已选 status=%s (li[%s])", status, pos)
+    # 列表页：按日文状态文案点选（优先 #main，失败则全页）
+    row_sel = "li, button, [role='option'], [role='radio'], label, div[role='button']"
+    try:
+        item = main.locator(row_sel).filter(has_text=ja_label).first
+        await item.wait_for(state="visible", timeout=element_timeout_ms)
+    except Exception:
+        item = page.locator(row_sel).filter(has_text=ja_label).first
+        await item.wait_for(state="visible", timeout=element_timeout_ms)
+    await item.scroll_into_view_if_needed()
+    await item.click(timeout=element_timeout_ms)
+    log.info("[condition] 已选 status=%s 文案=%s", status, ja_label)
 
     # 等待返回表单页（或异步跳转到 sell/wizard）
     await asyncio.sleep(0.5)

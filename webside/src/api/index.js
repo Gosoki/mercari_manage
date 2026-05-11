@@ -44,7 +44,11 @@ export const warehouseApi = {
   list: () => http.get('/warehouses'),
   create: (data) => http.post('/warehouses', data),
   update: (id, data) => http.put(`/warehouses/${id}`, data),
-  remove: (id) => http.delete(`/warehouses/${id}`)
+  remove: (id) => http.delete(`/warehouses/${id}`),
+  /** 批量修改同一仓库展示名（其下所有货架位的 warehouse 字段） */
+  renameGroup: (data) => http.put('/warehouses/rename-group', data),
+  /** 同一仓库下批量修改 shelf_name 分组名称 */
+  renameShelfNameGroup: (data) => http.put('/warehouses/rename-shelf-name-group', data)
 }
 
 // 游戏类型

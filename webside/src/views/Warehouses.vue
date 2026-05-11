@@ -4,11 +4,11 @@
       <template #header>
         <div class="list-card-header">
           <div class="list-card-header-start">
-            <span class="list-card-title">仓库列表</span>
+            <span class="list-card-title">仓库与货架</span>
             <div class="header-overview-grid">
               <div class="header-overview-item">
                 <div class="header-overview-value">{{ mergedWarehouse.shelf_count }}</div>
-                <div class="header-overview-label">货架数量</div>
+                <div class="header-overview-label">货架位</div>
               </div>
               <div class="header-overview-item">
                 <div class="header-overview-value">{{ mergedWarehouse.product_types }}</div>
@@ -20,11 +20,10 @@
               </div>
             </div>
           </div>
-          <el-tooltip content="新建仓库" placement="top">
-            <el-button type="primary" class="add-warehouse-btn" @click="openWarehouseDialog">
-              <el-icon><Plus /></el-icon>
-            </el-button>
-          </el-tooltip>
+          <el-button type="primary" class="header-primary-btn" @click="openAddWarehouseNameDialog">
+            <el-icon><Plus /></el-icon>
+            添加仓库
+          </el-button>
         </div>
       </template>
       <el-collapse v-if="groupedByWarehouse.length" v-model="activeCollapse" class="warehouse-collapse">
@@ -42,7 +41,7 @@
                 <div class="collapse-stat-grid collapse-stat-grid--primary">
                   <div class="collapse-stat-item">
                     <div class="collapse-stat-value">{{ grp.shelfNameGroups.length }}</div>
-                    <div class="collapse-stat-label">名称分组</div>
+                    <div class="collapse-stat-label">货架分区</div>
                   </div>
                   <div class="collapse-stat-item">
                     <div class="collapse-stat-value">{{ grp.shelfCount }}</div>
@@ -58,15 +57,9 @@
                   </div>
                 </div>
               </div>
-              <div class="collapse-title-end">
-                <el-button
-                  type="primary"
-                  size="small"
-                  class="collapse-add-btn"
-                  @click.stop="openDialogForWarehouse(grp.warehouse)"
-                >
-                  <el-icon><Plus /></el-icon>
-                  添加货架
+              <div class="collapse-title-end collapse-title-actions" @click.stop>
+                <el-button type="primary" size="small" plain @click.stop="openRenameWarehouseDialog(grp)">
+                  修改名称
                 </el-button>
               </div>
             </div>
@@ -101,33 +94,42 @@
                       </div>
                     </div>
                   </div>
-                  <div class="shelf-name-title-end">
+                  <div class="shelf-name-title-end shelf-name-title-actions" @click.stop>
+                    <el-button type="primary" size="small" plain @click.stop="openRenameShelfNameDialog(grp, sub)">
+                      修改名称
+                    </el-button>
                     <el-button
                       type="primary"
                       size="small"
                       class="collapse-add-btn"
-                      @click.stop="openDialogForShelfGroup(grp.warehouse, sub.rawShelfName)"
+                      @click.stop="openDialogForWarehouse(grp.warehouse)"
                     >
                       <el-icon><Plus /></el-icon>
-                      添加货架号
+                      添加货架
                     </el-button>
                   </div>
                 </div>
               </template>
+              <div class="shelf-toolbar">
+                <el-button
+                  type="primary"
+                  size="small"
+                  plain
+                  @click="openDialogForShelfGroup(grp.warehouse, sub.rawShelfName)"
+                >
+                  <el-icon><Plus /></el-icon>
+                  添加货架号
+                </el-button>
+              </div>
               <el-table :data="sub.shelves" border stripe size="small" class="shelf-subtable shelf-no-table">
                 <el-table-column label="货架号" prop="name" min-width="120" />
                 <el-table-column label="位置" prop="location" min-width="130" />
                 <el-table-column label="描述" prop="description" min-width="160" show-overflow-tooltip />
                 <el-table-column label="商品种类" prop="product_types" width="100" align="center" />
                 <el-table-column label="总库存量" prop="total_quantity" width="100" align="center" />
-                <el-table-column label="操作" width="170" fixed="right">
+                <el-table-column label="操作" width="100" fixed="right">
                   <template #default="{ row }">
-                    <el-button size="small" @click="openDialog(row)">编辑</el-button>
-                    <el-popconfirm title="确认删除该货架？" @confirm="remove(row.id)">
-                      <template #reference>
-                        <el-button size="small" type="danger">删除</el-button>
-                      </template>
-                    </el-popconfirm>
+                    <el-button size="small" type="primary" link @click="openDialog(row)">编辑</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -135,28 +137,31 @@
           </el-collapse>
         </el-collapse-item>
       </el-collapse>
-      <el-empty v-else description="暂无货架数据" />
+      <el-empty v-else description="还没有货架数据，请先添加仓库">
+        <el-button type="primary" @click="openAddWarehouseNameDialog">
+          <el-icon><Plus /></el-icon>
+          添加仓库
+        </el-button>
+      </el-empty>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="form.id ? '编辑货架' : addDialogTitle" width="440px" destroy-on-close>
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
-        <el-form-item label="仓库" prop="warehouse">
-          <el-input v-model="form.warehouse" placeholder="请输入仓库名称（如 1号仓）" />
+    <el-dialog v-model="dialogVisible" :title="shelfDialogTitle" width="460px" destroy-on-close>
+      <el-form :model="form" :rules="rules" ref="formRef" label-width="92px">
+        <el-form-item label="所属仓库" prop="warehouse">
+          <el-input v-model="form.warehouse" placeholder="如：1号仓、默认仓库（相同名称会归为一组）" />
         </el-form-item>
+        <p v-if="!form.id" class="form-hint">说明：列表按「所属仓库」分组；每个保存记录对应一个货架位（仓库 + 货架号唯一）。</p>
         <el-form-item label="货架名称">
-          <el-input v-model="form.shelf_name" placeholder="可选，如：一层左、展示名" clearable />
+          <el-input v-model="form.shelf_name" placeholder="可选，用于二级分组展示（如：一层左）；留空表示未设置" clearable />
         </el-form-item>
-        <el-form-item v-if="form.id" label="货架号" prop="name">
-          <el-input v-model="form.name" placeholder="请输入货架号" clearable />
-        </el-form-item>
-        <el-form-item v-else label="货架号" prop="name">
-          <el-input v-model="form.name" placeholder="请输入货架号" clearable />
+        <el-form-item label="货架号" prop="name">
+          <el-input v-model="form.name" placeholder="同一仓库内不可重复，如：A-01" clearable />
         </el-form-item>
         <el-form-item label="位置">
-          <el-input v-model="form.location" placeholder="如：1号仓库1排左侧" />
+          <el-input v-model="form.location" placeholder="如：进门左手第一排" clearable />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="可选描述" />
+          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="可选备注" clearable />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -165,23 +170,128 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="warehouseDialogVisible" title="新建仓库" width="420px" destroy-on-close>
-      <el-form label-width="80px">
-        <el-form-item label="仓库名称" required>
-          <el-input v-model="newWarehouseName" placeholder="请输入仓库名称（如 2号仓）" />
+    <el-dialog
+      v-model="renameWarehouseDialogVisible"
+      title="修改仓库名称"
+      width="640px"
+      destroy-on-close
+      class="rename-warehouse-dialog"
+      @closed="onRenameWarehouseDialogClosed"
+    >
+      <el-form label-width="96px">
+        <el-form-item label="当前名称">
+          <el-input :model-value="renameWarehouseOld" disabled />
         </el-form-item>
+        <el-form-item label="新名称" required>
+          <el-input
+            v-model="renameWarehouseNew"
+            placeholder="输入新的仓库名称"
+            clearable
+            @keyup.enter="submitRenameWarehouse"
+          />
+        </el-form-item>
+        <p class="form-hint">将同步更新该仓库下全部货架位的所属仓库名；若目标名称下已有相同货架号则会失败。</p>
+      </el-form>
+
+      <el-divider content-position="left">货架位与删除</el-divider>
+      <p class="form-hint">删除货架位、删除整个仓库均在此操作；仅当无库存且无出入库等关联记录时可删除。</p>
+      <el-table :data="renameDialogShelves" border stripe size="small" max-height="280" class="rename-shelf-table">
+        <el-table-column label="货架号" prop="name" min-width="100" />
+        <el-table-column label="货架名称" min-width="100" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.shelf_name || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="位置" prop="location" min-width="100" show-overflow-tooltip />
+        <el-table-column label="总库存" prop="total_quantity" width="80" align="center" />
+        <el-table-column label="操作" width="88" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-popconfirm
+              title="仅当该货架无库存且无出入库记录时可删除，确定删除？"
+              width="260"
+              @confirm="removeShelfFromRenameDialog(row.id)"
+            >
+              <template #reference>
+                <el-button type="danger" link size="small" @click.stop>删除</el-button>
+              </template>
+            </el-popconfirm>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #footer>
+        <div class="rename-dialog-footer">
+          <el-popconfirm
+            :title="warehouseDeleteConfirmTextForDialog()"
+            width="320"
+            confirm-button-text="确定删除"
+            cancel-button-text="取消"
+            @confirm="removeWarehouseGroupForDialog"
+          >
+            <template #reference>
+              <el-button type="danger" plain>删除整个仓库</el-button>
+            </template>
+          </el-popconfirm>
+          <div class="rename-dialog-footer-right">
+            <el-button @click="renameWarehouseDialogVisible = false">关闭</el-button>
+            <el-button type="primary" :loading="renameWarehouseSubmitting" @click="submitRenameWarehouse">保存名称</el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="renameShelfNameDialogVisible"
+      title="修改货架名称"
+      width="440px"
+      destroy-on-close
+      @closed="onRenameShelfNameDialogClosed"
+    >
+      <el-form label-width="100px">
+        <el-form-item label="所属仓库">
+          <el-input :model-value="renameShelfWarehouse" disabled />
+        </el-form-item>
+        <el-form-item label="当前名称">
+          <el-input :model-value="renameShelfOldDisplay" disabled />
+        </el-form-item>
+        <el-form-item label="新名称">
+          <el-input
+            v-model="renameShelfNew"
+            placeholder="留空表示取消名称（归入未设置分组）"
+            clearable
+            @keyup.enter="submitRenameShelfName"
+          />
+        </el-form-item>
+        <p class="form-hint">将同步更新本分组下全部货架位的「货架名称」；仅改展示分组，不改变货架号。</p>
       </el-form>
       <template #footer>
-        <el-button @click="warehouseDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="confirmCreateWarehouse">下一步</el-button>
+        <el-button @click="renameShelfNameDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="renameShelfSubmitting" @click="submitRenameShelfName">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="addWarehouseNameDialogVisible" title="添加仓库" width="420px" destroy-on-close @closed="onAddWarehouseNameDialogClosed">
+      <el-form label-width="88px" @submit.prevent="confirmAddWarehouseName">
+        <el-form-item label="仓库名称" required>
+          <el-input
+            v-model="newWarehouseNameInput"
+            placeholder="如：2号仓（保存后请为该仓库添加货架位）"
+            clearable
+            @keyup.enter="confirmAddWarehouseName"
+          />
+        </el-form-item>
+        <p class="form-hint">仓库名称用于列表分组；创建后需在「添加货架」中填写货架分区名与货架号。</p>
+      </el-form>
+      <template #footer>
+        <el-button @click="addWarehouseNameDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmAddWarehouseName">下一步：添加货架</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import { warehouseApi } from '@/api/index.js'
 
 const DEFAULT_WAREHOUSE = '默认仓库'
@@ -232,8 +342,20 @@ const activeCollapse = ref([])
 /** 二级折叠（货架名称）每组展开的 name，按仓库分 key */
 const activeShelfNameByWh = ref({})
 const dialogVisible = ref(false)
-const warehouseDialogVisible = ref(false)
-const newWarehouseName = ref('')
+const addWarehouseNameDialogVisible = ref(false)
+const newWarehouseNameInput = ref('')
+const renameWarehouseDialogVisible = ref(false)
+/** 弹窗内列表筛选键（改名成功后会更新为新名称） */
+const renameWarehouseGroupKey = ref('')
+const renameWarehouseOld = ref('')
+const renameWarehouseNew = ref('')
+const renameWarehouseSubmitting = ref(false)
+const renameShelfNameDialogVisible = ref(false)
+const renameShelfWarehouse = ref('')
+const renameShelfOldRaw = ref('')
+const renameShelfOldDisplay = ref('')
+const renameShelfNew = ref('')
+const renameShelfSubmitting = ref(false)
 const submitting = ref(false)
 const formRef = ref()
 const form = ref({
@@ -244,15 +366,24 @@ const form = ref({
   location: '',
   description: ''
 })
-/** 新建弹窗标题：仓库表头 → 添加货架；三级（货架名称行）→ 添加货架号 */
+/** 新建来源：shelf = 普通新增；shelfNo = 自某分区快捷新增（预填分区名） */
 const createDialogKind = ref('shelf')
-const addDialogTitle = computed(() =>
-  createDialogKind.value === 'shelfNo' ? '添加货架号' : '添加货架'
-)
+
+const shelfDialogTitle = computed(() => {
+  if (form.value?.id) return '编辑货架'
+  const wh = normalizeWarehouseName(form.value?.warehouse)
+  if (createDialogKind.value === 'shelfNo') {
+    const sn = (form.value?.shelf_name || '').trim()
+    if (sn) return `新增货架号 · ${wh} / ${sn}`
+    return `新增货架号 · ${wh}`
+  }
+  if (wh && wh !== DEFAULT_WAREHOUSE) return `新增货架 · ${wh}`
+  return '新增货架'
+})
 
 const rules = {
-  warehouse: [{ required: true, message: '请输入仓库名称', trigger: 'blur' }],
-  name: [{ required: true, message: '请输入货架号', trigger: 'blur' }],
+  warehouse: [{ required: true, message: '请填写所属仓库', trigger: 'blur' }],
+  name: [{ required: true, message: '请填写货架号', trigger: 'blur' }],
 }
 
 /** 一级：仓库 → 二级：货架名称分组 → 三级：货架号表格 */
@@ -285,19 +416,6 @@ const groupedByWarehouse = computed(() => {
   })
 })
 
-watch(
-  groupedByWarehouse,
-  (groups) => {
-    activeCollapse.value = groups.map((g) => g.warehouse)
-    const o = {}
-    for (const g of groups) {
-      o[g.warehouse] = g.shelfNameGroups.map((s) => s.key)
-    }
-    activeShelfNameByWh.value = o
-  },
-  { immediate: true },
-)
-
 const mergedWarehouse = computed(() => {
   const productTypes = list.value.reduce((sum, item) => sum + Number(item.product_types || 0), 0)
   const totalQuantity = list.value.reduce((sum, item) => sum + Number(item.total_quantity || 0), 0)
@@ -308,13 +426,171 @@ const mergedWarehouse = computed(() => {
   }
 })
 
+const renameDialogShelves = computed(() => {
+  if (!renameWarehouseDialogVisible.value || !renameWarehouseGroupKey.value) return []
+  const key = renameWarehouseGroupKey.value
+  return list.value.filter((r) => normalizeWarehouseName(r.warehouse) === key)
+})
+
 async function load() {
   const rows = await warehouseApi.list()
   list.value = rows.map((item) => ({ ...item, warehouse: normalizeWarehouseName(item.warehouse) }))
 }
 
+function onAddWarehouseNameDialogClosed() {
+  newWarehouseNameInput.value = ''
+}
+
+function onRenameShelfNameDialogClosed() {
+  renameShelfWarehouse.value = ''
+  renameShelfOldRaw.value = ''
+  renameShelfOldDisplay.value = ''
+  renameShelfNew.value = ''
+}
+
+function openRenameShelfNameDialog(grp, sub) {
+  renameShelfWarehouse.value = String(grp?.warehouse ?? '').trim() || DEFAULT_WAREHOUSE
+  renameShelfOldRaw.value = sub?.rawShelfName != null ? String(sub.rawShelfName).trim() : ''
+  renameShelfOldDisplay.value = String(sub?.label ?? '').trim() || '（未设置货架名称）'
+  renameShelfNew.value = renameShelfOldRaw.value
+  renameShelfNameDialogVisible.value = true
+}
+
+async function submitRenameShelfName() {
+  const oldRaw = String(renameShelfOldRaw.value ?? '').trim()
+  const newT = String(renameShelfNew.value ?? '').trim()
+  if (oldRaw === newT) {
+    ElMessage.warning('名称未变化')
+    return
+  }
+  renameShelfSubmitting.value = true
+  try {
+    await warehouseApi.renameShelfNameGroup({
+      warehouse: renameShelfWarehouse.value,
+      old_shelf_name: oldRaw,
+      new_shelf_name: newT,
+    })
+    ElMessage.success('货架名称已更新')
+    renameShelfNameDialogVisible.value = false
+    await load()
+  } catch (e) {
+    ElMessage.error(apiErrorMessage(e))
+  } finally {
+    renameShelfSubmitting.value = false
+  }
+}
+
+function onRenameWarehouseDialogClosed() {
+  renameWarehouseGroupKey.value = ''
+  renameWarehouseOld.value = ''
+  renameWarehouseNew.value = ''
+}
+
+function openRenameWarehouseDialog(grp) {
+  const name = String(grp?.warehouse ?? '').trim() || DEFAULT_WAREHOUSE
+  renameWarehouseGroupKey.value = name
+  renameWarehouseOld.value = name
+  renameWarehouseNew.value = name
+  renameWarehouseDialogVisible.value = true
+}
+
+async function submitRenameWarehouse() {
+  const oldW = (renameWarehouseOld.value || '').trim()
+  const newW = (renameWarehouseNew.value || '').trim()
+  if (!newW) {
+    ElMessage.warning('请输入新仓库名称')
+    return
+  }
+  if (normalizeWarehouseName(oldW) === normalizeWarehouseName(newW)) {
+    ElMessage.warning('名称未变化')
+    return
+  }
+  renameWarehouseSubmitting.value = true
+  try {
+    await warehouseApi.renameGroup({ old_warehouse: oldW, new_warehouse: newW })
+    ElMessage.success('仓库名称已更新')
+    const nextKey = normalizeWarehouseName(newW)
+    renameWarehouseGroupKey.value = nextKey
+    renameWarehouseOld.value = nextKey
+    renameWarehouseNew.value = nextKey
+    await load()
+  } catch (e) {
+    ElMessage.error(apiErrorMessage(e))
+  } finally {
+    renameWarehouseSubmitting.value = false
+  }
+}
+
+function openAddWarehouseNameDialog() {
+  newWarehouseNameInput.value = ''
+  addWarehouseNameDialogVisible.value = true
+}
+
+function confirmAddWarehouseName() {
+  const raw = (newWarehouseNameInput.value || '').trim()
+  if (!raw) {
+    ElMessage.warning('请输入仓库名称')
+    return
+  }
+  const name = normalizeWarehouseName(raw)
+  addWarehouseNameDialogVisible.value = false
+  openDialogForWarehouse(name)
+}
+
+function warehouseDeleteConfirmTextForDialog() {
+  const n = renameDialogShelves.value.length
+  const wh = renameWarehouseGroupKey.value || ''
+  const base = `将依次删除该仓库下全部 ${n} 个货架位；每个须无库存、无出入库及费用关联记录。确定删除「${wh}」？`
+  if (wh === DEFAULT_WAREHOUSE) return `【默认仓库】${base}（删除后若仍有业务数据，部分货架位可能无法删除，请以提示为准。）`
+  return base
+}
+
+async function removeWarehouseGroupForDialog() {
+  const shelves = [...renameDialogShelves.value]
+  if (!shelves.length) return
+  const grp = {
+    warehouse: renameWarehouseGroupKey.value,
+    shelves,
+    shelfCount: shelves.length,
+  }
+  await removeWarehouseGroup(grp, { closeRenameDialog: true })
+}
+
+async function removeWarehouseGroup(grp, options = {}) {
+  const shelves = [...(grp.shelves || [])]
+  if (!shelves.length) return
+  let removed = 0
+  for (const row of shelves) {
+    try {
+      await warehouseApi.remove(row.id)
+      removed++
+    } catch {
+      await load()
+      if (removed > 0) {
+        ElMessage.warning(`已删除 ${removed} 个货架位后中止，请处理剩余项后重试`)
+      }
+      return
+    }
+  }
+  ElMessage.success(`已删除仓库「${grp.warehouse}」共 ${removed} 个货架位`)
+  await load()
+  if (options.closeRenameDialog) renameWarehouseDialogVisible.value = false
+}
+
+async function removeShelfFromRenameDialog(id) {
+  try {
+    await warehouseApi.remove(id)
+    ElMessage.success('删除成功')
+    await load()
+    if (!renameDialogShelves.value.length) renameWarehouseDialogVisible.value = false
+  } catch (e) {
+    ElMessage.error(apiErrorMessage(e))
+  }
+}
+
 function openDialog(row = null) {
   if (row) {
+    createDialogKind.value = 'shelf'
     form.value = { ...row, warehouse: normalizeWarehouseName(row.warehouse), shelf_name: row.shelf_name || '' }
   } else {
     createDialogKind.value = 'shelf'
@@ -358,20 +634,11 @@ function openDialogForShelfGroup(warehouseName, rawShelfName) {
   dialogVisible.value = true
 }
 
-function openWarehouseDialog() {
-  newWarehouseName.value = ''
-  warehouseDialogVisible.value = true
-}
-
-function confirmCreateWarehouse() {
-  const name = (newWarehouseName.value || '').trim()
-  if (!name) {
-    ElMessage.warning('请输入仓库名称')
-    return
-  }
-  warehouseDialogVisible.value = false
-  openDialogForWarehouse(name)
-  ElMessage.success('已创建仓库名，请继续新增该仓库下的货架')
+function apiErrorMessage(err) {
+  const d = err?.response?.data?.detail
+  if (typeof d === 'string') return d
+  if (Array.isArray(d) && d[0]?.msg) return d.map((x) => x.msg).join('；')
+  return err?.message || '请求失败'
 }
 
 async function submit() {
@@ -399,15 +666,11 @@ async function submit() {
     ElMessage.success('保存成功')
     dialogVisible.value = false
     load()
+  } catch (e) {
+    ElMessage.error(apiErrorMessage(e))
   } finally {
     submitting.value = false
   }
-}
-
-async function remove(id) {
-  await warehouseApi.remove(id)
-  ElMessage.success('删除成功')
-  load()
 }
 
 onMounted(load)
@@ -456,10 +719,32 @@ onMounted(load)
   color: #9ba8bf;
   margin-top: 2px;
 }
-.add-warehouse-btn {
-  padding: 8px 14px;
-  border-radius: 6px;
+.header-primary-btn {
   flex-shrink: 0;
+}
+.form-hint {
+  margin: -4px 0 12px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #8b9bb8;
+}
+.rename-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+}
+.rename-dialog-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.rename-shelf-table {
+  width: 100%;
 }
 .list-card-title {
   font-size: 15px;
@@ -591,6 +876,17 @@ onMounted(load)
 .collapse-add-btn {
   flex-shrink: 0;
 }
+.collapse-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.shelf-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
 /* 二级：按货架名称折叠 */
 .shelf-name-collapse {
   border: none;
@@ -648,6 +944,12 @@ onMounted(load)
 }
 .shelf-name-title-end {
   justify-self: end;
+}
+.shelf-name-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 .shelf-name-title-text {
   font-size: 14px;

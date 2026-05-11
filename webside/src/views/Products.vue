@@ -25,9 +25,18 @@
             <el-select v-model="filterCat" class="search-select-control" placeholder="所有游戏分类" clearable @change="load">
               <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
             </el-select>
-            <el-select v-model="filterWarehouse" class="search-select-control" placeholder="所有仓库" clearable @change="load">
-              <el-option v-for="w in warehouses" :key="w.id" :label="warehouseShelfLabel(w)" :value="w.id" />
-            </el-select>
+            <el-cascader
+              v-model="filterWarehousePath"
+              :options="warehouseCascaderOptions"
+              :props="warehouseCascaderProps"
+              :show-all-levels="false"
+              class="search-select-control"
+              placeholder="仓库 / 货架名称 / 货架号"
+              popper-class="product-type-cascader-popper"
+              clearable
+              filterable
+              @change="handleFilterWarehouseChange"
+            />
             <el-cascader
               v-model="filterProductTypePath"
               :options="productTypeCascaderOptions"
@@ -241,7 +250,7 @@
             <div v-else class="editable-cell" @click="openOwnerInline(row)">{{ displayOwnerName(row) }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="所属仓库" min-width="100" align="center" header-align="center" show-overflow-tooltip>
+        <el-table-column label="仓库" min-width="100" align="center" header-align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ row.inv_wh_name || '-' }}</template>
         </el-table-column>
         <el-table-column label="所属货架" min-width="100" align="center" header-align="center" show-overflow-tooltip>
@@ -402,18 +411,22 @@
         </el-form-item>
         <el-row :gutter="12">
           <el-col :xs="24" :sm="16">
-            <el-form-item label="所属仓库" prop="warehouse_id">
+            <el-form-item label="所属货架" prop="warehouse_id">
               <div class="product-field-inline">
                 <template v-if="!warehouseCreateMode">
-                  <el-select
-                    v-model="form.warehouse_id"
+                  <el-cascader
+                    v-model="warehouseCascaderPath"
+                    :options="warehouseCascaderOptions"
+                    :props="warehouseCascaderProps"
+                    :show-all-levels="false"
                     clearable
                     :filterable="!isIOS"
-                    placeholder="请选择仓库"
+                    placeholder="请选择：仓库 → 货架名称 → 货架号"
                     class="product-field-inline__main"
-                  >
-                    <el-option v-for="w in warehouses" :key="w.id" :label="warehouseShelfLabel(w)" :value="w.id" />
-                  </el-select>
+                    style="width: 100%"
+                    popper-class="product-type-cascader-popper"
+                    @change="handleWarehouseCascaderChange"
+                  />
                   <el-button type="primary" plain @click="startCreateWarehouse">新建仓库</el-button>
                 </template>
                 <template v-else>
@@ -446,7 +459,10 @@
         <el-row :gutter="20">
           <el-col :xs="24" :sm="12">
             <el-form-item prop="image_front" style="display:block">
-              <div class="img-label">正面图</div>
+              <div class="img-label-row">
+                <div class="img-label">正面图</div>
+                <el-button type="primary" plain size="small" @click="triggerProductImageFilePick('front')">上传图片</el-button>
+              </div>
               <div class="image-upload-area large" @click="openProductImageSource('front')">
                 <img v-if="form.image_front" :src="form.image_front" class="preview-img" />
                 <div v-else class="upload-placeholder">
@@ -454,6 +470,13 @@
                   <div class="upload-tip">{{ formImageUploadTip }}</div>
                 </div>
               </div>
+              <input
+                ref="fileInputFrontPick"
+                type="file"
+                accept="image/*"
+                style="display:none"
+                @change="handleImageUpload($event, 'front')"
+              />
               <input
                 ref="fileInputFront"
                 type="file"
@@ -470,7 +493,10 @@
           </el-col>
           <el-col :xs="24" :sm="12">
             <el-form-item style="display:block">
-              <div class="img-label">背面图（选填）</div>
+              <div class="img-label-row">
+                <div class="img-label">背面图（选填）</div>
+                <el-button type="primary" plain size="small" @click="triggerProductImageFilePick('back')">上传图片</el-button>
+              </div>
               <div class="image-upload-area large" @click="openProductImageSource('back')">
                 <img v-if="form.image_back" :src="form.image_back" class="preview-img" />
                 <div v-else class="upload-placeholder">
@@ -478,6 +504,13 @@
                   <div class="upload-tip">{{ formImageUploadTip }}</div>
                 </div>
               </div>
+              <input
+                ref="fileInputBackPick"
+                type="file"
+                accept="image/*"
+                style="display:none"
+                @change="handleImageUpload($event, 'back')"
+              />
               <input
                 ref="fileInputBack"
                 type="file"
@@ -705,7 +738,7 @@
         <div class="product-meta">
           <span class="product-meta-name">{{ contProduct.name || '(未命名)' }}</span>
           <el-tag type="info" size="small">当前库存 {{ contProduct.quantity ?? 0 }} 件</el-tag>
-          <el-tag size="small" effect="plain">所属仓库 {{ contProduct.warehouse_name || '未设置' }}</el-tag>
+          <el-tag size="small" effect="plain">仓库 {{ contProduct.warehouse_name || '未设置' }}</el-tag>
         </div>
         <div class="cont-quantity-row">
           <span class="cont-quantity-label">本次数量</span>
@@ -825,7 +858,6 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import { inventoryApi, categoryApi, warehouseApi, authApi, scanApi, ocrApi, transactionApi, productTypeCategoryMappingApi, onSaleItemApi, listingApi } from '@/api/index.js'
-import { warehouseShelfLabel } from '@/utils/warehouseLabel.js'
 import SingleListingFormDialog from '@/components/SingleListingFormDialog.vue'
 import CombinedListingFormDialog from '@/components/CombinedListingFormDialog.vue'
 
@@ -864,6 +896,7 @@ const ownerUsers = ref([])
 const keyword = ref('')
 const filterCat = ref(null)
 const filterWarehouse = ref(null)
+const filterWarehousePath = ref([])
 const filterProductType = ref(null)
 const filterProductTypePath = ref([])
 const filterOwnerUserId = ref(null)
@@ -874,6 +907,9 @@ const submitting = ref(false)
 const formRef = ref()
 const fileInputFront = ref()
 const fileInputBack = ref()
+/** 标签旁「上传图片」：不带 capture，便于从相册/文件选择 */
+const fileInputFrontPick = ref()
+const fileInputBackPick = ref()
 /** 编辑弹窗：桌面端摄像头拍正/背面 */
 const productImgCameraVisible = ref(false)
 const productImgCameraSide = ref('front')
@@ -898,6 +934,7 @@ const listingPostOverlayFailed = ref(false)
 const listingPostProgressLabel = ref('')
 let listingPostProgressTimer = null
 const productTypeCascaderPath = ref([])
+const warehouseCascaderPath = ref([])
 const inventoryExpandById = ref({})
 const scanVisible = ref(false)
 const scanning = ref(false)
@@ -1160,7 +1197,7 @@ const rules = {
   warehouse_id: [
     {
       validator: (_, val, cb) => {
-        if (val == null || val === '') cb(new Error('请选择所属仓库'))
+        if (val == null || val === '') cb(new Error('请选择所属货架（仓库 → 货架名称 → 货架号）'))
         else cb()
       },
       trigger: 'change',
@@ -1180,6 +1217,15 @@ const rules = {
 }
 
 const productTypeCascaderProps = {
+  value: 'value',
+  label: 'label',
+  children: 'children',
+  emitPath: true,
+  checkStrictly: false,
+}
+
+/** 与 productTypeCascaderProps 一致：点击展开子级，悬停不跳转 */
+const warehouseCascaderProps = {
   value: 'value',
   label: 'label',
   children: 'children',
@@ -1623,6 +1669,122 @@ const productTypeTreeMeta = computed(() => {
 
 const productTypeCascaderOptions = computed(() => productTypeTreeMeta.value.roots)
 
+const DEFAULT_WH_LABEL = '默认仓库'
+/** 与后端 WarehouseModel.normalize_warehouse_key 一致 */
+function warehouseGroupKey(w) {
+  const t = String(w?.warehouse ?? '').trim()
+  return t || DEFAULT_WH_LABEL
+}
+
+/** 二级分组键：与仓库管理页一致，空 shelf_name 归为同一组 */
+const EMPTY_SHELF_NAME_PART = '__shelf_name_empty__'
+
+function shelfNamePartitionKey(w) {
+  const raw = w?.shelf_name && String(w.shelf_name).trim() ? String(w.shelf_name).trim() : ''
+  return raw || EMPTY_SHELF_NAME_PART
+}
+
+function shelfNamePartitionLabelFromKey(pk) {
+  if (pk === EMPTY_SHELF_NAME_PART) return '（未设置货架名称）'
+  return pk
+}
+
+/** 三级：仓库 → 货架名称(shelf_name) → 货架号(行 id) */
+const warehouseTreeMeta = computed(() => {
+  const list = Array.isArray(warehouses.value) ? warehouses.value : []
+  const idToPath = new Map()
+  const byWh = new Map()
+  for (const w of list) {
+    const wh = warehouseGroupKey(w)
+    if (!byWh.has(wh)) byWh.set(wh, [])
+    byWh.get(wh).push(w)
+  }
+  const roots = []
+  const sortedWh = [...byWh.keys()].sort((a, b) => {
+    if (a === DEFAULT_WH_LABEL) return -1
+    if (b === DEFAULT_WH_LABEL) return 1
+    return a.localeCompare(b, 'zh-CN')
+  })
+  for (const whName of sortedWh) {
+    const rows = byWh.get(whName).slice()
+    const byPartition = new Map()
+    for (const w of rows) {
+      const pk = shelfNamePartitionKey(w)
+      if (!byPartition.has(pk)) byPartition.set(pk, [])
+      byPartition.get(pk).push(w)
+    }
+    const l1Val = `WHG:${encodeURIComponent(whName)}`
+    const midNodes = []
+    const sortedPk = [...byPartition.keys()].sort((a, b) => {
+      if (a === EMPTY_SHELF_NAME_PART) return 1
+      if (b === EMPTY_SHELF_NAME_PART) return -1
+      return a.localeCompare(b, 'zh-CN')
+    })
+    for (const pk of sortedPk) {
+      const partRows = byPartition.get(pk).slice()
+      partRows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN'))
+      const l2Val = `WHSN:${encodeURIComponent(whName)}::${encodeURIComponent(pk)}`
+      const labelMid = shelfNamePartitionLabelFromKey(pk)
+      const leaves = partRows.map((w) => {
+        const id = Number(w.id)
+        const leafVal = `WHS:${w.id}`
+        if (Number.isFinite(id)) idToPath.set(id, [l1Val, l2Val, leafVal])
+        const code = String(w.name ?? '').trim() || '未命名'
+        return { value: leafVal, label: code, children: [] }
+      })
+      midNodes.push({ value: l2Val, label: labelMid, children: leaves })
+    }
+    roots.push({ value: l1Val, label: whName, children: midNodes })
+  }
+  return { roots, idToPath }
+})
+
+const warehouseCascaderOptions = computed(() => warehouseTreeMeta.value.roots)
+
+function syncWarehouseCascaderPathByWarehouseId(wid) {
+  const id = wid == null || wid === '' ? null : Number(wid)
+  if (!Number.isFinite(id)) {
+    warehouseCascaderPath.value = []
+    return
+  }
+  const path = warehouseTreeMeta.value.idToPath.get(id)
+  warehouseCascaderPath.value = path ? [...path] : []
+}
+
+function syncFilterWarehousePathByWarehouseId(wid) {
+  const id = wid == null || wid === '' ? null : Number(wid)
+  if (!Number.isFinite(id)) {
+    filterWarehousePath.value = []
+    return
+  }
+  const path = warehouseTreeMeta.value.idToPath.get(id)
+  filterWarehousePath.value = path ? [...path] : []
+}
+
+function handleWarehouseCascaderChange(path) {
+  const picked = Array.isArray(path) ? path[path.length - 1] : null
+  if (!picked || !String(picked).startsWith('WHS:')) {
+    form.value.warehouse_id = null
+    formRef.value?.validateField('warehouse_id')
+    return
+  }
+  const id = Number(String(picked).slice(4))
+  form.value.warehouse_id = Number.isFinite(id) ? id : null
+  formRef.value?.validateField('warehouse_id')
+}
+
+function handleFilterWarehouseChange(path) {
+  const picked = Array.isArray(path) ? path[path.length - 1] : null
+  if (!picked || !String(picked).startsWith('WHS:')) {
+    filterWarehouse.value = null
+    load()
+    return
+  }
+  const id = Number(String(picked).slice(4))
+  filterWarehouse.value = Number.isFinite(id) ? id : null
+  load()
+}
+
 function syncCascaderPathByProductTypeId(typeId) {
   const normalized = typeId == null ? null : Number(typeId)
   if (!Number.isFinite(normalized)) {
@@ -1688,6 +1850,7 @@ async function confirmCreateWarehouse() {
   const created = await warehouseApi.create({ name })
   warehouses.value = await warehouseApi.list()
   form.value.warehouse_id = created?.id ?? form.value.warehouse_id
+  syncWarehouseCascaderPathByWarehouseId(form.value.warehouse_id)
   newWarehouseName.value = ''
   warehouseCreateMode.value = false
   ElMessage.success('仓库创建成功')
@@ -1942,6 +2105,7 @@ function openDialog(row = null) {
   syncPriceEditFromForm()
   syncMercariIdListFromForm()
   syncCascaderPathByProductTypeId(form.value.product_type_id)
+  syncWarehouseCascaderPathByWarehouseId(form.value.warehouse_id)
   dialogVisible.value = true
 }
 
@@ -1953,6 +2117,15 @@ watch(dialogVisible, (visible) => {
     newWarehouseName.value = ''
   }
 })
+
+watch(
+  warehouses,
+  () => {
+    if (dialogVisible.value) syncWarehouseCascaderPathByWarehouseId(form.value.warehouse_id)
+    syncFilterWarehousePathByWarehouseId(filterWarehouse.value)
+  },
+  { deep: true }
+)
 
 function openNoBarcodeEntry() {
   openDialog()
@@ -2307,6 +2480,11 @@ function triggerFileInputOnly(side) {
   else fileInputBack.value?.click()
 }
 
+function triggerProductImageFilePick(side) {
+  if (side === 'front') fileInputFrontPick.value?.click()
+  else fileInputBackPick.value?.click()
+}
+
 function stopProductImgCameraStream() {
   if (productImgStream) {
     productImgStream.getTracks().forEach((t) => t.stop())
@@ -2641,7 +2819,7 @@ function resumeContScan() {
 
 async function confirmContAction() {
   if (!contProduct.value?.warehouse_id) {
-    ElMessage.warning('该商品未设置所属仓库，请先编辑商品后再操作')
+    ElMessage.warning('该商品未设置所属货架，请先编辑商品后再操作')
     return
   }
   contConfirming.value = true
@@ -2947,6 +3125,14 @@ onBeforeUnmount(() => {
 .preview-img { width: 100%; height: 100%; object-fit: cover; }
 .upload-placeholder { text-align: center; }
 .upload-tip { font-size: 12px; color: #8e9bb3; margin-top: 8px; }
+.img-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.img-label-row .img-label { margin-bottom: 0; flex: 1; min-width: 0; }
 .img-label { font-size: 13px; color: #8e9bb3; margin-bottom: 8px; }
 .img-actions { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
 .scanning-hint { color: #409EFF; animation: pulse 1s infinite; }
