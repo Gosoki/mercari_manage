@@ -1,1 +1,0 @@
-图片上传接口 https://api.mercari.jp/services/photo/v1/upload
