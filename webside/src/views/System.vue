@@ -1,11 +1,63 @@
 <template>
   <div>
-    <el-card shadow="never" class="search-card listing-defaults-card">
+    <el-card shadow="never" class="search-card">
+      <el-row justify="end">
+        <el-button type="primary" @click="openUserDialog">
+          <el-icon><Plus /></el-icon> 新增用户
+        </el-button>
+      </el-row>
+    </el-card>
+
+    <el-row :gutter="16">
+      <el-col :xs="24" :lg="14">
+        <el-card shadow="never" class="table-card">
+          <template #header>
+            <div class="card-title">用户列表</div>
+          </template>
+          <el-table :data="users" v-loading="loading" stripe>
+            <el-table-column prop="id" label="ID" width="70" />
+            <el-table-column prop="username" label="用户名" min-width="120" />
+            <el-table-column prop="display_name" label="显示名" min-width="140" />
+            <el-table-column label="状态" width="90" align="center">
+              <template #default="{ row }">
+                <el-tag :type="row.is_active ? 'success' : 'danger'" size="small">
+                  {{ row.is_active ? '启用' : '禁用' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="last_login_at" label="最近登录" min-width="160" />
+            <el-table-column prop="created_at" label="创建时间" min-width="160" />
+          </el-table>
+        </el-card>
+      </el-col>
+
+      <el-col :xs="24" :lg="10">
+        <el-card shadow="never" class="table-card">
+          <template #header>
+            <div class="card-title">修改我的密码</div>
+          </template>
+          <el-form ref="pwdFormRef" :model="pwdForm" :rules="pwdRules" label-width="90px">
+            <el-form-item label="原密码" prop="old_password">
+              <el-input v-model="pwdForm.old_password" type="password" show-password />
+            </el-form-item>
+            <el-form-item label="新密码" prop="new_password">
+              <el-input v-model="pwdForm.new_password" type="password" show-password />
+            </el-form-item>
+            <el-form-item label="确认密码" prop="confirm_password">
+              <el-input v-model="pwdForm.confirm_password" type="password" show-password />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="pwdSubmitting" @click="submitPassword">修改密码</el-button>
+            </el-form-item>
+          </el-form>
+          <div class="pwd-tip">仅支持修改当前登录用户自己的密码。</div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-card shadow="never" class="search-card">
       <template #header>
         <div class="card-title">出品默认值</div>
-        <div class="card-sub">
-          与库存页「出品」表单中的发货与账号选项一致；保存后打开出品弹窗将自动预填（库存条目自身不含这些字段时以此处为准）。
-        </div>
       </template>
       <el-form label-width="132px" class="listing-def-form">
         <el-form-item label="默认发货地址">
@@ -65,61 +117,6 @@
         </el-form-item>
       </el-form>
     </el-card>
-
-    <el-card shadow="never" class="search-card">
-      <el-row justify="end">
-        <el-button type="primary" @click="openUserDialog">
-          <el-icon><Plus /></el-icon> 新增用户
-        </el-button>
-      </el-row>
-    </el-card>
-
-    <el-row :gutter="16">
-      <el-col :xs="24" :lg="14">
-        <el-card shadow="never" class="table-card">
-          <template #header>
-            <div class="card-title">用户列表</div>
-          </template>
-          <el-table :data="users" v-loading="loading" stripe>
-            <el-table-column prop="id" label="ID" width="70" />
-            <el-table-column prop="username" label="用户名" min-width="120" />
-            <el-table-column prop="display_name" label="显示名" min-width="140" />
-            <el-table-column label="状态" width="90" align="center">
-              <template #default="{ row }">
-                <el-tag :type="row.is_active ? 'success' : 'danger'" size="small">
-                  {{ row.is_active ? '启用' : '禁用' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="last_login_at" label="最近登录" min-width="160" />
-            <el-table-column prop="created_at" label="创建时间" min-width="160" />
-          </el-table>
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :lg="10">
-        <el-card shadow="never" class="table-card">
-          <template #header>
-            <div class="card-title">修改我的密码</div>
-          </template>
-          <el-form ref="pwdFormRef" :model="pwdForm" :rules="pwdRules" label-width="90px">
-            <el-form-item label="原密码" prop="old_password">
-              <el-input v-model="pwdForm.old_password" type="password" show-password />
-            </el-form-item>
-            <el-form-item label="新密码" prop="new_password">
-              <el-input v-model="pwdForm.new_password" type="password" show-password />
-            </el-form-item>
-            <el-form-item label="确认密码" prop="confirm_password">
-              <el-input v-model="pwdForm.confirm_password" type="password" show-password />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" :loading="pwdSubmitting" @click="submitPassword">修改密码</el-button>
-            </el-form-item>
-          </el-form>
-          <div class="pwd-tip">仅支持修改当前登录用户自己的密码。</div>
-        </el-card>
-      </el-col>
-    </el-row>
 
     <el-dialog v-model="userDialogVisible" title="新增用户" width="420px" destroy-on-close>
       <el-form ref="userFormRef" :model="userForm" :rules="userRules" label-width="90px">
@@ -381,16 +378,6 @@ onMounted(async () => {
 .search-card {
   margin-bottom: 16px;
   border-radius: 8px;
-}
-.listing-defaults-card :deep(.el-card__header) {
-  padding-bottom: 8px;
-}
-.card-sub {
-  font-size: 13px;
-  color: #94a3b8;
-  font-weight: normal;
-  margin-top: 6px;
-  line-height: 1.5;
 }
 .table-card {
   border-radius: 8px;
