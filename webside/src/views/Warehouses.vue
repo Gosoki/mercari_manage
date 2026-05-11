@@ -58,6 +58,10 @@
                 </div>
               </div>
               <div class="collapse-title-end collapse-title-actions" @click.stop>
+                <el-button type="primary" size="small" @click.stop="openDialogShelfOnly(grp.warehouse, '')">
+                  <el-icon><Plus /></el-icon>
+                  添加货架
+                </el-button>
                 <el-button type="primary" size="small" plain @click.stop="openRenameWarehouseDialog(grp)">
                   修改名称
                 </el-button>
@@ -95,32 +99,21 @@
                     </div>
                   </div>
                   <div class="shelf-name-title-end shelf-name-title-actions" @click.stop>
-                    <el-button type="primary" size="small" plain @click.stop="openRenameShelfNameDialog(grp, sub)">
-                      修改名称
-                    </el-button>
                     <el-button
                       type="primary"
                       size="small"
                       class="collapse-add-btn"
-                      @click.stop="openDialogForWarehouse(grp.warehouse)"
+                      @click.stop="openDialogForShelfGroup(grp.warehouse, sub.rawShelfName)"
                     >
                       <el-icon><Plus /></el-icon>
-                      添加货架
+                      添加货架号
+                    </el-button>
+                    <el-button type="primary" size="small" plain @click.stop="openRenameShelfNameDialog(grp, sub)">
+                      修改名称
                     </el-button>
                   </div>
                 </div>
               </template>
-              <div class="shelf-toolbar">
-                <el-button
-                  type="primary"
-                  size="small"
-                  plain
-                  @click="openDialogForShelfGroup(grp.warehouse, sub.rawShelfName)"
-                >
-                  <el-icon><Plus /></el-icon>
-                  添加货架号
-                </el-button>
-              </div>
               <el-table :data="sub.shelves" border stripe size="small" class="shelf-subtable shelf-no-table">
                 <el-table-column label="货架号" prop="name" min-width="120" />
                 <el-table-column label="位置" prop="location" min-width="130" />
@@ -148,25 +141,49 @@
     <el-dialog v-model="dialogVisible" :title="shelfDialogTitle" width="460px" destroy-on-close>
       <el-form :model="form" :rules="rules" ref="formRef" label-width="92px">
         <el-form-item label="所属仓库" prop="warehouse">
-          <el-input v-model="form.warehouse" placeholder="如：1号仓、默认仓库（相同名称会归为一组）" />
+          <el-input v-model="form.warehouse" clearable />
         </el-form-item>
-        <p v-if="!form.id" class="form-hint">说明：列表按「所属仓库」分组；每个保存记录对应一个货架位（仓库 + 货架号唯一）。</p>
         <el-form-item label="货架名称">
-          <el-input v-model="form.shelf_name" placeholder="可选，用于二级分组展示（如：一层左）；留空表示未设置" clearable />
+          <el-input v-model="form.shelf_name" clearable />
         </el-form-item>
-        <el-form-item label="货架号" prop="name">
-          <el-input v-model="form.name" placeholder="同一仓库内不可重复，如：A-01" clearable />
+        <el-form-item v-if="form.id || createDialogKind !== 'shelfOnly'" label="货架号" prop="name">
+          <el-input v-model="form.name" clearable />
         </el-form-item>
         <el-form-item label="位置">
-          <el-input v-model="form.location" placeholder="如：进门左手第一排" clearable />
+          <el-input v-model="form.location" clearable />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="可选备注" clearable />
+          <el-input v-model="form.description" type="textarea" :rows="3" clearable />
+        </el-form-item>
+        <el-form-item v-if="form.id" label="库存迁移">
+          <el-button type="warning" plain @click="openMigrateInventoryDialog">一键迁移物品</el-button>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="submit" :loading="submitting">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="migrateInventoryDialogVisible" title="一键迁移物品" width="440px" destroy-on-close @closed="onMigrateInventoryDialogClosed">
+      <el-form label-width="88px">
+        <el-form-item label="目标货架" required>
+          <el-cascader
+            v-model="migrateTargetWarehousePath"
+            :options="migrateTargetCascaderOptions"
+            :props="migrateTargetCascaderProps"
+            :show-all-levels="false"
+            clearable
+            filterable
+            placeholder=""
+            style="width: 100%"
+            @change="onMigrateTargetChange"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="migrateInventoryDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="migrateInventorySubmitting" @click="confirmMigrateInventory">确定迁移</el-button>
       </template>
     </el-dialog>
 
@@ -185,16 +202,13 @@
         <el-form-item label="新名称" required>
           <el-input
             v-model="renameWarehouseNew"
-            placeholder="输入新的仓库名称"
             clearable
             @keyup.enter="submitRenameWarehouse"
           />
         </el-form-item>
-        <p class="form-hint">将同步更新该仓库下全部货架位的所属仓库名；若目标名称下已有相同货架号则会失败。</p>
       </el-form>
 
       <el-divider content-position="left">货架位与删除</el-divider>
-      <p class="form-hint">删除货架位、删除整个仓库均在此操作；仅当无库存且无出入库等关联记录时可删除。</p>
       <el-table :data="renameDialogShelves" border stripe size="small" max-height="280" class="rename-shelf-table">
         <el-table-column label="货架号" prop="name" min-width="100" />
         <el-table-column label="货架名称" min-width="100" show-overflow-tooltip>
@@ -255,12 +269,10 @@
         <el-form-item label="新名称">
           <el-input
             v-model="renameShelfNew"
-            placeholder="留空表示取消名称（归入未设置分组）"
             clearable
             @keyup.enter="submitRenameShelfName"
           />
         </el-form-item>
-        <p class="form-hint">将同步更新本分组下全部货架位的「货架名称」；仅改展示分组，不改变货架号。</p>
       </el-form>
       <template #footer>
         <el-button @click="renameShelfNameDialogVisible = false">取消</el-button>
@@ -273,12 +285,10 @@
         <el-form-item label="仓库名称" required>
           <el-input
             v-model="newWarehouseNameInput"
-            placeholder="如：2号仓（保存后请为该仓库添加货架位）"
             clearable
             @keyup.enter="confirmAddWarehouseName"
           />
         </el-form-item>
-        <p class="form-hint">仓库名称用于列表分组；创建后需在「添加货架」中填写货架分区名与货架号。</p>
       </el-form>
       <template #footer>
         <el-button @click="addWarehouseNameDialogVisible = false">取消</el-button>
@@ -293,6 +303,7 @@ import { computed, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { warehouseApi } from '@/api/index.js'
+import { warehouseShelfLabel } from '@/utils/warehouseLabel.js'
 
 const DEFAULT_WAREHOUSE = '默认仓库'
 
@@ -366,16 +377,26 @@ const form = ref({
   location: '',
   description: ''
 })
-/** 新建来源：shelf = 普通新增；shelfNo = 自某分区快捷新增（预填分区名） */
+/** 新建来源：shelfOnly = 添加货架（货架号可空）；shelfNo = 添加货架号；shelf = 编辑等 */
 const createDialogKind = ref('shelf')
+
+const migrateInventoryDialogVisible = ref(false)
+const migrateSourceWarehouseId = ref(null)
+const migrateTargetWarehouseId = ref(null)
+const migrateTargetWarehousePath = ref([])
+const migrateInventorySubmitting = ref(false)
 
 const shelfDialogTitle = computed(() => {
   if (form.value?.id) return '编辑货架'
   const wh = normalizeWarehouseName(form.value?.warehouse)
   if (createDialogKind.value === 'shelfNo') {
     const sn = (form.value?.shelf_name || '').trim()
-    if (sn) return `新增货架号 · ${wh} / ${sn}`
-    return `新增货架号 · ${wh}`
+    if (sn) return `添加货架号 · ${wh} / ${sn}`
+    return `添加货架号 · ${wh}`
+  }
+  if (createDialogKind.value === 'shelfOnly') {
+    if (wh && wh !== DEFAULT_WAREHOUSE) return `添加货架 · ${wh}`
+    return '添加货架'
   }
   if (wh && wh !== DEFAULT_WAREHOUSE) return `新增货架 · ${wh}`
   return '新增货架'
@@ -383,7 +404,16 @@ const shelfDialogTitle = computed(() => {
 
 const rules = {
   warehouse: [{ required: true, message: '请填写所属仓库', trigger: 'blur' }],
-  name: [{ required: true, message: '请填写货架号', trigger: 'blur' }],
+  name: [
+    {
+      validator: (_, val, cb) => {
+        if (!form.value.id && createDialogKind.value === 'shelfOnly') return cb()
+        if (!String(val ?? '').trim()) return cb(new Error('请填写货架号'))
+        cb()
+      },
+      trigger: 'blur',
+    },
+  ],
 }
 
 /** 一级：仓库 → 二级：货架名称分组 → 三级：货架号表格 */
@@ -426,11 +456,128 @@ const mergedWarehouse = computed(() => {
   }
 })
 
+const migrateInventoryOptions = computed(() => {
+  const sid = migrateSourceWarehouseId.value
+  return list.value
+    .filter((w) => w.id != null && Number(w.id) !== Number(sid))
+    .map((w) => ({
+      value: Number(w.id),
+      label: `${normalizeWarehouseName(w.warehouse)} · ${warehouseShelfLabel(w)}`,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'))
+})
+
+const migrateTargetCascaderProps = {
+  value: 'value',
+  label: 'label',
+  children: 'children',
+  emitPath: true,
+  checkStrictly: false,
+}
+
+const migrateTargetCascaderOptions = computed(() => {
+  const sid = Number(migrateSourceWarehouseId.value)
+  const byWh = new Map()
+  for (const row of list.value) {
+    const id = Number(row?.id)
+    if (!Number.isFinite(id) || id === sid) continue
+    const wh = normalizeWarehouseName(row.warehouse)
+    if (!byWh.has(wh)) byWh.set(wh, [])
+    byWh.get(wh).push(row)
+  }
+  const whNames = [...byWh.keys()].sort((a, b) => {
+    if (a === DEFAULT_WAREHOUSE) return -1
+    if (b === DEFAULT_WAREHOUSE) return 1
+    return a.localeCompare(b, 'zh-CN')
+  })
+  return whNames.map((wh) => {
+    const rows = byWh.get(wh)
+    const shelfMap = new Map()
+    for (const r of rows) {
+      const sn = r?.shelf_name && String(r.shelf_name).trim()
+        ? String(r.shelf_name).trim()
+        : '（未设置货架名称）'
+      if (!shelfMap.has(sn)) shelfMap.set(sn, [])
+      shelfMap.get(sn).push(r)
+    }
+    const snKeys = [...shelfMap.keys()].sort((a, b) => {
+      if (a === '（未设置货架名称）') return 1
+      if (b === '（未设置货架名称）') return -1
+      return a.localeCompare(b, 'zh-CN')
+    })
+    return {
+      value: `WH:${encodeURIComponent(wh)}`,
+      label: wh,
+      children: snKeys.map((sn) => ({
+        value: `SN:${encodeURIComponent(wh)}::${encodeURIComponent(sn)}`,
+        label: sn,
+        children: shelfMap.get(sn)
+          .slice()
+          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN'))
+          .map((r) => ({
+            value: `SID:${r.id}`,
+            label: warehouseShelfLabel(r),
+            children: [],
+          })),
+      })),
+    }
+  })
+})
+
+function onMigrateTargetChange(path) {
+  const picked = Array.isArray(path) ? path[path.length - 1] : null
+  if (!picked || !String(picked).startsWith('SID:')) {
+    migrateTargetWarehouseId.value = null
+    return
+  }
+  const id = Number(String(picked).slice(4))
+  migrateTargetWarehouseId.value = Number.isFinite(id) ? id : null
+}
+
 const renameDialogShelves = computed(() => {
   if (!renameWarehouseDialogVisible.value || !renameWarehouseGroupKey.value) return []
   const key = renameWarehouseGroupKey.value
   return list.value.filter((r) => normalizeWarehouseName(r.warehouse) === key)
 })
+
+function onMigrateInventoryDialogClosed() {
+  migrateSourceWarehouseId.value = null
+  migrateTargetWarehouseId.value = null
+  migrateTargetWarehousePath.value = []
+}
+
+function openMigrateInventoryDialog() {
+  if (!form.value?.id) return
+  migrateSourceWarehouseId.value = Number(form.value.id)
+  migrateTargetWarehouseId.value = null
+  migrateTargetWarehousePath.value = []
+  migrateInventoryDialogVisible.value = true
+}
+
+async function confirmMigrateInventory() {
+  const tid = migrateTargetWarehouseId.value
+  const sid = migrateSourceWarehouseId.value
+  if (tid == null || tid === '') {
+    ElMessage.warning('请选择目标货架')
+    return
+  }
+  if (Number(tid) === Number(sid)) {
+    ElMessage.warning('目标不能与当前货架相同')
+    return
+  }
+  migrateInventorySubmitting.value = true
+  try {
+    const res = await warehouseApi.migrateInventory(sid, { target_warehouse_id: Number(tid) })
+    const n = res?.moved ?? 0
+    ElMessage.success(n > 0 ? `已迁移 ${n} 条库存` : '当前货架无库存记录')
+    migrateInventoryDialogVisible.value = false
+    await load()
+  } catch (e) {
+    ElMessage.error(apiErrorMessage(e))
+  } finally {
+    migrateInventorySubmitting.value = false
+  }
+}
 
 async function load() {
   const rows = await warehouseApi.list()
@@ -534,7 +681,7 @@ function confirmAddWarehouseName() {
   }
   const name = normalizeWarehouseName(raw)
   addWarehouseNameDialogVisible.value = false
-  openDialogForWarehouse(name)
+  openDialogShelfOnly(name, '')
 }
 
 function warehouseDeleteConfirmTextForDialog() {
@@ -593,26 +740,21 @@ function openDialog(row = null) {
     createDialogKind.value = 'shelf'
     form.value = { ...row, warehouse: normalizeWarehouseName(row.warehouse), shelf_name: row.shelf_name || '' }
   } else {
-    createDialogKind.value = 'shelf'
-    form.value = {
-      id: null,
-      warehouse: DEFAULT_WAREHOUSE,
-      shelf_name: '',
-      name: '',
-      location: '',
-      description: ''
-    }
+    openDialogShelfOnly(DEFAULT_WAREHOUSE, '')
+    return
   }
   dialogVisible.value = true
 }
 
-/** 在仓库表头添加货架（预填仓库） */
-function openDialogForWarehouse(warehouseName) {
-  createDialogKind.value = 'shelf'
+/**
+ * 二级「添加货架」：不必填货架号，预填当前分区的货架名称（rawShelfName 可为空）
+ */
+function openDialogShelfOnly(warehouseName, rawShelfName = '') {
+  createDialogKind.value = 'shelfOnly'
   form.value = {
     id: null,
     warehouse: normalizeWarehouseName(warehouseName),
-    shelf_name: '',
+    shelf_name: rawShelfName != null && String(rawShelfName).trim() ? String(rawShelfName).trim() : '',
     name: '',
     location: '',
     description: '',
@@ -648,16 +790,16 @@ async function submit() {
     if (form.value.id) {
       await warehouseApi.update(form.value.id, {
         warehouse: form.value.warehouse,
-        name: form.value.name,
-        shelf_name: form.value.shelf_name || null,
+        name: (form.value.name || '').trim() || null,
+        shelf_name: (form.value.shelf_name || '').trim() || null,
         location: form.value.location,
         description: form.value.description
       })
     } else {
-      const code = (form.value.name || '').trim()
+      const rawCode = (form.value.name || '').trim()
       await warehouseApi.create({
         warehouse: form.value.warehouse,
-        name: code,
+        name: rawCode || null,
         shelf_name: (form.value.shelf_name || '').trim() || null,
         location: form.value.location,
         description: form.value.description
@@ -721,13 +863,6 @@ onMounted(load)
 }
 .header-primary-btn {
   flex-shrink: 0;
-}
-.form-hint {
-  margin: -4px 0 12px;
-  padding: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #8b9bb8;
 }
 .rename-dialog-footer {
   display: flex;
@@ -881,11 +1016,6 @@ onMounted(load)
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-}
-.shelf-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
 }
 /* 二级：按货架名称折叠 */
 .shelf-name-collapse {

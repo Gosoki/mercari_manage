@@ -48,7 +48,9 @@ export const warehouseApi = {
   /** 批量修改同一仓库展示名（其下所有货架位的 warehouse 字段） */
   renameGroup: (data) => http.put('/warehouses/rename-group', data),
   /** 同一仓库下批量修改 shelf_name 分组名称 */
-  renameShelfNameGroup: (data) => http.put('/warehouses/rename-shelf-name-group', data)
+  renameShelfNameGroup: (data) => http.put('/warehouses/rename-shelf-name-group', data),
+  /** 将该货架位上全部库存改到目标货架位（warehouses.id） */
+  migrateInventory: (fromId, data) => http.post(`/warehouses/${fromId}/migrate-inventory`, data)
 }
 
 // 游戏类型

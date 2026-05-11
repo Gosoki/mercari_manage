@@ -858,6 +858,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import { inventoryApi, categoryApi, warehouseApi, authApi, scanApi, ocrApi, transactionApi, productTypeCategoryMappingApi, onSaleItemApi, listingApi } from '@/api/index.js'
+import { warehouseShelfLabel } from '@/utils/warehouseLabel.js'
 import SingleListingFormDialog from '@/components/SingleListingFormDialog.vue'
 import CombinedListingFormDialog from '@/components/CombinedListingFormDialog.vue'
 
@@ -1729,8 +1730,7 @@ const warehouseTreeMeta = computed(() => {
         const id = Number(w.id)
         const leafVal = `WHS:${w.id}`
         if (Number.isFinite(id)) idToPath.set(id, [l1Val, l2Val, leafVal])
-        const code = String(w.name ?? '').trim() || '未命名'
-        return { value: leafVal, label: code, children: [] }
+        return { value: leafVal, label: warehouseShelfLabel(w), children: [] }
       })
       midNodes.push({ value: l2Val, label: labelMid, children: leaves })
     }

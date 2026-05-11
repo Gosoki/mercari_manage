@@ -105,6 +105,66 @@ class DBManager:
         print("[OK] warehouses 组合唯一迁移完成")
         return True
 
+    def _migrate_warehouses_name_nullable(self) -> bool:
+        """货架号 name 允许为空（添加货架可不填编号）"""
+        db = self.db
+        if not db.table_exists("warehouses"):
+            return True
+        cols = db.get_table_columns("warehouses")
+        name_col = next((c for c in cols if c.get("name") == "name"), None)
+        if not name_col or not name_col.get("notnull"):
+            return True
+        print("正在迁移 warehouses：货架号 name 允许为空 ...")
+        col_names = [c["name"] for c in sorted(cols, key=lambda x: x.get("cid", 0))]
+        insert_cols = ", ".join(f"[{c}]" for c in col_names)
+        select_sql = ", ".join(f"[{c}]" for c in col_names)
+        # 重建为 name TEXT 可空，保留其余列定义与数据
+        type_by_name = {c["name"]: c.get("type", "TEXT") for c in cols}
+        pk_def = "[id] INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT"
+        parts = [pk_def]
+        for c in col_names:
+            if c == "id":
+                continue
+            ctype = type_by_name.get(c, "TEXT")
+            if c == "name":
+                parts.append("[name] TEXT")
+            elif c == "warehouse":
+                parts.append("[warehouse] TEXT DEFAULT '默认仓库'")
+            elif c == "created_at":
+                parts.append("[created_at] DATETIME DEFAULT CURRENT_TIMESTAMP")
+            else:
+                parts.append(f"[{c}] {ctype}")
+        create_body = ", ".join(parts)
+        try:
+            with db.get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute("PRAGMA foreign_keys=OFF")
+                cur.execute("BEGIN IMMEDIATE")
+                cur.execute(f"CREATE TABLE [warehouses__mig_nullname] ({create_body})")
+                cur.execute(
+                    f"INSERT INTO [warehouses__mig_nullname] ({insert_cols}) "
+                    f"SELECT {select_sql} FROM [warehouses]"
+                )
+                cur.execute("DROP TABLE [warehouses]")
+                cur.execute("ALTER TABLE [warehouses__mig_nullname] RENAME TO [warehouses]")
+                cur.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_warehouses_warehouse_name "
+                    "ON [warehouses]([warehouse], [name])"
+                )
+                conn.commit()
+                cur.execute("PRAGMA foreign_keys=ON")
+        except Exception as e:
+            print(f"[错误] warehouses name 可空迁移失败: {e}")
+            return False
+        cache_attr = "_cached_table_columns"
+        if hasattr(WarehouseModel, cache_attr):
+            try:
+                delattr(WarehouseModel, cache_attr)
+            except Exception:
+                pass
+        print("[OK] warehouses name 可空迁移完成")
+        return True
+
     def _migrate_ptcm_to_independent_module(self) -> bool:
         """
         将 product_type_category_mappings 从 product_type_id 迁移到纯文本 product_type。
@@ -295,6 +355,8 @@ class DBManager:
             return False
 
         if not self._migrate_warehouses_composite_unique():
+            return False
+        if not self._migrate_warehouses_name_nullable():
             return False
         return True
 

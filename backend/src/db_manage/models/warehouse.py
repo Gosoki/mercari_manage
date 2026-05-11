@@ -25,7 +25,7 @@ class WarehouseModel(BaseModel):
             },
             'name': {
                 'type': 'TEXT',
-                'not_null': True,
+                'not_null': False,
                 'default': None,
             },
             # 货架名称（展示用）；业务唯一键为 (warehouse, name) 中的 name，即货架号
@@ -80,14 +80,21 @@ class WarehouseModel(BaseModel):
         return result[0] if result else None
 
     @classmethod
-    def find_by_warehouse_and_name(cls, warehouse: Any, name: str):
-        """同一仓库下货架号（name）唯一"""
+    def find_by_warehouse_and_name(cls, warehouse: Any, name: Any):
+        """同一仓库下查找货架号；name 为空或 None 时匹配 [name] IS NULL（仅用于唯一性校验等）"""
         wh = cls.normalize_warehouse_key(warehouse)
-        result = cls.find_all(
-            "COALESCE(NULLIF(TRIM([warehouse]), ''), '默认仓库') = ? AND [name] = ?",
-            (wh, name),
-            limit=1,
-        )
+        if name is None or (isinstance(name, str) and not str(name).strip()):
+            result = cls.find_all(
+                "COALESCE(NULLIF(TRIM([warehouse]), ''), '默认仓库') = ? AND [name] IS NULL",
+                (wh,),
+                limit=1,
+            )
+        else:
+            result = cls.find_all(
+                "COALESCE(NULLIF(TRIM([warehouse]), ''), '默认仓库') = ? AND [name] = ?",
+                (wh, str(name).strip()),
+                limit=1,
+            )
         return result[0] if result else None
 
     @classmethod

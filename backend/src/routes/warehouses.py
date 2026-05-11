@@ -10,7 +10,7 @@ db = DatabaseManager()
 
 
 class WarehouseCreate(PydanticModel):
-    name: str  # 货架号（同一仓库内唯一）
+    name: Optional[str] = None  # 货架号（同一仓库内非空时唯一）；可为空表示暂未编号
     warehouse: Optional[str] = "默认仓库"
     shelf_name: Optional[str] = None  # 货架名称（展示）
     location: Optional[str] = None
@@ -31,11 +31,26 @@ class RenameWarehouseGroupBody(PydanticModel):
     new_warehouse: str
 
 
+class MigrateInventoryBody(PydanticModel):
+    target_warehouse_id: int
+
+
 class RenameShelfNameGroupBody(PydanticModel):
     """同一仓库下、同一货架名称（shelf_name）分组批量改为新名称"""
     warehouse: str
     old_shelf_name: Optional[str] = None  # 空串 / None 表示「未设置货架名称」分组
     new_shelf_name: Optional[str] = None  # 空串 / None 表示清空为未设置
+
+
+def _norm_shelf_code(n: Optional[str]) -> Optional[str]:
+    if n is None:
+        return None
+    t = str(n).strip()
+    return t if t else None
+
+
+def _shelf_codes_equal(a: Optional[str], b: Optional[str]) -> bool:
+    return _norm_shelf_code(a) == _norm_shelf_code(b)
 
 
 def _norm_shelf_name_key(s: Optional[str]) -> Optional[str]:
@@ -90,11 +105,12 @@ def _safe_remove_default_template_shelf(name: str, exclude_id: int) -> None:
 @router.post("")
 def create_warehouse(data: WarehouseCreate):
     wh_key = WarehouseModel.normalize_warehouse_key(data.warehouse)
-    if WarehouseModel.find_by_warehouse_and_name(wh_key, data.name):
+    nm = _norm_shelf_code(data.name)
+    if nm is not None and WarehouseModel.find_by_warehouse_and_name(wh_key, nm):
         raise HTTPException(status_code=400, detail="该仓库下货架号已存在")
     sn = (data.shelf_name or "").strip() or None
     wh = WarehouseModel(
-        name=data.name,
+        name=nm,
         warehouse=wh_key,
         shelf_name=sn,
         location=data.location,
@@ -103,8 +119,8 @@ def create_warehouse(data: WarehouseCreate):
     if not wh.save():
         raise HTTPException(status_code=500, detail="保存失败")
     default_key = WarehouseModel.normalize_warehouse_key(None)
-    if wh_key != default_key:
-        _safe_remove_default_template_shelf(data.name, wh.id)
+    if wh_key != default_key and nm:
+        _safe_remove_default_template_shelf(nm, wh.id)
     return _serialize(wh)
 
 
@@ -124,12 +140,18 @@ def rename_warehouse_group(data: RenameWarehouseGroupBody):
         raise HTTPException(status_code=404, detail="未找到该仓库")
     target_ids = {w.id for w in targets}
     for w in targets:
-        other = WarehouseModel.find_by_warehouse_and_name(new_key, w.name)
-        if other and other.id not in target_ids:
-            raise HTTPException(
-                status_code=400,
-                detail=f"目标仓库「{new_key}」下已存在货架号「{w.name}」，请先处理冲突后再改名",
-            )
+        if _norm_shelf_code(w.name) is None:
+            continue
+        for other in all_rows:
+            if other.id in target_ids:
+                continue
+            if row_wh_key(other) != new_key:
+                continue
+            if _shelf_codes_equal(other.name, w.name):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"目标仓库「{new_key}」下已存在货架号「{w.name}」，请先处理冲突后再改名",
+                )
     for w in targets:
         w.warehouse = new_key
         if not w.save():
@@ -162,28 +184,47 @@ def rename_shelf_name_group(data: RenameShelfNameGroupBody):
     return {"message": "货架名称已更新", "updated": len(targets)}
 
 
+@router.post("/{wid}/migrate-inventory")
+def migrate_inventory_to_shelf(wid: int, data: MigrateInventoryBody):
+    """将挂在该货架位（warehouses.id）上的全部库存改到目标货架位。"""
+    tid = int(data.target_warehouse_id)
+    if tid == wid:
+        raise HTTPException(status_code=400, detail="目标货架不能与当前相同")
+    src = WarehouseModel.find_by_id(id=wid)
+    dst = WarehouseModel.find_by_id(id=tid)
+    if not src or not dst:
+        raise HTTPException(status_code=404, detail="货架不存在")
+    moved = db.execute_update(
+        "UPDATE [inventory] SET warehouse_id = ? WHERE warehouse_id = ?",
+        (tid, wid),
+    )
+    return {"moved": moved, "message": "迁移完成"}
+
+
 @router.put("/{wid}")
 def update_warehouse(wid: int, data: WarehouseUpdate):
     wh = WarehouseModel.find_by_id(id=wid)
     if not wh:
         raise HTTPException(status_code=404, detail="仓库不存在")
-    next_name = data.name if data.name is not None else wh.name
+    patch = data.model_dump(exclude_unset=True)
     next_wh = WarehouseModel.normalize_warehouse_key(
-        data.warehouse if data.warehouse is not None else wh.warehouse
+        patch["warehouse"] if "warehouse" in patch else wh.warehouse
     )
-    other = WarehouseModel.find_by_warehouse_and_name(next_wh, next_name)
-    if other and other.id != wid:
-        raise HTTPException(status_code=400, detail="该仓库下货架号已存在")
-    if data.name is not None:
-        wh.name = data.name
-    if data.warehouse is not None:
-        wh.warehouse = WarehouseModel.normalize_warehouse_key(data.warehouse)
-    if data.shelf_name is not None:
-        wh.shelf_name = (data.shelf_name or "").strip() or None
-    if data.location is not None:
-        wh.location = data.location
-    if data.description is not None:
-        wh.description = data.description
+    next_name = _norm_shelf_code(patch["name"]) if "name" in patch else wh.name
+    if _norm_shelf_code(next_name) is not None:
+        other = WarehouseModel.find_by_warehouse_and_name(next_wh, next_name)
+        if other and other.id != wid:
+            raise HTTPException(status_code=400, detail="该仓库下货架号已存在")
+    if "name" in patch:
+        wh.name = next_name
+    if "warehouse" in patch:
+        wh.warehouse = next_wh
+    if "shelf_name" in patch:
+        wh.shelf_name = (patch["shelf_name"] or "").strip() or None
+    if "location" in patch:
+        wh.location = patch["location"]
+    if "description" in patch:
+        wh.description = patch["description"]
     wh.save()
     return _serialize(wh)
 
