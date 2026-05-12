@@ -316,6 +316,7 @@ def sync_on_sale_items_from_mercari(account_id: Optional[int] = None) -> Dict[st
         "seller_id": seller_key,
         "api_item_count": len(items),
         "inserted": 0,
+        "inserted_item_ids": [],
         "updated": 0,
         "skipped": 0,
         "marked_deleted": 0,
@@ -354,6 +355,7 @@ def sync_on_sale_items_from_mercari(account_id: Optional[int] = None) -> Dict[st
             r = upsert_on_sale_item_row(row)
             if r == "inserted":
                 stats["inserted"] += 1
+                stats["inserted_item_ids"].append(iid_key)
                 # 新增且处于在售状态 → 补增库存计数
                 if new_active:
                     activated_item_ids.add(iid_key)

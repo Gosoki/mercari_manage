@@ -509,33 +509,44 @@ async function openMercariManage(row) {
   }
 }
 
-async function fetchItemDetail(row) {
-  const iid = String(row.item_id || '').trim()
+async function fetchItemDetailForItemId(itemId, options = {}) {
+  const { accountId = null, silent = false, reloadAfter = true } = options
+  const iid = String(itemId || '').trim()
   if (!iid) {
-    ElMessage.warning('缺少商品 ID')
-    return
+    if (!silent) ElMessage.warning('缺少商品 ID')
+    return { ok: false }
   }
-  if (detailLoadingIds.value.has(iid)) return
+  if (detailLoadingIds.value.has(iid)) return { ok: false, skipped: true }
   const next = new Set(detailLoadingIds.value)
   next.add(iid)
   detailLoadingIds.value = next
   try {
-    const res = await onSaleItemApi.fetchDetail({ item_id: iid })
+    const payload = { item_id: iid }
+    if (accountId != null && accountId !== '') payload.account_id = accountId
+    const res = await onSaleItemApi.fetchDetail(payload)
     const sync = res?.data?.sync || {}
-    if (sync.updated) {
-      ElMessage.success(
-        sync.message ||
-          `已关联 ${sync.inventory_ids?.length ?? 0} 条库存，煤炉 ID ${sync.mercari_item_id}`
-      )
-      await load()
-    } else {
-      ElMessage.warning(sync.message || '未写入库存（请检查说明中的管理番号/条码与账号 DPoP_ItemGet-Info）')
+    const ok = Boolean(sync.updated)
+    if (!silent) {
+      if (ok) {
+        ElMessage.success(
+          sync.message ||
+            `已关联 ${sync.inventory_ids?.length ?? 0} 条库存，煤炉 ID ${sync.mercari_item_id}`
+        )
+      } else {
+        ElMessage.warning(sync.message || '未写入库存（请检查说明中的管理番号/条码与账号 DPoP_ItemGet-Info）')
+      }
     }
+    if (ok && reloadAfter) await load()
+    return { ok, sync }
   } finally {
     const done = new Set(detailLoadingIds.value)
     done.delete(iid)
     detailLoadingIds.value = done
   }
+}
+
+async function fetchItemDetail(row) {
+  await fetchItemDetailForItemId(row.item_id)
 }
 
 async function openSyncDialog() {
@@ -565,7 +576,28 @@ async function runSync() {
       `同步完成：煤炉 ${d.api_item_count ?? 0} 条，新增 ${d.inserted ?? 0}，更新 ${d.updated ?? 0}，标记删除 ${d.marked_deleted ?? 0}`
     )
     syncVisible.value = false
-    load()
+    await load()
+
+    const rawNewIds = Array.isArray(d.inserted_item_ids) ? d.inserted_item_ids : []
+    const newIds = rawNewIds.map((x) => String(x ?? '').trim()).filter(Boolean)
+    if (newIds.length > 0) {
+      const aid = syncAccountId.value
+      let okN = 0
+      let failN = 0
+      for (const iid of newIds) {
+        const r = await fetchItemDetailForItemId(iid, {
+          accountId: aid,
+          silent: true,
+          reloadAfter: false,
+        })
+        if (r.ok) okN += 1
+        else if (!r.skipped) failN += 1
+      }
+      await load()
+      ElMessage.info(
+        `新增商品已自动获取详情：成功关联库存 ${okN} 条，未写入 ${failN} 条（请核对商品说明与 DPoP_ItemGet-Info）`
+      )
+    }
   } finally {
     syncLoading.value = false
   }
