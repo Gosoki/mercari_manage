@@ -2,6 +2,9 @@
 """
 在售商品详情：经网页 ``jp.mercari.com/item/m…`` + MITM 截获 items/get 响应，
 解析说明中的管理番号 / バーコード → 回写 inventory.mercari_item_id、on_sale_quantity。
+
+标题含「まとめ商品」且说明含「■ 商品内容」与 ``・`` 行时，按订单页同款规则用标题
+匹配 on_sale_items → inventory（_resolve_inventory_id_by_bundle_title）。
 """
 
 from __future__ import annotations
@@ -10,9 +13,12 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..db_manage.database import DatabaseManager
+from ..db_manage.models.on_sale_item import OnSaleItemModel
 from .get_order.description_mgmt_ids import (
+    _extract_bundle_product_titles,
     _inventory_id_by_barcode,
     _inventory_id_exists,
+    _resolve_inventory_id_by_bundle_title,
     parse_order_description_outbound_tokens,
 )
 from .get_order.mercari_item_get import fetch_mercari_item_get
@@ -163,6 +169,27 @@ def resolve_inventory_id_from_listing_description(text: Optional[str]) -> Option
     return None
 
 
+_MATOME_LISTING_TITLE_MARK = "まとめ商品"
+
+
+def _is_matome_listing_bundle_by_title_and_description(
+    listing_name: Optional[str],
+    description: Optional[str],
+) -> bool:
+    """
+    标题含「まとめ商品」且说明中存在「■ 商品内容」小节及至少一条「・」行时，
+    按订单页同款逻辑用商品内容标题匹配库存（见 _extract_bundle_product_titles）。
+    """
+    name = str(listing_name or "").strip()
+    if _MATOME_LISTING_TITLE_MARK not in name:
+        return False
+    desc = str(description or "").strip()
+    if not desc:
+        return False
+    titles = _extract_bundle_product_titles(desc)
+    return len(titles) > 0
+
+
 def extract_mgmt_barcode_hints(text: Optional[str]) -> Dict[str, Any]:
     """便于前端展示：从说明中抽取的管理番号（数字串）与条码串列表（不要求已存在于库）。"""
     tokens = parse_order_description_outbound_tokens(text)
@@ -174,6 +201,42 @@ def extract_mgmt_barcode_hints(text: Optional[str]) -> Dict[str, Any]:
         else:
             barcodes.append(str(val).strip())
     return {"management_numbers": mgmt, "barcodes": barcodes}
+
+
+def _persist_listing_description_for_item(
+    request_item_id: str,
+    api_item_id: Optional[str],
+    description: Optional[str],
+) -> None:
+    """
+    将 items/get 返回的 data.description 写入 on_sale_items.listing_description，
+    供在售列表与「查看详情」展示。按多种 item_id 写法匹配本地一行。
+    """
+    text = description if isinstance(description, str) else None
+
+    keys: List[str] = []
+    for x in (api_item_id, request_item_id):
+        s = str(x or "").strip()
+        if s and s not in keys:
+            keys.append(s)
+    for s in list(keys):
+        if s.startswith("m") and len(s) > 1:
+            t2 = s[1:].strip()
+            if t2 and t2 not in keys:
+                keys.append(t2)
+        elif s.isdigit():
+            ms = f"m{s}"
+            if ms not in keys:
+                keys.append(ms)
+
+    for k in keys:
+        rows = OnSaleItemModel.find_all(where="TRIM([item_id]) = TRIM(?)", params=(k,), limit=1)
+        if not rows:
+            continue
+        ob = rows[0]
+        ob.listing_description = text
+        ob.save()
+        return
 
 
 def fetch_detail_and_sync_inventory(
@@ -205,55 +268,91 @@ def fetch_detail_and_sync_inventory(
 
     desc = data.get("description")
     desc_text = desc if isinstance(desc, str) else None
-    inv_id = resolve_inventory_id_from_listing_description(desc_text)
+    listing_name = data.get("name")
+    listing_name_str = listing_name if isinstance(listing_name, str) else None
+
     mid_api = _normalize_mercari_item_id(data.get("id"))
     status = data.get("status")
     on_sale_qty = _on_sale_quantity_from_status(status if isinstance(status, str) else None)
+
+    _persist_listing_description_for_item(str(item_id or "").strip(), mid_api, desc_text)
 
     hints = extract_mgmt_barcode_hints(desc_text)
     sync["parsed_hints"] = hints
     parsed_tokens = parse_listing_description_tokens_with_quantity(desc_text)
     sync["parsed_tokens"] = parsed_tokens
 
-    if inv_id is None:
-        sync["message"] = (
-            "说明中未找到可关联的库存（需「管理ID」「管理番号」对应已存在的库存 id，"
-            "或「バーコード」对应已存在的库存条码）"
-        )
-        return {"api": resp, "sync": sync}
+    matome_bundle = _is_matome_listing_bundle_by_title_and_description(listing_name_str, desc_text)
+    sync["matome_bundle"] = matome_bundle
+
+    resolved_lines: List[Dict[str, Any]] = []
+    qty_by_inventory: Dict[int, int] = {}
+    inv_id: Optional[int] = None
+
+    if matome_bundle:
+        bundle_titles = _extract_bundle_product_titles(desc_text)
+        sync["bundle_titles"] = bundle_titles
+        for title in bundle_titles:
+            riv = _resolve_inventory_id_by_bundle_title(title)
+            resolved_lines.append(
+                {
+                    "kind": "bundle_title",
+                    "value": title,
+                    "quantity": 1,
+                    "inventory_id": riv,
+                }
+            )
+            if riv is not None:
+                i = int(riv)
+                qty_by_inventory[i] = max(qty_by_inventory.get(i, 0), int(on_sale_qty))
+        if qty_by_inventory:
+            inv_id = sorted(qty_by_inventory.keys())[0]
+        sync["resolved_lines"] = resolved_lines
+        if not qty_by_inventory:
+            sync["message"] = (
+                "まとめ商品：说明「■ 商品内容」中的标题未匹配到库存"
+                "（与订单页一致：需在售列表存在同标题商品且对应库存已绑定煤炉商品 ID）"
+            )
+            return {"api": resp, "sync": sync}
+    else:
+        inv_id = resolve_inventory_id_from_listing_description(desc_text)
+        if inv_id is None:
+            sync["message"] = (
+                "说明中未找到可关联的库存（需「管理ID」「管理番号」对应已存在的库存 id，"
+                "或「バーコード」对应已存在的库存条码）"
+            )
+            return {"api": resp, "sync": sync}
+
+        for token in parsed_tokens:
+            kind = str(token.get("kind") or "")
+            value = token.get("value")
+            qty = int(token.get("quantity") or 1)
+            resolved_inv_id: Optional[int] = None
+            if kind == "mgmt_id":
+                mid = int(value)
+                if _inventory_id_exists(mid):
+                    resolved_inv_id = mid
+            elif kind == "barcode":
+                resolved_inv_id = _inventory_id_by_barcode(str(value or "").strip())
+            resolved_lines.append(
+                {
+                    "kind": kind,
+                    "value": value,
+                    "quantity": qty,
+                    "inventory_id": resolved_inv_id,
+                }
+            )
+            if resolved_inv_id is not None:
+                qty_by_inventory[resolved_inv_id] = qty_by_inventory.get(resolved_inv_id, 0) + qty
+
+        if not qty_by_inventory and inv_id is not None:
+            # 回退兼容：若解析列表为空但旧逻辑能识别到单个库存，按 status 推导 0/1。
+            qty_by_inventory[int(inv_id)] = max(0, int(on_sale_qty))
+        sync["resolved_lines"] = resolved_lines
 
     if not mid_api:
         sync["message"] = "响应中缺少商品 id"
         return {"api": resp, "sync": sync}
-
-    resolved_lines: List[Dict[str, Any]] = []
-    qty_by_inventory: Dict[int, int] = {}
-    for token in parsed_tokens:
-        kind = str(token.get("kind") or "")
-        value = token.get("value")
-        qty = int(token.get("quantity") or 1)
-        resolved_inv_id: Optional[int] = None
-        if kind == "mgmt_id":
-            mid = int(value)
-            if _inventory_id_exists(mid):
-                resolved_inv_id = mid
-        elif kind == "barcode":
-            resolved_inv_id = _inventory_id_by_barcode(str(value or "").strip())
-        resolved_lines.append(
-            {
-                "kind": kind,
-                "value": value,
-                "quantity": qty,
-                "inventory_id": resolved_inv_id,
-            }
-        )
-        if resolved_inv_id is not None:
-            qty_by_inventory[resolved_inv_id] = qty_by_inventory.get(resolved_inv_id, 0) + qty
-
-    if not qty_by_inventory and inv_id is not None:
-        # 回退兼容：若解析列表为空但旧逻辑能识别到单个库存，按 status 推导 0/1。
-        qty_by_inventory[int(inv_id)] = max(0, int(on_sale_qty))
-    sync["resolved_lines"] = resolved_lines
 
     db = DatabaseManager()
     try:
@@ -310,5 +409,14 @@ def fetch_detail_and_sync_inventory(
     sync["on_sale_quantity"] = sum(qty_by_inventory.values()) if qty_by_inventory else 0
     sync["inventory_ids"] = sorted(qty_by_inventory.keys())
     sync["inventory_quantity_map"] = {str(k): int(v) for k, v in qty_by_inventory.items()}
-    sync["message"] = "已同步煤炉商品 ID 与在售数量" if qty_by_inventory else "未匹配到可写入库存"
+    if qty_by_inventory:
+        if matome_bundle:
+            n = len(qty_by_inventory)
+            sync["message"] = (
+                f"まとめ商品：已按「■ 商品内容」匹配 {n} 条库存并同步煤炉商品 ID（与订单页 bundle_title 规则一致）"
+            )
+        else:
+            sync["message"] = "已同步煤炉商品 ID 与在售数量"
+    else:
+        sync["message"] = "未匹配到可写入库存"
     return {"api": resp, "sync": sync}

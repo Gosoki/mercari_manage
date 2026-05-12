@@ -169,6 +169,9 @@ export const onSaleItemApi = {
   /** items/get 详情并同步库存 mercari_item_id / on_sale_quantity；须配置 dpop_item_get_info */
   fetchDetail: (data, axiosConfig = {}) =>
     http.post('/on-sale-items/fetch-detail', data, { timeout: 120000, ...axiosConfig }),
+  /** 同一账号队列内串行批量 items/get（单 HTTP，服务端 run_meilu_serial 一次） */
+  fetchDetailsBatch: (data, axiosConfig = {}) =>
+    http.post('/on-sale-items/fetch-details-batch', data, { timeout: 0, ...axiosConfig }),
 }
 
 // Mercari 操作

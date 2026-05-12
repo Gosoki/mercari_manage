@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Dict, Optional, Set
+from typing import Dict, List, Optional, Set
 import re
 
 from fastapi import APIRouter, HTTPException
@@ -231,6 +231,15 @@ class FetchOnSaleDetailRequest(PydanticModel):
     account_id: Optional[int] = None
 
 
+class FetchOnSaleDetailsBatchRequest(PydanticModel):
+    """同一账号下批量 items/get：在 run_meilu_serial 内串行执行，避免多请求并发抢占 WebDriver。"""
+    item_ids: List[str]
+    account_id: Optional[int] = None
+
+
+_FETCH_DETAILS_BATCH_MAX = 200
+
+
 @router.get("")
 def list_on_sale_items(
     keyword: Optional[str] = None,
@@ -378,3 +387,66 @@ def fetch_on_sale_item_detail(data: FetchOnSaleDetailRequest):
         raise HTTPException(status_code=500, detail=f"获取详情失败: {exc}") from exc
 
     return {"success": True, "data": payload}
+
+
+@router.post("/fetch-details-batch")
+def fetch_on_sale_item_details_batch(data: FetchOnSaleDetailsBatchRequest):
+    """
+    对多个 item_id 依次执行 fetch_detail_and_sync_inventory，且整段只提交一次
+    run_meilu_serial（与单条 fetch-detail、在售同步同一队列键 FIFO），避免多 HTTP
+    并发在同一账号下抢占 Edge / MITM。
+    """
+    raw_ids = data.item_ids or []
+    cleaned: List[str] = []
+    seen: Set[str] = set()
+    for x in raw_ids:
+        t = str(x or "").strip()
+        if not t or t in seen:
+            continue
+        seen.add(t)
+        cleaned.append(t)
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="item_ids 不能为空")
+    if len(cleaned) > _FETCH_DETAILS_BATCH_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"单次最多处理 {_FETCH_DETAILS_BATCH_MAX} 个商品 ID",
+        )
+
+    try:
+        aid = resolve_meilu_account_id(data.account_id)
+        qk = queue_key_for_meilu_account(int(aid))
+
+        def _run_batch() -> Dict[str, Any]:
+            results: List[Dict[str, Any]] = []
+            ok_synced = 0
+            not_ok = 0
+            for iid in cleaned:
+                try:
+                    payload = fetch_detail_and_sync_inventory(iid, account_id=aid)
+                    sync = payload.get("sync") if isinstance(payload.get("sync"), dict) else {}
+                    if sync.get("updated"):
+                        ok_synced += 1
+                    else:
+                        not_ok += 1
+                    results.append({"item_id": iid, "sync": sync})
+                except Exception as exc:
+                    not_ok += 1
+                    results.append({"item_id": iid, "sync": None, "error": str(exc)})
+            return {
+                "account_id": int(aid),
+                "total": len(cleaned),
+                "ok_synced": ok_synced,
+                "not_ok": not_ok,
+                "results": results,
+            }
+
+        out = run_meilu_serial(qk, _run_batch)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"批量获取详情失败: {exc}") from exc
+
+    return {"success": True, "data": out}

@@ -5,7 +5,7 @@
         <el-col :xs="24" :md="14" class="search-left-group">
           <el-input
             v-model="filters.keyword"
-            placeholder="搜索商品ID、标题"
+            placeholder="搜索商品 ID、标题、商品说明"
             clearable
             @change="onFilterChange"
           />
@@ -179,7 +179,7 @@
         <el-table-column label="更新" width="160" align="center" header-align="center">
           <template #default="{ row }">{{ displayTs(row.updated) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right" align="center" header-align="center">
+        <el-table-column label="操作" width="220" fixed="right" align="center" header-align="center">
           <template #default="{ row }">
             <el-button
               type="primary"
@@ -188,16 +188,16 @@
               :loading="manageLoadingIds.has(String(row.item_id || '').trim())"
               @click="openMercariManage(row)"
             >
-              管理
+              浏览器打开
             </el-button>
             <el-button
-              :type="hasSecondaryData(row) ? 'success' : 'warning'"
+              :type="hasDetailViewable(row) ? 'success' : 'warning'"
               link
               size="small"
               :loading="detailLoadingIds.has(String(row.item_id || '').trim())"
-              @click="fetchItemDetail(row)"
+              @click="onDetailActionClick(row)"
             >
-              获取详情
+              {{ hasDetailViewable(row) ? '查看详情' : '获取详情' }}
             </el-button>
           </template>
         </el-table-column>
@@ -216,6 +216,94 @@
         />
       </div>
     </el-card>
+
+    <el-dialog
+      v-model="detailViewVisible"
+      title="在售商品详情"
+      width="760px"
+      class="on-sale-detail-dialog"
+      destroy-on-close
+      @closed="onDetailViewClosed"
+    >
+      <div v-loading="detailViewLoading" class="detail-view-body">
+        <template v-if="detailViewBase">
+          <div class="detail-section-title">煤炉侧信息</div>
+          <el-descriptions :column="2" border size="small" class="detail-desc">
+            <el-descriptions-item label="商品 ID" :span="1">{{ detailViewBase.item_id || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="状态" :span="1">
+              <el-tag :type="onSaleStatusTagType(detailViewBase.status)" size="small" effect="light">
+                {{ onSaleStatusLabel(detailViewBase.status) }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="标题" :span="2">{{ detailViewBase.name || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="价格（日元）" :span="1">{{ Number(detailViewBase.price || 0) }}</el-descriptions-item>
+            <el-descriptions-item label="卖家" :span="1">
+              {{ detailViewBase.seller_name || '-' }}
+              <span v-if="detailViewBase.seller_id" class="cell-muted">（{{ detailViewBase.seller_id }}）</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="煤炉更新" :span="1">{{ displayTs(detailViewBase.updated) }}</el-descriptions-item>
+            <el-descriptions-item label="本地同步" :span="1">{{ displayTs(detailViewBase.synced_at) }}</el-descriptions-item>
+          </el-descriptions>
+
+          <div class="detail-section-title">商品说明（煤炉）</div>
+          <div v-if="detailListingBodyText" class="detail-listing-body-wrap">
+            <el-input
+              type="textarea"
+              :model-value="detailListingBodyText"
+              readonly
+              :autosize="{ minRows: 10, maxRows: 22 }"
+            />
+          </div>
+          <el-empty v-else description="暂无已保存的商品说明，请使用「获取详情」或下方「重新从煤炉获取」" :image-size="48" />
+
+          <div class="detail-section-title">库存关联摘要</div>
+          <el-descriptions :column="1" border size="small" class="detail-desc">
+            <el-descriptions-item label="匹配条数">{{ Number(detailViewBase.inventory_match_count || 0) }}</el-descriptions-item>
+            <el-descriptions-item label="管理 ID（汇总）">
+              <span v-if="(detailViewBase.inventory_mgmt_ids_text || '').trim()">{{ detailViewBase.inventory_mgmt_ids_text }}</span>
+              <span v-else class="cell-muted">-</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="条码（汇总）">
+              <span v-if="(detailViewBase.inventory_barcodes_text || '').trim()">{{ detailViewBase.inventory_barcodes_text }}</span>
+              <span v-else class="cell-muted">-</span>
+            </el-descriptions-item>
+            <el-descriptions-item v-if="(detailViewBase.inventory_locations_text || '').trim()" label="位置（汇总）">
+              {{ detailViewBase.inventory_locations_text }}
+            </el-descriptions-item>
+          </el-descriptions>
+
+          <div class="detail-section-title">关联库存明细</div>
+          <el-table
+            v-if="detailInventoryLines.length"
+            :data="detailInventoryLines"
+            border
+            stripe
+            size="small"
+            max-height="320"
+            class="detail-inv-table"
+          >
+            <el-table-column prop="management_id" label="管理 ID" width="100" align="center" />
+            <el-table-column prop="barcode" label="条码" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="product_name" label="库存商品名称" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="location" label="存储位置" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="on_sale_quantity" label="在售数" width="88" align="center" />
+          </el-table>
+          <el-empty v-else description="暂无解析出的库存行（可尝试重新从煤炉获取）" :image-size="56" />
+        </template>
+      </div>
+      <template #footer>
+        <el-button @click="detailViewVisible = false">关闭</el-button>
+        <el-button
+          v-if="detailViewBase"
+          type="primary"
+          plain
+          :loading="detailLoadingIds.has(String(detailViewBase.item_id || '').trim())"
+          @click="detailViewRefreshFromMercari"
+        >
+          重新从煤炉获取
+        </el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="syncVisible" title="从煤炉同步在售列表" width="420px" destroy-on-close>
       <el-form label-width="88px">
@@ -292,6 +380,43 @@ const syncAccountId = ref(null)
 const accountOptions = ref([])
 const accountsLoading = ref(false)
 
+/** 查看详情弹窗 */
+const detailViewVisible = ref(false)
+const detailViewLoading = ref(false)
+const detailViewBase = ref(null)
+const detailViewOnSaleItems = ref([])
+
+const detailInventoryLines = computed(() => {
+  const items = detailViewOnSaleItems.value
+  if (Array.isArray(items) && items.length > 0) {
+    const acc = []
+    for (const it of items) {
+      for (const ln of inventoryLines(it)) {
+        acc.push(ln)
+      }
+    }
+    if (acc.length) return acc
+  }
+  const base = detailViewBase.value
+  return base ? inventoryLines(base) : []
+})
+
+/** 弹窗内展示：优先列表行上的 listing_description，否则明细接口返回的行 */
+const detailListingBodyText = computed(() => {
+  const base = detailViewBase.value
+  if (base && String(base.listing_description ?? '').trim()) {
+    return String(base.listing_description)
+  }
+  const items = detailViewOnSaleItems.value
+  if (Array.isArray(items) && items.length) {
+    for (const it of items) {
+      const t = String(it?.listing_description ?? '').trim()
+      if (t) return String(it.listing_description)
+    }
+  }
+  return ''
+})
+
 const list = ref([])
 /** 展开区：key 为 trim 后的 item_id */
 const expandByItemId = reactive({})
@@ -362,6 +487,16 @@ function hasSecondaryData(row) {
   const barcodes = String(row.inventory_barcodes_text || '').trim()
   const matched = Number(row.inventory_match_count || 0)
   return Boolean(mgmt || barcodes || matched > 0)
+}
+
+function hasStoredListingDescription(row) {
+  if (!row || typeof row !== 'object') return false
+  return Boolean(String(row.listing_description ?? '').trim())
+}
+
+/** 已有关联库存或已拉取并保存过商品说明时，可打开「查看详情」 */
+function hasDetailViewable(row) {
+  return hasSecondaryData(row) || hasStoredListingDescription(row)
 }
 
 function inventoryLines(row) {
@@ -470,6 +605,57 @@ function mercariItemPathSegment(itemId) {
   return raw.startsWith('m') ? raw : `m${raw}`
 }
 
+function onDetailActionClick(row) {
+  if (hasDetailViewable(row)) {
+    openDetailView(row)
+  } else {
+    fetchItemDetail(row)
+  }
+}
+
+async function openDetailView(row) {
+  if (!row) return
+  detailViewBase.value = { ...row }
+  detailViewVisible.value = true
+  const k = expandKey(row.item_id)
+  if (!k) return
+  detailViewLoading.value = true
+  detailViewOnSaleItems.value = []
+  try {
+    const res = await onSaleItemApi.listByItemId({ item_id: k })
+    detailViewOnSaleItems.value = res.items || []
+  } catch {
+    detailViewOnSaleItems.value = []
+  } finally {
+    detailViewLoading.value = false
+  }
+}
+
+function onDetailViewClosed() {
+  detailViewBase.value = null
+  detailViewOnSaleItems.value = []
+}
+
+async function detailViewRefreshFromMercari() {
+  const base = detailViewBase.value
+  if (!base?.item_id) return
+  await fetchItemDetailForItemId(base.item_id, { reloadAfter: true })
+  const k = expandKey(base.item_id)
+  const found = list.value.find((r) => expandKey(r.item_id) === k)
+  if (found) {
+    detailViewBase.value = { ...found }
+  }
+  detailViewLoading.value = true
+  try {
+    const res = await onSaleItemApi.listByItemId({ item_id: k })
+    detailViewOnSaleItems.value = res.items || []
+  } catch {
+    detailViewOnSaleItems.value = []
+  } finally {
+    detailViewLoading.value = false
+  }
+}
+
 async function openMercariManage(row) {
   const seg = mercariItemPathSegment(row.item_id)
   if (!seg) {
@@ -536,7 +722,7 @@ async function fetchItemDetailForItemId(itemId, options = {}) {
         ElMessage.warning(sync.message || '未写入库存（请检查说明中的管理番号/条码与账号 DPoP_ItemGet-Info）')
       }
     }
-    if (ok && reloadAfter) await load()
+    if (reloadAfter) await load()
     return { ok, sync }
   } finally {
     const done = new Set(detailLoadingIds.value)
@@ -582,17 +768,13 @@ async function runSync() {
     const newIds = rawNewIds.map((x) => String(x ?? '').trim()).filter(Boolean)
     if (newIds.length > 0) {
       const aid = syncAccountId.value
-      let okN = 0
-      let failN = 0
-      for (const iid of newIds) {
-        const r = await fetchItemDetailForItemId(iid, {
-          accountId: aid,
-          silent: true,
-          reloadAfter: false,
-        })
-        if (r.ok) okN += 1
-        else if (!r.skipped) failN += 1
-      }
+      const batchRes = await onSaleItemApi.fetchDetailsBatch(
+        { account_id: aid, item_ids: newIds },
+        { timeout: 0 }
+      )
+      const bd = batchRes.data || {}
+      const okN = Number(bd.ok_synced ?? 0) || 0
+      const failN = Number(bd.not_ok ?? 0) || 0
       await load()
       ElMessage.info(
         `新增商品已自动获取详情：成功关联库存 ${okN} 条，未写入 ${failN} 条（请核对商品说明与 DPoP_ItemGet-Info）`
@@ -705,4 +887,28 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.detail-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 16px 0 10px;
+  color: var(--el-text-color-primary);
+}
+.detail-section-title:first-of-type {
+  margin-top: 0;
+}
+.detail-view-body {
+  min-height: 80px;
+}
+.detail-desc {
+  width: 100%;
+}
+.detail-inv-table {
+  width: 100%;
+}
+.detail-listing-body-wrap :deep(.el-textarea__inner) {
+  font-family: inherit;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 </style>

@@ -43,6 +43,7 @@ _ON_SALE_ITEM_LIST_KEYS: Tuple[str, ...] = (
     "is_no_price",
     "impression_boost_status",
     "auction_info_json",
+    "listing_description",
     "synced_at",
     "is_delete",
 )
@@ -222,6 +223,11 @@ class OnSaleItemModel(BaseModel):
                 "not_null": False,
                 "default": None,
             },
+            "listing_description": {
+                "type": "TEXT",
+                "not_null": False,
+                "default": None,
+            },
             "synced_at": {
                 "type": "INTEGER",
                 "not_null": False,
@@ -255,9 +261,9 @@ class OnSaleItemModel(BaseModel):
         if not include_deleted:
             sql += " AND COALESCE(t.is_delete, 0) = 0"
         if keyword:
-            sql += " AND (t.item_id LIKE ? OR IFNULL(t.name,'') LIKE ?)"
+            sql += " AND (t.item_id LIKE ? OR IFNULL(t.name,'') LIKE ? OR IFNULL(t.listing_description,'') LIKE ?)"
             kw = f"%{keyword.strip()}%"
-            params.extend([kw, kw])
+            params.extend([kw, kw, kw])
         if seller_id is not None and str(seller_id).strip():
             sql += " AND TRIM(t.seller_id) = TRIM(?)"
             params.append(str(seller_id).strip())
