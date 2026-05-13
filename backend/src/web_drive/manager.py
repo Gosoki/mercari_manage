@@ -115,15 +115,19 @@ class EdgeWebDriveManager:
         """只保留一个标签并打开 start_url。
 
         Edge 持久化 profile 的「继续浏览上次页面」可能在 launch 后异步再开标签，
-        仅关掉 pages[1:] 仍会出现两个相同页面；因此先关掉启动时所有页再 new_page，
-        并在 goto 后短循环关闭晚到的恢复标签。
+        仅关掉 pages[1:] 仍会出现两个相同页面；因此需要收敛到单标签。
+
+        注意：不能先关掉全部页面再 new_page。Chromium/Edge 在「0 个标签」状态下
+        常会触发 Target.createTarget: Failed to open a new tab。应始终在仍有标签时
+        先 new_page，再关闭此前所有页面（不复用旧 Page）。
         """
-        for p in list(context.pages):
+        pages_before = list(context.pages)
+        page = await context.new_page()
+        for p in pages_before:
             try:
                 await p.close()
             except Exception:
                 pass
-        page = await context.new_page()
         await page.goto(start_url, wait_until=wait_until)
         for _ in range(12):
             extra = [p for p in context.pages if p is not page]

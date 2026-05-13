@@ -6,12 +6,14 @@ import uuid
 from typing import Optional
 from fastapi import UploadFile, HTTPException
 
+from src.app_paths import backend_root_str
+
 
 BASE64_IMAGE_RE = re.compile(r"^data:image/(png|jpeg|jpg|webp|gif);base64,", re.IGNORECASE)
 
 
 def _backend_root() -> str:
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return backend_root_str()
 
 
 def get_image_root() -> str:

@@ -53,7 +53,7 @@
               <el-select v-model="filterOwnerUserId" class="search-select-control" placeholder="所有商品归属" clearable @change="load">
                 <el-option v-for="u in ownerUsers" :key="u.id" :label="u.display_name || u.username" :value="u.id" />
               </el-select>
-              <el-checkbox v-model="hideNoWarehouseSlot" class="search-filter-checkbox" @change="() => load()">隐藏无在库</el-checkbox>
+              <el-checkbox v-model="hideNoWarehouseSlot" class="search-filter-checkbox">隐藏无在库</el-checkbox>
             </div>
           </div>
         </el-col>
@@ -1076,8 +1076,20 @@ const filterWarehousePath = ref([])
 const filterProductType = ref(null)
 const filterProductTypePath = ref([])
 const filterOwnerUserId = ref(null)
-/** 默认开启：隐藏未分配仓库/货架（warehouse_id 为空）的条目；取消勾选则一并列出 */
-const hideNoWarehouseSlot = ref(true)
+/** localStorage：是否隐藏未分配仓库/货架（warehouse_id 为空）的条目 */
+const HIDE_NO_WAREHOUSE_SLOT_STORAGE_KEY = 'mercari.inventory.hideNoWarehouseSlot'
+function readHideNoWarehouseSlotPreference() {
+  try {
+    const raw = localStorage.getItem(HIDE_NO_WAREHOUSE_SLOT_STORAGE_KEY)
+    if (raw === '0' || raw === 'false') return false
+    if (raw === '1' || raw === 'true') return true
+  } catch {
+    /* ignore */
+  }
+  return true
+}
+/** 默认开启；勾选状态会写入 localStorage 并在切换时立即重新拉取列表 */
+const hideNoWarehouseSlot = ref(readHideNoWarehouseSlotPreference())
 const currentPage = ref(1)
 const pageSize = 15
 const dialogVisible = ref(false)
@@ -2148,6 +2160,15 @@ async function load(options = {}) {
   if (currentPage.value > totalPages) currentPage.value = totalPages
   if (currentPage.value < 1) currentPage.value = 1
 }
+
+watch(hideNoWarehouseSlot, (v) => {
+  try {
+    localStorage.setItem(HIDE_NO_WAREHOUSE_SLOT_STORAGE_KEY, v ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+  void load({ resetPage: false })
+})
 
 /** 与控制台相同：全库条目/总数量 + 接口返回的今日入出库（手机端不展示统计，一般不请求） */
 async function loadInventoryStats() {

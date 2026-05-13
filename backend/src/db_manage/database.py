@@ -9,6 +9,8 @@ import threading
 from contextlib import contextmanager
 from typing import List, Dict, Any, Optional
 
+from src.app_paths import backend_root_str
+
 
 class DatabaseManager:
     """数据库管理器 - 单例模式"""
@@ -25,11 +27,8 @@ class DatabaseManager:
 
     def __init__(self):
         if not hasattr(self, 'initialized'):
-            # mercariDB.db 放在 backend/ 目录下（本文件在 src/db_manage/）
-            backend_dir = os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            )
-            self.db_path = os.path.join(backend_dir, 'mercariDB.db')
+            # mercariDB.db 放在 backend 根目录（冻结后与 exe 同目录）
+            self.db_path = os.path.join(backend_root_str(), 'mercariDB.db')
             self.initialized = True
             self._setup_database()
 

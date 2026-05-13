@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 import os
 
+from src.app_paths import backend_root_str
+
 
 def backend_root() -> str:
-    here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.dirname(os.path.dirname(here))
+    return backend_root_str()
 
 
 def ssl_mitm_data_dir() -> str:

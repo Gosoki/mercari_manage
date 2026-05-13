@@ -4,13 +4,13 @@
 import os
 import re
 
+from src.app_paths import backend_root_str
+
 _ACCOUNT_KEY_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
 
 def backend_root() -> str:
-    # 本文件位于 backend/src/web_drive/paths.py → 上两级为 backend 根目录
-    here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.dirname(os.path.dirname(here))
+    return backend_root_str()
 
 
 def profiles_root() -> str:

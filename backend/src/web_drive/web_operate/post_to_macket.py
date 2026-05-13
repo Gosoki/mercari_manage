@@ -27,6 +27,8 @@ import tempfile
 import urllib.request
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
+from src.app_paths import backend_root_str
+
 log = logging.getLogger(__name__)
 
 # ───────────────────────── Mercari 出品页 XPath ──────────────────────────── #
@@ -140,9 +142,7 @@ SHIPPING_FROM_SELECT_XPATH = (
 
 def _backend_imges_root() -> str:
     """返回 backend/imges 目录的绝对路径。"""
-    here = os.path.dirname(os.path.abspath(__file__))
-    backend = os.path.dirname(os.path.dirname(os.path.dirname(here)))
-    return os.path.join(backend, "imges")
+    return os.path.join(backend_root_str(), "imges")
 
 
 def _resolve_image_to_local(url_or_path: str) -> Optional[str]:

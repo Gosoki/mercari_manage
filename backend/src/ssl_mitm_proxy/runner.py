@@ -119,6 +119,7 @@ def start_mitm_proxy() -> Dict[str, Any]:
         return {"started": False, "error": f"找不到插件: {addon}"}
 
     env = os.environ.copy()
+    env["MERCARI_BACKEND_ROOT"] = os.path.abspath(backend_root())
     port = mitm_listen_port()
     err_log = os.path.join(conf, "mitmdump_stderr.log")
     try:

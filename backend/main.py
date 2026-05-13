@@ -1,5 +1,7 @@
 import logging
 import os
+import sys
+from pathlib import Path
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +28,7 @@ from src.routes.web_drive import router as web_drive_router
 from src.routes.app_config import router as app_config_router
 from src.routes.ssl_mitm import router as ssl_mitm_router
 from src.operation_mercari.API import router as mercari_router
+from src.app_paths import backend_root
 
 app = FastAPI(title="mercari 订单管理", version="1.0.0")
 
@@ -92,3 +95,27 @@ async def shutdown_web_drive():
 @app.get("/api/health")
 def health():
     return {"status": "ok", "message": "mercari 订单管理运行中"}
+
+
+def _webside_dist_dir() -> Path:
+    override = (os.environ.get("MERCARI_WEBSIDE_DIST") or "").strip()
+    if override:
+        return Path(override)
+    root = backend_root()
+    if getattr(sys, "frozen", False):
+        return root / "webside" / "dist"
+    # 开发目录：仓库内 webside 与 backend 同级
+    return root.parent / "webside" / "dist"
+
+
+_spa_dir = _webside_dist_dir()
+if (
+    _spa_dir.is_dir()
+    and os.environ.get("MERCARI_NO_STATIC", "").strip().lower()
+    not in ("1", "true", "yes", "on")
+):
+    app.mount(
+        "/",
+        StaticFiles(directory=str(_spa_dir), html=True),
+        name="spa",
+    )
