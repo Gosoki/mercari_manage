@@ -23,8 +23,8 @@
             v-model="dateRange"
             type="daterange"
             range-separator="至"
-            start-placeholder="购入时间起"
-            end-placeholder="购入时间止"
+            start-placeholder="最后时间起"
+            end-placeholder="最后时间止"
             value-format="YYYY-MM-DD"
             style="width: 100%"
             @change="onFilterChange"
@@ -136,19 +136,19 @@
                   <el-table-column label="本单件数" prop="quantity" width="96" align="center" />
                   <el-table-column label="商品原价格" width="120" align="center">
                     <template #default="{ row: line }">
-                      <span v-if="line.line_kind === 'bundle_title'">{{ orderMoneyField(line.original_price) ?? '-' }}</span>
+                      <span v-if="outboundLineShowsRatioPricing(line)">{{ orderMoneyField(line.original_price) ?? '-' }}</span>
                       <span v-else class="cell-dash">-</span>
                     </template>
                   </el-table-column>
                   <el-table-column label="货物比例" width="120" align="center">
                     <template #default="{ row: line }">
-                      <span v-if="line.line_kind === 'bundle_title' && line.goods_ratio != null">{{ formatGoodsRatio(line.goods_ratio) }}</span>
+                      <span v-if="outboundLineShowsRatioPricing(line) && line.goods_ratio != null">{{ formatGoodsRatio(line.goods_ratio) }}</span>
                       <span v-else class="cell-dash">-</span>
                     </template>
                   </el-table-column>
                   <el-table-column label="比例价格" width="120" align="center">
                     <template #default="{ row: line }">
-                      <span v-if="line.line_kind === 'bundle_title'">{{ orderMoneyField(line.ratio_price) ?? '-' }}</span>
+                      <span v-if="outboundLineShowsRatioPricing(line)">{{ orderMoneyField(line.ratio_price) ?? '-' }}</span>
                       <span v-else class="cell-dash">-</span>
                     </template>
                   </el-table-column>
@@ -934,9 +934,29 @@ async function reloadManualInventoryList() {
     const res = await inventoryApi.list(
       manualInvFilters.buildInventoryListParams({ in_stock_only: true })
     )
-    const next = Array.isArray(res) ? res : []
+    let next = Array.isArray(res) ? res : []
+    const inList = new Set(next.map((x) => Number(x.id)))
+    const selectedIds = [
+      ...new Set(
+        (manualOutboundForm.value.rows || [])
+          .map((r) => Number(r?.inventory_id || 0))
+          .filter((id) => Number.isFinite(id) && id > 0)
+      ),
+    ]
+    const missing = selectedIds.filter((id) => !inList.has(id))
+    if (missing.length) {
+      const fetched = await Promise.all(
+        missing.map((id) => inventoryApi.get(id).catch(() => null))
+      )
+      for (const one of fetched) {
+        if (one && one.id != null) {
+          next.push(one)
+          inList.add(Number(one.id))
+        }
+      }
+    }
     manualInventoryOptions.value = next
-    const allowed = new Set(next.map((x) => Number(x.id)))
+    const allowed = inList
     for (const row of manualOutboundForm.value.rows || []) {
       const iid = Number(row?.inventory_id || 0)
       if (Number.isFinite(iid) && iid > 0 && !allowed.has(iid)) {
@@ -995,7 +1015,7 @@ const packagingForm = ref({
   unit_price: null,
 })
 
-/** 与列表相同条件：keyword、状态、购入时间区间；今日新增为本地当日购入且仍满足相同 keyword/状态。汇总不含 status=cancelled（后端 stats 排除已取消）。 */
+/** 与列表相同条件：keyword、状态、最后时间区间（order_updated_at 优先）；今日副指标为本地当日且仍满足相同 keyword/状态（同上时间口径）。汇总不含 status=cancelled（后端 stats 排除已取消）。 */
 const orderStatCards = computed(() => {
   const o = stats.value
   return [
@@ -1541,12 +1561,18 @@ function clearOutboundExpandCache(orderNo) {
   expandState.value = next
 }
 
-/** 出库明细行：后端 line_kind 为 mgmt_id | barcode */
+/** 出库明细行：后端 line_kind 含 mgmt_id | barcode | bundle_title | manual */
 function outboundLineKindLabel(line) {
   const k = line?.line_kind
   if (k === 'bundle_title') return '组合标题'
+  if (k === 'manual') return '手动添加'
   if (k === 'barcode') return '条码'
   return '管理ID'
+}
+
+/** 后端已写入 goods_ratio / ratio_price 时展示（组合标题或按库存价分摊的手动/管理 ID/条码行） */
+function outboundLineShowsRatioPricing(line) {
+  return line?.goods_ratio != null || line?.ratio_price != null
 }
 
 function outboundLineKey(orderNo, lineId) {

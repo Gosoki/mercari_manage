@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-订单「货物比例 / 比例价格」权重：与 routes.orders list_order_outbound_lines 中
-bundle_title 分摊逻辑一致，供包材成本按归属拆分、按商品归属筛选时的金额拆分等复用。
+订单「货物比例 / 比例价格」权重：与 routes.orders list_order_outbound_lines 一致
+（bundle_title 在售匹配价；否则按库存价×件数含手动出库），供包材按归属拆分、订单金额按归属拆分等复用。
 """
 
 from __future__ import annotations
@@ -15,11 +15,69 @@ from .db_manage.models.order_outbound_line import OrderOutboundLineModel
 _db = DatabaseManager()
 
 
+def _apply_inventory_line_ratio_pricing(items: List[Dict[str, Any]], order_amount: int) -> bool:
+    """
+    对「已关联库存、且尚无 ratio_price」的出库行（manual / mgmt_id / barcode 等），
+    按库存原价 × 件数（原价为 0 则退化为件数）将订单金额分摊到各行，写入 goods_ratio、ratio_price。
+    """
+    order_amount = int(order_amount or 0)
+    if order_amount <= 0:
+        return False
+
+    weighted: List[Tuple[Dict[str, Any], int]] = []
+    for it in items:
+        if it.get("inventory_id") is None:
+            continue
+        if it.get("ratio_price") is not None:
+            continue
+        qty = max(1, int(it.get("quantity") or 1))
+        pr = it.get("original_price")
+        try:
+            pi = max(0, int(pr) if pr is not None else 0)
+        except (TypeError, ValueError):
+            pi = 0
+        w = int(pi) * int(qty)
+        if w <= 0:
+            w = int(qty)
+        weighted.append((it, int(w)))
+
+    if not weighted:
+        return False
+
+    weights = [w for _, w in weighted]
+    sum_w = sum(weights)
+    if sum_w <= 0:
+        return False
+
+    floors: List[int] = []
+    fracs: List[float] = []
+    for w in weights:
+        raw_total = order_amount * (float(w) / float(sum_w))
+        f = int(raw_total)
+        floors.append(f)
+        fracs.append(raw_total - f)
+
+    remain = order_amount - sum(floors)
+    alloc_totals = floors[:]
+    if remain > 0:
+        idxs = sorted(range(len(fracs)), key=lambda i: fracs[i], reverse=True)
+        for i in idxs[:remain]:
+            alloc_totals[i] += 1
+
+    for i, (it, w) in enumerate(weighted):
+        it["goods_ratio"] = float(w) / float(sum_w) if sum_w > 0 else None
+        it["ratio_price"] = int(alloc_totals[i])
+    return True
+
+
 def apply_bundle_title_ratio_pricing(items: List[Dict[str, Any]], order_amount: int) -> bool:
     """
-    为 items 中的 bundle_title 行写入 goods_ratio、ratio_price（与订单二级表一致）。
+    优先为 bundle_title 行按在售「组合标题」匹配价写入 goods_ratio、ratio_price；
+    若无法完成（无组合行、金额≤0、在售权重为 0 等），再对仍无 ratio_price 且已关联库存的行
+    （含手动出库 manual、管理 ID、条码）按库存价×件数分摊。
+
     会先清空 items 中所有行的 goods_ratio / ratio_price。
-    若无法按在售价格权重分摊则返回 False，且不修改 bundle 行以外的行。
+    任一方式成功写入比例则返回 True。
     """
     for it in items:
         it["goods_ratio"] = None
@@ -29,8 +87,9 @@ def apply_bundle_title_ratio_pricing(items: List[Dict[str, Any]], order_amount: 
     bundle_lines = [
         it for it in items if str(it.get("line_kind") or "").strip() == "bundle_title"
     ]
+    bundle_ok = False
     if not bundle_lines or order_amount <= 0:
-        return False
+        return _apply_inventory_line_ratio_pricing(items, order_amount)
 
     def _normalize_match_text(value: str) -> str:
         return re.sub(r"\s+", "", str(value or "").strip()).casefold()
@@ -123,36 +182,39 @@ def apply_bundle_title_ratio_pricing(items: List[Dict[str, Any]], order_amount: 
         weights.append(w)
 
     sum_w = sum(weights)
-    if sum_w <= 0:
-        return False
+    if sum_w > 0:
+        floors: List[int] = []
+        fracs: List[float] = []
+        for w in weights:
+            raw_total = order_amount * (float(w) / float(sum_w))
+            f = int(raw_total)
+            floors.append(f)
+            fracs.append(raw_total - f)
 
-    floors: List[int] = []
-    fracs: List[float] = []
-    for w in weights:
-        raw_total = order_amount * (float(w) / float(sum_w))
-        f = int(raw_total)
-        floors.append(f)
-        fracs.append(raw_total - f)
+        remain = order_amount - sum(floors)
+        alloc_totals = floors[:]
+        if remain > 0:
+            idxs = sorted(range(len(fracs)), key=lambda i: fracs[i], reverse=True)
+            for i in idxs[:remain]:
+                alloc_totals[i] += 1
 
-    remain = order_amount - sum(floors)
-    alloc_totals = floors[:]
-    if remain > 0:
-        idxs = sorted(range(len(fracs)), key=lambda i: fracs[i], reverse=True)
-        for i in idxs[:remain]:
-            alloc_totals[i] += 1
+        for i, it in enumerate(bundle_lines):
+            it["goods_ratio"] = float(weights[i]) / float(sum_w) if sum_w > 0 else None
+            it["ratio_price"] = int(alloc_totals[i])
 
-    for i, it in enumerate(bundle_lines):
-        it["goods_ratio"] = float(weights[i]) / float(sum_w) if sum_w > 0 else None
-        it["ratio_price"] = int(alloc_totals[i])
+        bundle_ok = True
 
-    return True
+    if bundle_ok:
+        return True
+
+    return _apply_inventory_line_ratio_pricing(items, order_amount)
 
 
 def owner_weights_from_order_goods_ratio(order_no: str) -> List[Dict[str, Any]]:
     """
-    若订单存在可计算的 bundle_title 比例（与订单二级表「货物比例」同源），
+    若订单存在可计算的比例（组合标题在售价，或库存行价×件数；与订单二级表同源），
     返回 [{"owner": 展示名同商品归属, "weight": 整数权重}, ...]；
-    weight 为该归属下各组合行的 ratio_price 之和（与订单金额分摊一致）。
+    weight 为该归属下各出库行的 ratio_price 之和（与订单金额分摊一致）。
 
     无法计算时返回 []，调用方应回退其它权重口径。
     """
@@ -172,8 +234,6 @@ def owner_weights_from_order_goods_ratio(order_no: str) -> List[Dict[str, Any]]:
 
     grouped: Dict[str, int] = {}
     for it in items:
-        if str(it.get("line_kind") or "").strip() != "bundle_title":
-            continue
         rp = it.get("ratio_price")
         if rp is None:
             continue
@@ -291,7 +351,7 @@ def split_order_money_for_owner_user(
     net_income_raw: Any,
 ) -> Dict[str, Any]:
     """
-    按商品归属拆分一单上的金额、手续费、快递费、净收益（与二级表 bundle 比例一致；否则按库存价×件数）。
+    按商品归属拆分一单上的金额、手续费、快递费、净收益（与二级表 ratio_price 一致：bundle 或库存行分摊；否则按库存价×件数）。
 
     返回 amount / service_fee / shipping_fee / net_income（与库字段同名，值为拆分后整数日元；
     原字段为 null 的仍返回 null）。
@@ -316,14 +376,20 @@ def split_order_money_for_owner_user(
     basis = "bundle"
     if amount > 0:
         for it in items:
-            if str(it.get("line_kind") or "").strip() != "bundle_title":
-                continue
             rp = it.get("ratio_price")
             if rp is None:
                 continue
             u = it.get("product_owner_user_id")
             if u is not None and int(u) == oid:
                 owner_amt += int(rp)
+        if owner_amt > 0:
+            has_non_bundle_ratio = any(
+                str(it.get("line_kind") or "").strip() != "bundle_title"
+                for it in items
+                if it.get("ratio_price") is not None
+            )
+            if has_non_bundle_ratio:
+                basis = "inventory_line"
 
     if owner_amt <= 0 and amount > 0:
         owner_amt, basis = _fallback_owner_amount_and_basis(items, amount, oid)

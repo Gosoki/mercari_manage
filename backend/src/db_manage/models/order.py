@@ -186,12 +186,12 @@ class OrderModel(BaseModel):
             params.append(status)
         if start_ts is not None:
             base_sql += (
-                " AND COALESCE(o.purchase_time, o.order_date) >= ?"
+                " AND COALESCE(o.order_updated_at, o.purchase_time, o.order_date) >= ?"
             )
             params.append(int(start_ts))
         if end_ts is not None:
             base_sql += (
-                " AND COALESCE(o.purchase_time, o.order_date) <= ?"
+                " AND COALESCE(o.order_updated_at, o.purchase_time, o.order_date) <= ?"
             )
             params.append(int(end_ts))
         if owner_user_id is not None and int(owner_user_id) > 0:

@@ -67,7 +67,7 @@ class MeiluAccountCreate(PydanticModel):
     value: Optional[Dict[str, Any]] = None
     login_id: Optional[str] = None
     seller_id: Optional[str] = None
-    status: str = "active"
+    status: str = "disabled"
     remark: Optional[str] = None
     is_open: int = 0
     fetch_interval: Optional[str] = None

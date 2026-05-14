@@ -23,7 +23,7 @@
       </el-row>
     </el-card>
 
-    <!-- 订单汇总：近 30 天本地自然日（Unix 秒区间），与订单页 /orders/stats 口径一致（COALESCE 购入/下单时间） -->
+    <!-- 订单汇总：近 30 天本地自然日（Unix 秒区间），与订单页 /orders/stats 口径一致（COALESCE 最后更新/购入/下单） -->
     <el-card class="section-card order-stats-wrap" shadow="never" v-loading="orderStatsLoading">
       <template #header>
         <div class="card-header">

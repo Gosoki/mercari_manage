@@ -71,7 +71,10 @@
       destroy-on-close
       class="meilu-dialog"
     >
-      <p v-if="!form.id" class="form-intro-tip">保存后将自动打开该账号专用浏览器，请在窗口中登录 jp.mercari.com。</p>
+      <p v-if="!form.id" class="form-intro-tip">
+        打开本弹窗时会自动请求启动「新增前登录」浏览器（会话键 meilu_prepare），请在 Edge 中登录
+        jp.mercari.com。账号状态默认为「停用」，填写账号名称等信息后保存即可入库。登录完成后可使用「获取用户信息」完善资料（实现待定）。
+      </p>
       <el-form :model="form" :rules="formRules" ref="formRef" label-width="120px" class="meilu-form">
         <el-divider content-position="left">基础信息</el-divider>
         <el-form-item label="账号名称" prop="account_name">
@@ -136,6 +139,13 @@
             </template>
           </el-popconfirm>
           <div class="meilu-dialog-footer__actions">
+            <el-button
+              v-if="!form.id"
+              plain
+              :loading="browserLoadingKeys.has(MEILU_PREPARE_KEY)"
+              @click="openPrepareLoginBrowser"
+            >打开登录浏览器</el-button>
+            <el-button v-if="!form.id" plain @click="onFetchUserInfoPlaceholder">获取用户信息</el-button>
             <el-button @click="dialogVisible = false">取消</el-button>
             <el-button type="primary" :loading="submitting" @click="submit">保存</el-button>
           </div>
@@ -152,6 +162,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { meiluAccountApi, mercariApi, webDriveApi } from '@/api/index.js'
 
 const MERCARI_HOME = 'https://jp.mercari.com/'
+
+/** 新增账号前共用的 WebDrive 会话键，与后端抓包/出品等约定一致 */
+const MEILU_PREPARE_KEY = 'meilu_prepare'
 
 function browserKeyFor(accountId) {
   return `meilu_${accountId}`
@@ -225,7 +238,7 @@ const createDefaultForm = () => ({
   id: null,
   account_name: '',
   seller_id: '',
-  status: 'active',
+  status: 'disabled',
   remark: '',
   is_open: 0,
   fetch_interval: '',
@@ -287,9 +300,20 @@ async function load() {
   total.value = res.total || 0
 }
 
+function openPrepareLoginBrowser() {
+  openBrowserByKey(MEILU_PREPARE_KEY, '新增煤炉账号 · 登录浏览器')
+}
+
 function openCreate() {
   form.value = createDefaultForm()
   dialogVisible.value = true
+  nextTick(() => {
+    openPrepareLoginBrowser()
+  })
+}
+
+function onFetchUserInfoPlaceholder() {
+  ElMessage.info('「获取用户信息」实现方式待定，后续版本将在此拉取卖家 ID 等资料。')
 }
 
 function openEdit(row) {
@@ -342,17 +366,10 @@ async function submit() {
       dialogVisible.value = false
       load()
     } else {
-      const created = await meiluAccountApi.create(payload)
-      ElMessage.success('新增成功')
+      await meiluAccountApi.create(payload)
+      ElMessage.success('新增成功，可在卡片上打开该账号专用浏览器或继续完善资料')
       dialogVisible.value = false
       await load()
-      const newId = created?.id
-      if (newId != null) {
-        await openBrowserByKey(
-          browserKeyFor(newId),
-          created.account_name || payload.account_name || `账号 #${newId}`,
-        )
-      }
     }
   } finally {
     submitting.value = false

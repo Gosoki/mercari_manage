@@ -1,6 +1,6 @@
 /**
  * 订单统计与后端 /orders、/orders/stats 一致：本地自然日边界换算为 Unix 秒，
- * 筛选字段对应 COALESCE(purchase_time, order_date)。
+ * 筛选字段对应 COALESCE(order_updated_at, purchase_time, order_date)（最后更新优先）。
  */
 
 export function formatLocalYmd(d) {

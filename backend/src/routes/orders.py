@@ -176,9 +176,11 @@ def order_stats(
     """当前筛选条件下的全表汇总（金额、手续费、快递费、净收益及行数），不受分页影响。
 
     已取消（cancelled）订单不计入本接口汇总；列表仍可按状态筛选查看。
-    筛选购入时间区间：start_ts / end_ts 为 Unix 秒（与列表一致，建议由前端按本地自然日 0 点～当日结束换算）。
-    可选 today_start_ts / today_end_ts（同为 Unix 秒，本地「今天」起止）：在相同 keyword、status 下汇总「今日购入」，
-    不受 start_ts/end_ts 影响。
+    筛选时间区间：start_ts / end_ts 为 Unix 秒（与列表一致），按
+    COALESCE(order_updated_at, purchase_time, order_date)（最后更新优先，缺省回退购入/下单）比较；
+    建议由前端按本地自然日 0 点～当日结束换算。
+    可选 today_start_ts / today_end_ts（同为 Unix 秒，本地「今天」起止）：在相同 keyword、status 下汇总「今日」
+    （同上时间口径），不受 start_ts/end_ts 影响。
 
     sum_packaging / today_sum_packaging：关联订单的「包装材料」支出合计（日元），筛选条件与上述一致。
     """
@@ -225,7 +227,7 @@ def list_order_outbound_lines(
     order_no: str,
     owner_user_id: Optional[int] = None,
 ):
-    """某订单从商品说明解析出的待出库明细（管理 ID、库存名称、仓库位置等）。"""
+    """某订单从商品说明解析出的待出库明细（管理 ID、库存名称、仓库位置等）；比例价格优先组合标题在售价，否则按库存原价×件数（含手动添加）。"""
     ono = (order_no or "").strip()
     if not ono:
         raise HTTPException(status_code=400, detail="order_no 不能为空")
