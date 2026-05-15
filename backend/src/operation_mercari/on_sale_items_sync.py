@@ -255,27 +255,17 @@ def upsert_on_sale_item_row(row: Dict[str, Any]) -> str:
     return "inserted"
 
 
-async def sync_on_sale_items_from_mercari(account_id: Optional[int] = None) -> Dict[str, Any]:
+def apply_on_sale_list_sync(
+    seller_key: str,
+    items: List[Dict[str, Any]],
+    meta: Dict[str, Any],
+) -> Dict[str, Any]:
     """
-    从煤炉拉取在售列表（网页出品一覧触发的 items/get_items，on_sale,stop）并同步本地：
+    将 MITM/API 得到的在售列表写入本地 on_sale_items（与「从煤炉同步」相同规则）。
 
     - 列表中存在：按 item_id 新增/更新，且 is_delete=0
     - 本地存在但新列表中不存在：标记 is_delete=1（软删除）
-
-    inventory.on_sale_quantity 释放规则（每次以 1 件为粒度）：
-    ┌─────────────────────────────────────────────────────────────────┐
-    │ 触发条件                         │ 操作                        │
-    ├─────────────────────────────────────────────────────────────────┤
-    │ status: on_sale → stop           │ on_sale_quantity -= 1       │
-    │ 商品从 API 消失（is_delete=1）   │ 若之前 on_sale，-= 1       │
-    │ status: stop/deleted → on_sale   │ on_sale_quantity += 1       │
-    └─────────────────────────────────────────────────────────────────┘
-    下限为 0，不会出现负数。
     """
-    aid, sid = _resolve_account_and_seller(account_id)
-    seller_key = str(int(sid))
-    items, meta = await fetch_on_sale_list_items(seller_id=sid, account_id=aid)
-
     incoming_ids = {
         str(it.get("id") or "").strip()
         for it in items
@@ -429,3 +419,14 @@ async def sync_on_sale_items_from_mercari(account_id: Optional[int] = None) -> D
     stats["has_next"] = meta.get("has_next", False)
     stats["total_item_count"] = meta.get("total_item_count", len(items))
     return stats
+
+
+async def sync_on_sale_items_from_mercari(account_id: Optional[int] = None) -> Dict[str, Any]:
+    """
+    从煤炉拉取在售列表（网页出品一覧触发的 items/get_items，on_sale,stop）并同步本地。
+    见 ``apply_on_sale_list_sync`` 的库存与软删除规则说明。
+    """
+    aid, sid = _resolve_account_and_seller(account_id)
+    seller_key = str(int(sid))
+    items, meta = await fetch_on_sale_list_items(seller_id=sid, account_id=aid)
+    return apply_on_sale_list_sync(seller_key, items, meta)

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import re
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel as PydanticModel, Field
@@ -230,6 +230,11 @@ async def delete_on_sale_item(body: DeleteMercariItemBody):
       · 点击「この商品を削除する」
       · 确认弹窗中点击「削除する」
     """
+    from ..web_drive.account_serial_queue import (
+        queue_key_for_meilu_account,
+        run_meilu_serial_async,
+    )
+    from ..web_drive.paths import meilu_id_from_account_key
     from ..web_drive.web_operate.delete_order import delete_mercari_item as _do_delete
     from ..ssl_mitm_proxy.runner import default_mitm_proxy_url
 
@@ -237,16 +242,28 @@ async def delete_on_sale_item(body: DeleteMercariItemBody):
     if not item_id:
         raise HTTPException(status_code=400, detail="item_id 不能为空")
 
+    account_id = meilu_id_from_account_key(body.account_key)
+    if account_id is None:
+        raise HTTPException(status_code=400, detail="无效的 account_key")
+
     try:
         proxy: Optional[str] = None
         if body.use_mitm_proxy:
             proxy = (body.proxy_server or "").strip() or default_mitm_proxy_url()
 
-        data = await _do_delete(
-            get_web_drive_manager(),
-            body.account_key,
-            item_id=item_id,
-            proxy_server=proxy,
+        mgr = get_web_drive_manager()
+
+        async def _run() -> Dict[str, Any]:
+            return await _do_delete(
+                mgr,
+                body.account_key,
+                item_id=item_id,
+                proxy_server=proxy,
+            )
+
+        data = await run_meilu_serial_async(
+            queue_key_for_meilu_account(account_id),
+            _run,
         )
         return {"success": True, "data": data}
     except ValueError as exc:

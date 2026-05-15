@@ -684,11 +684,16 @@ async function deleteMercariItemFromDetail() {
       use_mitm_proxy: true
     })
     const d = res?.data || {}
-    ElMessage.success(
-      d.delete_confirmed
-        ? `已在煤炉删除商品 ${iid}（请稍后在列表中同步状态）`
-        : '删除流程已执行，请检查浏览器中的煤炉页面'
-    )
+    const sync = d.sync || {}
+    if (d.delete_confirmed && sync && typeof sync === 'object') {
+      ElMessage.success(
+        `已删除商品 ${iid}，列表已同步：煤炉 ${sync.api_item_count ?? 0} 条，更新 ${sync.updated ?? 0}，标记删除 ${sync.marked_deleted ?? 0}`
+      )
+    } else if (d.delete_confirmed) {
+      ElMessage.success(`已在煤炉删除商品 ${iid}`)
+    } else {
+      ElMessage.warning('删除流程已执行，请检查浏览器中的煤炉页面')
+    }
     detailViewVisible.value = false
     await load()
   } catch {

@@ -3,13 +3,15 @@
 Mercari 在售商品删除：打开编辑页并点击删除确认。
 
 流程：
-  1. 打开 https://jp.mercari.com/sell/edit/{item_id}
+  1. 启动 MITM，打开 https://jp.mercari.com/sell/edit/{item_id}
   2. 点击「この商品を削除する」
   3. 二次确认弹窗中点击「削除する」
+  4. 等待跳转出品一覧页，截获 items/get_items 并同步本地（同「从煤炉同步」）
 """
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict, Optional
 
 from .post_to_macket import (
@@ -113,14 +115,33 @@ async def delete_mercari_item(
 
     edit_url = build_sell_edit_url(item_id)
 
+    from ...operation_mercari.get_order.get_on_sale.on_sale_list import (
+        LISTINGS_PAGE_URL,
+        sync_on_sale_from_listings_browser_page,
+    )
+    from ...operation_mercari.sync_data import _resolve_account_and_seller
+    from ...ssl_mitm_proxy.capture_config import clear_on_sale_list_response_file
+    from ...ssl_mitm_proxy.runner import default_mitm_proxy_url, start_mitm_proxy
+    from ..paths import meilu_id_from_account_key
+
+    mitm = start_mitm_proxy()
+    if mitm.get("error"):
+        raise RuntimeError(f"MITM 代理不可用: {mitm['error']}")
+
+    account_id = meilu_id_from_account_key(account_key)
+    if account_id is None:
+        raise ValueError(f"无效的 account_key: {account_key}")
+    _aid, seller_id = _resolve_account_and_seller(account_id)
+    seller_key = str(int(seller_id))
+
     ps = (proxy_server or "").strip()
     if not ps:
         try:
-            from ...ssl_mitm_proxy.runner import default_mitm_proxy_url
-
             ps = default_mitm_proxy_url()
         except Exception:
             ps = "http://127.0.0.1:8890"
+
+    clear_on_sale_list_response_file(seller_key)
 
     log.info("[delete_mercari_item] account=%s item=%s url=%s", account_key, seg, edit_url)
 
@@ -155,6 +176,8 @@ async def delete_mercari_item(
         "delete_entry_clicked": False,
         "delete_confirmed": False,
         "url_after_delete": None,
+        "listings_url": LISTINGS_PAGE_URL,
+        "sync": None,
     }
 
     await _click_by_texts(
@@ -165,6 +188,7 @@ async def delete_mercari_item(
     )
     result["delete_entry_clicked"] = True
 
+    capture_since_ms = int(time.time() * 1000)
     await _click_delete_confirm_in_dialog(
         page,
         element_timeout_ms=element_timeout_ms,
@@ -185,19 +209,29 @@ async def delete_mercari_item(
     except Exception:
         pass
 
-    try:
-        await page.wait_for_url(
-            lambda u: "sell/edit" not in (u or "").lower(),
-            timeout=element_timeout_ms,
-        )
-    except Exception:
-        log.info("[delete_mercari_item] 删除后未检测到离开编辑页，可能仍停留在当前 URL")
-
     result["url_after_delete"] = page.url
     log.info(
-        "[delete_mercari_item] 完成 account=%s item=%s url_after=%s",
+        "[delete_mercari_item] 删除已确认，等待出品一覧并同步列表 account=%s item=%s",
+        account_key,
+        seg,
+    )
+
+    sync_stats = await sync_on_sale_from_listings_browser_page(
+        manager,
+        account_key,
+        int(seller_id),
+        page,
+        capture_since_ms=capture_since_ms,
+        timeout=max(90, element_timeout_ms // 1000),
+    )
+    result["sync"] = sync_stats
+    result["url_after_delete"] = page.url
+
+    log.info(
+        "[delete_mercari_item] 完成 account=%s item=%s url_after=%s marked_deleted=%s",
         account_key,
         seg,
         result["url_after_delete"],
+        sync_stats.get("marked_deleted"),
     )
     return result
