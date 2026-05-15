@@ -838,7 +838,7 @@ def create_product(data: ProductCreate, claims: dict = Depends(require_auth)):
                 name, barcode, category_id, product_type_id, owner_user_id, warehouse_id, price, cost_cny, quantity,
                 mercari_item_id, on_sale_quantity, pending_outbound_qty,
                 description, listing_title, listing_body, image, image_front, image_back, images_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data.name,
@@ -862,8 +862,11 @@ def create_product(data: ProductCreate, claims: dict = Depends(require_auth)):
                 img_cols["images_json"],
             ),
         )
-    except Exception:
-        raise HTTPException(status_code=400, detail="保存失败，条形码可能重复")
+    except Exception as exc:
+        err = str(exc).lower()
+        if "unique" in err and "barcode" in err:
+            raise HTTPException(status_code=400, detail="保存失败，条形码可能重复")
+        raise HTTPException(status_code=400, detail="保存失败，请检查填写内容后重试")
     inventory_items = _query_product_with_joins(" AND p.id = ? LIMIT 1", (new_id,))
     return inventory_items[0] if inventory_items else {"id": new_id}
 

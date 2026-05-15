@@ -6,11 +6,11 @@ Mercari 出品自动化：打开 https://jp.mercari.com/sell/create 并填写表
   前置  确保 Switch 开关处于 false（关闭）状态
    1.  图片上传（写真を追加）
    2.  填写商品名称
-   3.  选择商品类型（文案「カテゴリーを選択する」入口；按 DB position 逐级点击；若进入 /sell/wizard 则点「出品画面に戻る」）
-   4.  选择商品状態（文案「商品の状態を選択する」；选完后若进入 /sell/wizard 则点「出品画面に戻る」）
+   3.  选择商品类型（文案入口 + position；已拦截跳转 /sell/wizard）
+   4.  选择商品状態（文案入口；已拦截跳转 /sell/wizard）
    5.  填写商品说明
    6.  选择快递費負担
-   7.  选择配送方法（/sell/shipping_methods 页按文案选方式，点「更新する」确认）
+   7.  选择配送方法（/sell/shipping_methods 页优先 XPath 选 radio，点「更新する」确认）
    8.  选择发货地址
    9.  选择最大发货天数
   10.  选择出售类型（即购 / 拍卖；拍卖时同步选时长）
@@ -39,7 +39,9 @@ SELL_CREATE_URL = "https://jp.mercari.com/sell/create"
 DEFAULT_ELEMENT_TIMEOUT_MS = 12_000
 DEFAULT_PAGE_LOAD_TIMEOUT_MS = 12_000
 SALE_ELEMENT_TIMEOUT_MS = 8_000
-# 选择商品类型后偶尔会进入向导页，需点此返回出品表单
+# 出品自动化期间阻止进入 sell/wizard（煤炉选类型/状态后的中间向导页）
+SELL_WIZARD_URL_FRAGMENT = "sell/wizard"
+# 选择商品类型后若仍进入向导页，兜底点此返回（正常应被导航守卫拦住）
 SELL_WIZARD_BACK_TEXT = "出品画面に戻る"
 SELL_WIZARD_BACK_BUTTON_TESTID = "back-to-listing-button"
 # sell/wizard 返回出品表单：优先点此区域（用户提供的绝对 XPath）
@@ -94,6 +96,16 @@ SHIPPING_METHOD_ENTRY_TEXTS: Tuple[str, ...] = (
     "配送の方法",
 )
 SHIPPING_METHOD_CONFIRM_TEXT = "更新する"
+# /sell/shipping_methods 页各方式 radio（与系统 shipping_method 值对应）
+SHIPPING_METHOD_RADIO_XPATH: Dict[str, str] = {
+    "rakuraku": '//*[@id="main"]/div/div[1]/div[1]/div/fieldset/input',
+    "yuuyu": '//*[@id="main"]/div/div[2]/div[1]/div/fieldset/input',
+    "tanome": '//*[@id="main"]/div/div[3]/div[1]/div/fieldset/input',
+    "undecided": "/html/body/div[2]/div[2]/main/div/div[4]/div[2]/fieldset[8]/input",
+    "regular_mail": "",
+}
+# 「未定」需先展开折叠区再点 radio
+SHIPPING_METHOD_UNDECIDED_EXPAND_XPATH = '//*[@id="main"]/div/div[4]/div'
 SHIPPING_METHOD_ITEM_JA: Dict[str, str] = {
     "undecided": "未定",
     "rakuraku": "らくらくメルカリ便",
@@ -335,7 +347,124 @@ def _abort_listing(
 
 def _url_is_sell_wizard(url: str) -> bool:
     u = (url or "").strip().lower()
-    return "sell/wizard" in u or "/sell/wizard" in u
+    return SELL_WIZARD_URL_FRAGMENT in u
+
+
+_SELL_WIZARD_GUARD_INIT_SCRIPT = """
+(() => {
+  if (window.__mercariSellWizardGuard) return;
+  window.__mercariSellWizardGuard = true;
+  const isWizard = (u) => {
+    try {
+      const s = String(u || location.href || '');
+      return s.includes('/sell/wizard') || s.includes('sell/wizard');
+    } catch (e) { return false; }
+  };
+  const origPush = history.pushState.bind(history);
+  const origReplace = history.replaceState.bind(history);
+  history.pushState = function(state, title, url) {
+    if (isWizard(url)) return;
+    return origPush(state, title, url);
+  };
+  history.replaceState = function(state, title, url) {
+    if (isWizard(url)) return;
+    return origReplace(state, title, url);
+  };
+})();
+"""
+
+
+async def _redirect_from_sell_wizard(page: Any) -> None:
+    """若已落在 sell/wizard，强制回到出品表单页。"""
+    try:
+        url = str(page.url or "")
+    except Exception:
+        url = ""
+    if not _url_is_sell_wizard(url):
+        return
+    log.warning("[post_to_market] 检测到 sell/wizard，强制返回 %s", SELL_CREATE_URL)
+    print(f"[出品] 已阻止向导页，正在返回 {SELL_CREATE_URL}", flush=True)
+    try:
+        await page.goto(SELL_CREATE_URL, wait_until="domcontentloaded", timeout=15_000)
+    except Exception as exc:
+        log.warning("[post_to_market] goto sell/create 失败: %s", exc)
+        try:
+            await page.go_back(wait_until="domcontentloaded", timeout=10_000)
+        except Exception:
+            pass
+
+
+async def _block_sell_wizard_route(route: Any) -> None:
+    """Playwright 路由：拦截对 sell/wizard 的整页/框架导航请求（不拦 XHR）。"""
+    try:
+        url = route.request.url
+        rtype = route.request.resource_type
+    except Exception:
+        url = ""
+        rtype = ""
+    if _url_is_sell_wizard(url) and rtype in ("document", "frame"):
+        log.info("[post_to_market] 已拦截 sell/wizard 导航: %s", url)
+        await route.abort()
+        return
+    await route.continue_()
+
+
+async def install_sell_wizard_navigation_guard(
+    context: Any,
+    page: Optional[Any] = None,
+) -> None:
+    """
+    阻止浏览器进入 https://jp.mercari.com/sell/wizard：
+    - 路由 abort 整页请求
+    - init_script 拦截 SPA 的 history.pushState/replaceState
+    - framenavigated 兜底跳回 sell/create
+    """
+    try:
+        await context.route("**/*", _block_sell_wizard_route)
+    except Exception as exc:
+        log.warning("[post_to_market] 注册 sell/wizard 路由拦截失败: %s", exc)
+
+    try:
+        await context.add_init_script(_SELL_WIZARD_GUARD_INIT_SCRIPT)
+    except Exception as exc:
+        log.warning("[post_to_market] 注册 sell/wizard init_script 失败: %s", exc)
+
+    targets: List[Any] = []
+    if page is not None:
+        targets.append(page)
+    try:
+        for p in context.pages:
+            if p not in targets:
+                targets.append(p)
+    except Exception:
+        pass
+
+    for pg in targets:
+        try:
+            await pg.add_init_script(_SELL_WIZARD_GUARD_INIT_SCRIPT)
+        except Exception:
+            pass
+
+        def _on_framenavigated(frame: Any, _page: Any = pg) -> None:
+            try:
+                if frame != _page.main_frame:
+                    return
+            except Exception:
+                return
+            try:
+                furl = str(frame.url or "")
+            except Exception:
+                furl = ""
+            if not _url_is_sell_wizard(furl):
+                return
+            asyncio.create_task(_redirect_from_sell_wizard(_page))
+
+        try:
+            pg.on("framenavigated", _on_framenavigated)
+        except Exception as exc:
+            log.warning("[post_to_market] 注册 framenavigated 守卫失败: %s", exc)
+
+    log.info("[post_to_market] 已启用 sell/wizard 导航拦截")
 
 
 def _url_is_sell_shipping_methods(url: str) -> bool:
@@ -618,6 +747,8 @@ async def post_to_market(
         if ctx is None or not manager._is_context_alive(ctx):
             raise RuntimeError(f"会话启动失败: {account_key}")
         page = ctx.pages[-1] if ctx.pages else await ctx.new_page()
+
+    await install_sell_wizard_navigation_guard(ctx, page)
 
     # ── 2. 等待页面可交互 ────────────────────────────────────────────────── #
     report("page_load", "等待出品页加载完成…")
@@ -1076,26 +1207,23 @@ async def _select_category(
         except Exception:
             pass
 
-    # 最后一级点击后，向导页可能异步出现；稍等 pathname 再检测 wizard
+    # 最后一级点击后等待回到出品表单（不进入 sell/wizard）
     await asyncio.sleep(0.4)
     try:
         await page.wait_for_function(
             """() => {
                 const p = location.pathname || '';
                 const href = location.href || '';
-                return href.includes('sell/wizard') || p.includes('/sell/wizard')
-                    || href.includes('sell/create') || p.includes('/sell/create');
+                return (href.includes('sell/create') || p.includes('/sell/create'))
+                    && !href.includes('sell/wizard') && !p.includes('/sell/wizard');
             }""",
             timeout=page_load_timeout_ms,
         )
     except Exception:
-        log.info("[category] 等待进入 sell/create 或 sell/wizard 超时，仍尝试关闭向导")
+        log.info("[category] 等待返回 sell/create 超时，检查是否误入 wizard")
 
-    return await _leave_sell_wizard_if_present(
-        page,
-        element_timeout_ms=element_timeout_ms,
-        report=report,
-    )
+    await _redirect_from_sell_wizard(page)
+    return False
 
 
 async def _pick_visible_price_locator(
@@ -1385,19 +1513,15 @@ async def _select_condition(
             """() => {
                 const p = location.pathname || '';
                 const href = location.href || '';
-                return href.includes('sell/wizard') || p.includes('/sell/wizard')
-                    || href.includes('sell/create') || p.includes('/sell/create');
+                return (href.includes('sell/create') || p.includes('/sell/create'))
+                    && !href.includes('sell/wizard') && !p.includes('/sell/wizard');
             }""",
             timeout=page_load_timeout_ms,
         )
     except Exception:
-        log.info("[condition] 选择后等待路径进入 create 或 wizard 超时，仍检测向导页")
+        log.info("[condition] 选择后等待返回 sell/create 超时，检查是否误入 wizard")
 
-    await _leave_sell_wizard_if_present(
-        page,
-        element_timeout_ms=element_timeout_ms,
-        report=report,
-    )
+    await _redirect_from_sell_wizard(page)
 
 
 async def _set_shipping_payer(
@@ -1432,6 +1556,80 @@ async def _set_shipping_payer(
     log.info("[shipping_payer] JS设置 value=%s", value)
 
 
+async def _click_shipping_method_radio_by_xpath(
+    page: Any,
+    shipping_method: str,
+    *,
+    element_timeout_ms: int,
+) -> bool:
+    """在 shipping_methods 页按 XPath 点击对应 radio。成功返回 True。"""
+    radio_xpath = (SHIPPING_METHOD_RADIO_XPATH.get(shipping_method) or "").strip()
+    if not radio_xpath:
+        return False
+
+    if shipping_method == "undecided":
+        expand_xp = SHIPPING_METHOD_UNDECIDED_EXPAND_XPATH
+        try:
+            expand_loc = page.locator(f"xpath={expand_xp}")
+            await expand_loc.first.wait_for(state="visible", timeout=element_timeout_ms)
+            await expand_loc.first.scroll_into_view_if_needed()
+            await expand_loc.first.click(timeout=element_timeout_ms)
+            log.info("[shipping_method] 已通过 XPath 展开「未定」选项组")
+            await page.wait_for_timeout(400)
+        except Exception as exc:
+            log.warning("[shipping_method] XPath 展开「未定」失败: %s", exc)
+
+    radio_loc = page.locator(f"xpath={radio_xpath}")
+    await radio_loc.first.wait_for(state="attached", timeout=element_timeout_ms)
+    await radio_loc.first.scroll_into_view_if_needed()
+    try:
+        await radio_loc.first.click(force=True, timeout=element_timeout_ms)
+    except Exception:
+        await radio_loc.first.click(timeout=element_timeout_ms, force=True)
+    log.info("[shipping_method] 已通过 XPath 选择 %s: %s", shipping_method, radio_xpath)
+    return True
+
+
+async def _click_shipping_method_by_text(
+    page: Any,
+    shipping_method: str,
+    ja_label: str,
+    *,
+    element_timeout_ms: int,
+) -> None:
+    """shipping_methods 页按日文文案点选（XPath 失败时兜底）。"""
+    methods_main = page.locator("#main")
+    row_sel = "label, fieldset, li, button, [role='radio'], [role='button'], div"
+
+    if shipping_method == "undecided":
+        try:
+            expand = methods_main.locator(row_sel).filter(has_text="未定").first
+            await expand.wait_for(state="visible", timeout=element_timeout_ms)
+            await expand.scroll_into_view_if_needed()
+            await expand.click(timeout=element_timeout_ms)
+            log.info("[shipping_method] 已展开「未定」选项组（文案）")
+            await page.wait_for_timeout(400)
+        except Exception as exc:
+            log.warning("[shipping_method] 展开「未定」折叠失败: %s", exc)
+
+    try:
+        item = methods_main.locator(row_sel).filter(has_text=ja_label).first
+        await item.wait_for(state="visible", timeout=element_timeout_ms)
+    except Exception:
+        item = page.locator(row_sel).filter(has_text=ja_label).first
+        await item.wait_for(state="visible", timeout=element_timeout_ms)
+    await item.scroll_into_view_if_needed()
+    try:
+        await item.click(timeout=element_timeout_ms)
+    except Exception:
+        radio = item.locator("input[type='radio']").first
+        if await radio.count() > 0:
+            await radio.click(force=True, timeout=element_timeout_ms)
+        else:
+            raise
+    log.info("[shipping_method] 已通过文案选择 %s（%s）", shipping_method, ja_label)
+
+
 async def _select_shipping_method(
     page: Any,
     shipping_method: str,
@@ -1440,7 +1638,8 @@ async def _select_shipping_method(
     page_load_timeout_ms: int,
 ) -> None:
     """
-    点击「配送の方法を選択する」→ /sell/shipping_methods 页按文案选方式 → 点「更新する」确认。
+    点击「配送の方法を選択する」→ /sell/shipping_methods 页按系统选项 XPath 点 radio
+    → 失败则文案兜底 → 点「更新する」确认。
     """
     ja_label = SHIPPING_METHOD_ITEM_JA.get(shipping_method)
     if not ja_label:
@@ -1461,37 +1660,21 @@ async def _select_shipping_method(
         pass
     await page.wait_for_load_state("domcontentloaded", timeout=page_load_timeout_ms)
 
-    methods_main = page.locator("#main")
-    row_sel = "label, fieldset, li, button, [role='radio'], [role='button'], div"
+    if not _url_is_sell_shipping_methods(str(page.url or "")):
+        log.warning("[shipping_method] 未进入 shipping_methods 页，当前 URL=%s", page.url)
 
-    # 「未定」可能在折叠区，先尝试展开
-    if shipping_method == "undecided":
-        try:
-            expand = methods_main.locator(row_sel).filter(has_text="未定").first
-            await expand.wait_for(state="visible", timeout=element_timeout_ms)
-            await expand.scroll_into_view_if_needed()
-            await expand.click(timeout=element_timeout_ms)
-            log.info("[shipping_method] 已展开「未定」选项组")
-            await page.wait_for_timeout(400)
-        except Exception as exc:
-            log.warning("[shipping_method] 展开「未定」折叠失败: %s", exc)
+    xpath_ok = False
+    try:
+        xpath_ok = await _click_shipping_method_radio_by_xpath(
+            page, shipping_method, element_timeout_ms=element_timeout_ms,
+        )
+    except Exception as exc:
+        log.warning("[shipping_method] XPath 选择失败，改用文案: %s", exc)
 
-    try:
-        item = methods_main.locator(row_sel).filter(has_text=ja_label).first
-        await item.wait_for(state="visible", timeout=element_timeout_ms)
-    except Exception:
-        item = page.locator(row_sel).filter(has_text=ja_label).first
-        await item.wait_for(state="visible", timeout=element_timeout_ms)
-    await item.scroll_into_view_if_needed()
-    try:
-        await item.click(timeout=element_timeout_ms)
-    except Exception:
-        radio = item.locator("input[type='radio']").first
-        if await radio.count() > 0:
-            await radio.click(force=True, timeout=element_timeout_ms)
-        else:
-            raise
-    log.info("[shipping_method] 已选 %s（%s）", shipping_method, ja_label)
+    if not xpath_ok:
+        await _click_shipping_method_by_text(
+            page, shipping_method, ja_label, element_timeout_ms=element_timeout_ms,
+        )
     await page.wait_for_timeout(300)
 
     await _click_button_by_text(
