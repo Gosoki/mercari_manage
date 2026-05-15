@@ -668,7 +668,7 @@ async function deleteMercariItemFromDetail() {
   }
   try {
     await ElMessageBox.confirm(
-      `将在煤炉编辑页删除商品 ${iid}，此操作不可撤销。请确认已在浏览器中登录对应账号。`,
+      `将使用无头浏览器在煤炉删除商品 ${iid} 并自动同步列表，此操作不可撤销。请确保该账号已在「浏览器打开」中登录过（用于同步 Cookie）。`,
       '删除物品',
       { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
     )

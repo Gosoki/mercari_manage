@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Mercari 在售商品删除：打开编辑页并点击删除确认。
+Mercari 在售商品删除：无头 MITM 浏览器打开编辑页并删除，完成后同步列表并关闭浏览器。
 
 流程：
-  1. 启动 MITM，打开 https://jp.mercari.com/sell/edit/{item_id}
-  2. 点击「この商品を削除する」
-  3. 二次确认弹窗中点击「削除する」
-  4. 等待跳转出品一覧页，截获 items/get_items 并同步本地（同「从煤炉同步」）
+  1. 在 ``meilu_{id}__auto`` 无头 profile 上打开编辑页（Cookie 从 ``meilu_{id}`` 同步）
+  2. 点击「この商品を削除する」→ 弹窗内点击「削除する」
+  3. 等待跳转出品一覧，MITM 截获 items/get_items 并同步本地
+  4. 自动 close_session 关闭无头浏览器
 """
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any, Dict, Optional
 
@@ -31,6 +32,12 @@ DELETE_DIALOG_ACTION_TESTID = "dialog-action-button"
 DELETE_DIALOG_TITLE_TEXT = "この商品を削除しますか？"
 
 
+def _delete_headless() -> bool:
+    """删除自动化是否无头（默认开启；``WEB_DRIVE_DELETE_HEADLESS=0`` 可关闭）。"""
+    v = (os.environ.get("WEB_DRIVE_DELETE_HEADLESS") or "1").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 def mercari_item_path_segment(item_id: str) -> str:
     """煤炉商品路径段：API 多为 m 开头，纯数字时补 m。"""
     raw = (item_id or "").strip()
@@ -46,6 +53,15 @@ def build_sell_edit_url(item_id: str) -> str:
     return SELL_EDIT_URL_TPL.format(item_seg=seg)
 
 
+async def _page_for_session(manager: Any, session_key: str) -> Any:
+    s = manager._prepare_async()
+    async with s.lock:  # type: ignore[union-attr]
+        ctx = s.contexts.get(session_key)
+        if ctx is None or not manager._is_context_alive(ctx):
+            raise RuntimeError(f"会话启动失败: {session_key}")
+        return ctx.pages[-1] if ctx.pages else await ctx.new_page()
+
+
 async def _click_delete_confirm_in_dialog(
     page: Any,
     *,
@@ -58,7 +74,6 @@ async def _click_delete_confirm_in_dialog(
     dialog = page.locator(f'[data-testid="{DELETE_DIALOG_TESTID}"]')
     await dialog.wait_for(state="visible", timeout=element_timeout_ms)
 
-    # 可选：确认标题已出现，避免点到其它层叠 UI
     try:
         title_loc = dialog.get_by_text(DELETE_DIALOG_TITLE_TEXT, exact=False).first
         await title_loc.wait_for(state="visible", timeout=element_timeout_ms)
@@ -97,14 +112,23 @@ async def delete_mercari_item(
     account_key: str,
     *,
     item_id: str,
-    proxy_server: Optional[str] = None,
+    proxy_server: Optional[str] = None,  # noqa: ARG001 — MITM 由 mitm_automation_browser 统一配置
+    headless: Optional[bool] = None,
     page_load_timeout_ms: int = DEFAULT_PAGE_LOAD_TIMEOUT_MS,
     element_timeout_ms: int = DEFAULT_ELEMENT_TIMEOUT_MS,
 ) -> Dict[str, Any]:
     """
-    使用 WebDrive 打开商品编辑页并执行删除。
+    使用无头 MITM 浏览器（``meilu_{id}__auto``）删除商品并同步在售列表；结束后自动关闭浏览器。
     """
     from ..manager import EdgeWebDriveManager
+    from ..mitm_session import mitm_automation_browser
+    from ..paths import meilu_automation_key, meilu_id_from_account_key
+    from ...operation_mercari.get_order.get_on_sale.on_sale_list import (
+        LISTINGS_PAGE_URL,
+        sync_on_sale_from_listings_browser_page,
+    )
+    from ...operation_mercari.sync_data import _resolve_account_and_seller
+    from ...ssl_mitm_proxy.capture_config import clear_on_sale_list_response_file
 
     if not isinstance(manager, EdgeWebDriveManager):
         raise TypeError("manager 须为 EdgeWebDriveManager 实例")
@@ -113,125 +137,114 @@ async def delete_mercari_item(
     if not seg:
         raise ValueError("item_id 不能为空")
 
-    edit_url = build_sell_edit_url(item_id)
-
-    from ...operation_mercari.get_order.get_on_sale.on_sale_list import (
-        LISTINGS_PAGE_URL,
-        sync_on_sale_from_listings_browser_page,
-    )
-    from ...operation_mercari.sync_data import _resolve_account_and_seller
-    from ...ssl_mitm_proxy.capture_config import clear_on_sale_list_response_file
-    from ...ssl_mitm_proxy.runner import default_mitm_proxy_url, start_mitm_proxy
-    from ..paths import meilu_id_from_account_key
-
-    mitm = start_mitm_proxy()
-    if mitm.get("error"):
-        raise RuntimeError(f"MITM 代理不可用: {mitm['error']}")
-
     account_id = meilu_id_from_account_key(account_key)
     if account_id is None:
         raise ValueError(f"无效的 account_key: {account_key}")
+
     _aid, seller_id = _resolve_account_and_seller(account_id)
     seller_key = str(int(seller_id))
-
-    ps = (proxy_server or "").strip()
-    if not ps:
-        try:
-            ps = default_mitm_proxy_url()
-        except Exception:
-            ps = "http://127.0.0.1:8890"
+    auto_key = meilu_automation_key(account_id)
+    use_headless = _delete_headless() if headless is None else bool(headless)
+    edit_url = build_sell_edit_url(item_id)
 
     clear_on_sale_list_response_file(seller_key)
 
-    log.info("[delete_mercari_item] account=%s item=%s url=%s", account_key, seg, edit_url)
-
-    await manager.open_session(
+    log.info(
+        "[delete_mercari_item] account=%s auto=%s headless=%s item=%s url=%s",
         account_key,
-        headless=False,
-        start_url=edit_url,
-        proxy_server=ps,
-        interactive=True,
+        auto_key,
+        use_headless,
+        seg,
+        edit_url,
     )
-
-    s = manager._prepare_async()
-    async with s.lock:  # type: ignore[union-attr]
-        ctx = s.contexts.get(account_key)
-        if ctx is None or not manager._is_context_alive(ctx):
-            raise RuntimeError(f"会话启动失败: {account_key}")
-        page = ctx.pages[-1] if ctx.pages else await ctx.new_page()
-
-    try:
-        await page.wait_for_load_state("networkidle", timeout=page_load_timeout_ms)
-    except Exception:
-        try:
-            await page.wait_for_load_state("domcontentloaded", timeout=page_load_timeout_ms)
-        except Exception:
-            pass
 
     result: Dict[str, Any] = {
         "account_key": account_key,
+        "browser_key": auto_key,
+        "headless": use_headless,
         "item_id": seg,
         "edit_url": edit_url,
-        "url_before_delete": page.url,
+        "url_before_delete": None,
         "delete_entry_clicked": False,
         "delete_confirmed": False,
         "url_after_delete": None,
         "listings_url": LISTINGS_PAGE_URL,
         "sync": None,
+        "browser_closed": False,
     }
 
-    await _click_by_texts(
-        page,
-        (DELETE_ENTRY_TEXT,),
-        element_timeout_ms=element_timeout_ms,
-        log_prefix="[delete_mercari_item]",
-    )
-    result["delete_entry_clicked"] = True
+    async with mitm_automation_browser(
+        account_id,
+        start_url=edit_url,
+        headless=use_headless,
+    ) as (mgr, browser_key):
+        page = await _page_for_session(mgr, browser_key)
 
-    capture_since_ms = int(time.time() * 1000)
-    await _click_delete_confirm_in_dialog(
-        page,
-        element_timeout_ms=element_timeout_ms,
-    )
-    result["delete_confirmed"] = True
+        try:
+            await page.wait_for_load_state("networkidle", timeout=page_load_timeout_ms)
+        except Exception:
+            try:
+                await page.wait_for_load_state(
+                    "domcontentloaded", timeout=page_load_timeout_ms
+                )
+            except Exception:
+                pass
 
-    # 等待弹窗关闭
-    try:
-        await page.locator(f'[data-testid="{DELETE_DIALOG_TESTID}"]').wait_for(
-            state="hidden",
-            timeout=element_timeout_ms,
+        result["url_before_delete"] = page.url
+
+        await _click_by_texts(
+            page,
+            (DELETE_ENTRY_TEXT,),
+            element_timeout_ms=element_timeout_ms,
+            log_prefix="[delete_mercari_item]",
         )
-    except Exception:
-        pass
+        result["delete_entry_clicked"] = True
 
-    try:
-        await page.wait_for_load_state("domcontentloaded", timeout=page_load_timeout_ms)
-    except Exception:
-        pass
+        capture_since_ms = int(time.time() * 1000)
+        await _click_delete_confirm_in_dialog(
+            page,
+            element_timeout_ms=element_timeout_ms,
+        )
+        result["delete_confirmed"] = True
 
-    result["url_after_delete"] = page.url
+        try:
+            await page.locator(f'[data-testid="{DELETE_DIALOG_TESTID}"]').wait_for(
+                state="hidden",
+                timeout=element_timeout_ms,
+            )
+        except Exception:
+            pass
+
+        try:
+            await page.wait_for_load_state(
+                "domcontentloaded", timeout=page_load_timeout_ms
+            )
+        except Exception:
+            pass
+
+        result["url_after_delete"] = page.url
+        log.info(
+            "[delete_mercari_item] 删除已确认，等待出品一覧并同步 account=%s item=%s",
+            account_key,
+            seg,
+        )
+
+        sync_stats = await sync_on_sale_from_listings_browser_page(
+            mgr,
+            browser_key,
+            int(seller_id),
+            page,
+            capture_since_ms=capture_since_ms,
+            timeout=max(90, element_timeout_ms // 1000),
+        )
+        result["sync"] = sync_stats
+        result["url_after_delete"] = page.url
+
+    result["browser_closed"] = True
     log.info(
-        "[delete_mercari_item] 删除已确认，等待出品一覧并同步列表 account=%s item=%s",
+        "[delete_mercari_item] 完成并已关闭浏览器 account=%s item=%s marked_deleted=%s",
         account_key,
         seg,
-    )
-
-    sync_stats = await sync_on_sale_from_listings_browser_page(
-        manager,
-        account_key,
-        int(seller_id),
-        page,
-        capture_since_ms=capture_since_ms,
-        timeout=max(90, element_timeout_ms // 1000),
-    )
-    result["sync"] = sync_stats
-    result["url_after_delete"] = page.url
-
-    log.info(
-        "[delete_mercari_item] 完成 account=%s item=%s url_after=%s marked_deleted=%s",
-        account_key,
-        seg,
-        result["url_after_delete"],
-        sync_stats.get("marked_deleted"),
+        (result.get("sync") or {}).get("marked_deleted"),
     )
     return result

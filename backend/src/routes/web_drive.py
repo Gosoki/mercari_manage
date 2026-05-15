@@ -226,9 +226,7 @@ class DeleteMercariItemBody(PydanticModel):
 @router.post("/on-sale/delete-item")
 async def delete_on_sale_item(body: DeleteMercariItemBody):
     """
-    启动（或复用）指定账号的 Edge 会话，打开商品编辑页并执行删除：
-      · 点击「この商品を削除する」
-      · 确认弹窗中点击「削除する」
+    无头 MITM 浏览器（meilu_{id}__auto）打开编辑页删除商品，跳转出品一覧后同步本地列表，完成后自动关闭浏览器。
     """
     from ..web_drive.account_serial_queue import (
         queue_key_for_meilu_account,
