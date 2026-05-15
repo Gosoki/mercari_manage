@@ -34,6 +34,11 @@ log = logging.getLogger(__name__)
 # ───────────────────────── Mercari 出品页 XPath ──────────────────────────── #
 
 SELL_CREATE_URL = "https://jp.mercari.com/sell/create"
+
+# 出品自动化超时（毫秒）
+DEFAULT_ELEMENT_TIMEOUT_MS = 12_000
+DEFAULT_PAGE_LOAD_TIMEOUT_MS = 12_000
+SALE_ELEMENT_TIMEOUT_MS = 8_000
 # 选择商品类型后偶尔会进入向导页，需点此返回出品表单
 SELL_WIZARD_BACK_TEXT = "出品画面に戻る"
 SELL_WIZARD_BACK_BUTTON_TESTID = "back-to-listing-button"
@@ -427,7 +432,7 @@ async def _leave_sell_wizard_if_present(
             log.info("[post_to_market] 已通过 :has-text 点击「%s」", SELL_WIZARD_BACK_TEXT)
         await asyncio.sleep(0.45)
         try:
-            await page.wait_for_load_state("domcontentloaded", timeout=15_000)
+            await page.wait_for_load_state("domcontentloaded", timeout=element_timeout_ms)
         except Exception:
             pass
         log.info("[post_to_market] 已点击「%s」，当前 URL=%s", SELL_WIZARD_BACK_TEXT, page.url)
@@ -470,8 +475,8 @@ async def post_to_market(
     shipping_from_area_id: str = "",  # "1"~"47","99"
     # 代理 / 超时
     proxy_server: Optional[str] = None,
-    page_load_timeout_ms: int = 30_000,
-    element_timeout_ms: int = 20_000,
+    page_load_timeout_ms: int = DEFAULT_PAGE_LOAD_TIMEOUT_MS,
+    element_timeout_ms: int = DEFAULT_ELEMENT_TIMEOUT_MS,
     # 可选：与 GET /listing/post-progress/{id} 配合，前端轮询展示步骤
     progress_job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -572,7 +577,7 @@ async def post_to_market(
                         return el && el.getAttribute('aria-checked') !== 'true';
                     }""",
                     SWITCH_INPUT_XPATH,
-                    timeout=5_000,
+                    timeout=element_timeout_ms,
                 )
             except Exception:
                 pass
@@ -594,7 +599,7 @@ async def post_to_market(
             try:
                 await page.wait_for_selector(
                     "img[alt*='写真'], img[alt*='photo'], section img",
-                    timeout=10_000,
+                    timeout=element_timeout_ms,
                 )
             except Exception:
                 pass
@@ -757,7 +762,8 @@ async def post_to_market(
             sale_type,
             price,
             auction_duration=auction_duration,
-            element_timeout_ms=element_timeout_ms,
+            element_timeout_ms=SALE_ELEMENT_TIMEOUT_MS,
+            wizard_timeout_ms=element_timeout_ms,
             report=report,
         )
         result["sale_type_set"] = True
@@ -797,7 +803,7 @@ async def post_to_market(
         try:
             await page.wait_for_url(
                 "**/sell**",
-                timeout=30_000,
+                timeout=element_timeout_ms,
             )
         except Exception:
             pass
@@ -807,7 +813,7 @@ async def post_to_market(
         SUCCESS_TEXT = "出品が完了しました"
         try:
             success_loc = page.get_by_text(SUCCESS_TEXT, exact=False).first
-            await success_loc.wait_for(state="visible", timeout=10_000)
+            await success_loc.wait_for(state="visible", timeout=element_timeout_ms)
             span_text = (await success_loc.inner_text()).strip()
             result["submit_message"] = span_text
             if SUCCESS_TEXT in span_text:
@@ -909,7 +915,7 @@ async def _select_category(
                 return href.includes('sell/wizard') || p.includes('/sell/wizard')
                     || href.includes('sell/create') || p.includes('/sell/create');
             }""",
-            timeout=min(22_000, page_load_timeout_ms),
+            timeout=page_load_timeout_ms,
         )
     except Exception:
         log.info("[category] 等待进入 sell/create 或 sell/wizard 超时，仍尝试关闭向导")
@@ -930,7 +936,7 @@ async def _pick_visible_price_locator(
     """
     販売価格 input：主 XPath 易随版式失效，依次尝试多种选择器。
     """
-    per = min(10_000, max(4_000, element_timeout_ms // 2))
+    per = element_timeout_ms
     candidates: List[Any] = [
         page.locator(f"xpath={price_xpath}"),
         page.locator('#main input[name="price"]'),
@@ -964,16 +970,18 @@ async def _set_sale_type_and_price(
     price: int,
     *,
     auction_duration: str = "normal",
-    element_timeout_ms: int,
+    element_timeout_ms: int = SALE_ELEMENT_TIMEOUT_MS,
+    wizard_timeout_ms: Optional[int] = None,
     report: Optional[Callable[[str, str], None]] = None,
 ) -> None:
     """
     选择販売タイプ（即购 / 拍卖）并填写价格。
     拍卖时额外点击时长选项（通常 / 三小时）。
+    element_timeout_ms 默认 8s（售价区块）；wizard_timeout_ms 为返回向导前超时，默认与其它步骤一致。
     """
     await _leave_sell_wizard_if_present(
         page,
-        element_timeout_ms=min(15_000, element_timeout_ms),
+        element_timeout_ms=wizard_timeout_ms or DEFAULT_ELEMENT_TIMEOUT_MS,
         report=report,
     )
 
@@ -991,7 +999,7 @@ async def _set_sale_type_and_price(
     # 点击 radio（主 XPath + 文案兜底）
     radio_loc = page.locator(f"xpath={radio_xpath}")
     try:
-        await radio_loc.first.wait_for(state="attached", timeout=min(12_000, element_timeout_ms))
+        await radio_loc.first.wait_for(state="attached", timeout=element_timeout_ms)
         await radio_loc.first.scroll_into_view_if_needed()
         await radio_loc.first.click(timeout=element_timeout_ms, force=True)
     except Exception:
@@ -1001,7 +1009,7 @@ async def _set_sale_type_and_price(
                 alt = page.locator("#main label").filter(has_text=re.compile(r"即購|定価|すぐ購入", re.I)).locator("input").first
             else:
                 alt = page.locator("#main label").filter(has_text=re.compile(r"オークション|競り", re.I)).locator("input").first
-            await alt.wait_for(state="attached", timeout=min(12_000, element_timeout_ms))
+            await alt.wait_for(state="attached", timeout=element_timeout_ms)
             await alt.scroll_into_view_if_needed()
             await alt.click(timeout=element_timeout_ms, force=True)
         except Exception as exc:
@@ -1209,7 +1217,7 @@ async def _select_condition(
                 return href.includes('sell/wizard') || p.includes('/sell/wizard')
                     || href.includes('sell/create') || p.includes('/sell/create');
             }""",
-            timeout=min(22_000, page_load_timeout_ms),
+            timeout=page_load_timeout_ms,
         )
     except Exception:
         log.info("[condition] 选择后等待路径进入 create 或 wizard 超时，仍检测向导页")
@@ -1330,7 +1338,7 @@ async def _select_shipping_method(
                 const href = location.href || '';
                 return href.includes('sell/create') || !href.includes('shipping_methods');
             }""",
-            timeout=min(22_000, page_load_timeout_ms),
+            timeout=page_load_timeout_ms,
         )
     except Exception:
         pass
