@@ -6,11 +6,11 @@ Mercari 出品自动化：打开 https://jp.mercari.com/sell/create 并填写表
   前置  确保 Switch 开关处于 false（关闭）状态
    1.  图片上传（写真を追加）
    2.  填写商品名称
-   3.  选择商品类型（按 DB position 逐级点击；若进入 /sell/wizard 则点击「出品画面に戻る」返回）
-   4.  选择商品状態（#main 内按日文文案点入口与选项；选完后若进入 /sell/wizard 则点「出品画面に戻る」）
+   3.  选择商品类型（文案「カテゴリーを選択する」入口；按 DB position 逐级点击；若进入 /sell/wizard 则点「出品画面に戻る」）
+   4.  选择商品状態（文案「商品の状態を選択する」；选完后若进入 /sell/wizard 则点「出品画面に戻る」）
    5.  填写商品说明
    6.  选择快递費負担
-   7.  选择配送方法
+   7.  选择配送方法（/sell/shipping_methods 页按文案选方式，点「更新する」确认）
    8.  选择发货地址
    9.  选择最大发货天数
   10.  选择出售类型（即购 / 拍卖；拍卖时同步选时长）
@@ -36,9 +36,7 @@ log = logging.getLogger(__name__)
 SELL_CREATE_URL = "https://jp.mercari.com/sell/create"
 # 选择商品类型后偶尔会进入向导页，需点此返回出品表单
 SELL_WIZARD_BACK_TEXT = "出品画面に戻る"
-# 煤炉向导页「出品画面に戻る」：优先 data-testid（版式稳定）
 SELL_WIZARD_BACK_BUTTON_TESTID = "back-to-listing-button"
-SELL_WIZARD_BACK_BUTTON_XPATH = '//*[@id="main"]/div[2]/div[2]/button'
 
 # 写真ブロック内「写真を追加」按钮
 PHOTO_ADD_BUTTON_XPATH = '//*[@id="main"]/form/section[1]/div/div[6]/div[2]/button'
@@ -54,8 +52,8 @@ NAME_INPUT_XPATH = '//*[@id="main"]/form/section[2]/div[2]/div/div[1]/input'
 # 商品说明 textarea
 DESCRIPTION_TEXTAREA_XPATH = '//*[@id="main"]/form/div[1]/div/label/textarea[1]'
 
-# カテゴリー 入口链接
-CATEGORY_LINK_XPATH = '//*[@id="main"]/form/section[3]/div[2]/span/a'
+# カテゴリー 入口：按日文文案定位（不用 XPath）
+CATEGORY_ENTRY_TEXTS: Tuple[str, ...] = ("カテゴリーを選択する", "カテゴリー")
 
 # 类别页面各级列表项（a[x] 中 x 来自 DB position 字段）
 CATEGORY_ITEM_XPATH_TPL = '//*[@id="main"]/a[{pos}]'
@@ -81,23 +79,23 @@ SHIPPING_PAYER_VALUE: Dict[str, str] = {
     "buyer":  "1",  # 着払い(購入者負担)
 }
 
-# 配送方法 入口链接
-SHIPPING_METHOD_LINK_XPATH = '//*[@id="main"]/form/section[4]/div[3]/span/a'
-
-# 配送方法 选择页面各方法的 radio input XPath
-SHIPPING_METHOD_XPATH: Dict[str, str] = {
-    "rakuraku":    '//*[@id="main"]/div/div[1]/div[1]/div/fieldset/input',
-    "yuuyu":       '//*[@id="main"]/div/div[2]/div[1]/div/fieldset/input',
-    "tanome":      '//*[@id="main"]/div/div[3]/div[1]/div/fieldset/input',
-    "undecided":   '/html/body/div[2]/div[2]/main/div/div[4]/div[2]/fieldset[8]/input',
-    "regular_mail":'',   # 普通郵便：页面上可能无固定 XPath；留空跳过
+# 配送方法：/sell/shipping_methods 页按文案定位
+SHIPPING_METHODS_URL_FRAGMENT = "sell/shipping_methods"
+SHIPPING_METHOD_ENTRY_TEXTS: Tuple[str, ...] = (
+    "配送の方法を選択する",
+    "配送の方法",
+)
+SHIPPING_METHOD_CONFIRM_TEXT = "更新する"
+SHIPPING_METHOD_ITEM_JA: Dict[str, str] = {
+    "undecided": "未定",
+    "rakuraku": "らくらくメルカリ便",
+    "yuuyu": "ゆうゆうメルカリ便",
+    "tanome": "梱包・発送たのメル便",
+    "regular_mail": "普通郵便",
 }
 
-# 「未定」需先点击展开的折叠区块（点击后列表展开才能显示 未定 radio）
-SHIPPING_METHOD_UNDECIDED_EXPAND_XPATH = '//*[@id="main"]/div/div[4]/div'
-
-# 配送方法选择完成后的「確認」按钮
-SHIPPING_METHOD_CONFIRM_XPATH = '/html/body/div[4]/div/div/button'
+# 出品表单提交按钮（按文案）
+SUBMIT_BUTTON_TEXTS: Tuple[str, ...] = ("出品する", "出品")
 
 # 販売タイプ — 即購（定価）（body 下绝对路径，与煤炉当前 DOM 一致）
 SALE_INSTANT_RADIO_XPATH = (
@@ -300,6 +298,78 @@ def _url_is_sell_wizard(url: str) -> bool:
     return "sell/wizard" in u or "/sell/wizard" in u
 
 
+def _url_is_sell_shipping_methods(url: str) -> bool:
+    u = (url or "").strip().lower()
+    return SHIPPING_METHODS_URL_FRAGMENT in u
+
+
+async def _click_by_texts(
+    page: Any,
+    texts: Sequence[str],
+    *,
+    scope: Optional[Any] = None,
+    element_timeout_ms: int,
+    selectors: str = "a, button, [role='button'], span",
+    log_prefix: str = "",
+) -> str:
+    """
+    在 scope（默认 #main）内按日文文案点击第一个可见可点元素。
+    返回命中的文案；全部失败则抛出最后一次异常。
+    """
+    root = scope if scope is not None else page.locator("#main")
+    last_exc: Optional[BaseException] = None
+    for text in texts:
+        t = (text or "").strip()
+        if not t:
+            continue
+        for attempt in (
+            lambda: root.locator(selectors).filter(has_text=t).first,
+            lambda: root.get_by_text(t, exact=False).first,
+        ):
+            try:
+                loc = attempt()
+                await loc.wait_for(state="visible", timeout=element_timeout_ms)
+                await loc.scroll_into_view_if_needed()
+                await loc.click(timeout=element_timeout_ms)
+                if log_prefix:
+                    log.info("%s 已通过文案「%s」点击", log_prefix, t)
+                return t
+            except Exception as exc:
+                last_exc = exc
+                continue
+    raise last_exc if last_exc else RuntimeError(f"未找到可点击文案: {texts}")
+
+
+async def _click_button_by_text(
+    page: Any,
+    text: str,
+    *,
+    element_timeout_ms: int,
+    log_prefix: str = "",
+) -> None:
+    """全页按按钮/链接文案点击（用于「更新する」「出品する」等）。"""
+    t = (text or "").strip()
+    if not t:
+        raise ValueError("按钮文案不能为空")
+    last_exc: Optional[BaseException] = None
+    for factory in (
+        lambda: page.get_by_role("button", name=t),
+        lambda: page.get_by_role("link", name=t),
+        lambda: page.locator(f'button:has-text("{t}"), a:has-text("{t}")'),
+    ):
+        try:
+            loc = factory().first
+            await loc.wait_for(state="visible", timeout=element_timeout_ms)
+            await loc.scroll_into_view_if_needed()
+            await loc.click(timeout=element_timeout_ms)
+            if log_prefix:
+                log.info("%s 已点击「%s」", log_prefix, t)
+            return
+        except Exception as exc:
+            last_exc = exc
+    raise last_exc if last_exc else RuntimeError(f"未找到按钮文案: {t}")
+
+
 async def _leave_sell_wizard_if_present(
     page: Any,
     *,
@@ -309,7 +379,7 @@ async def _leave_sell_wizard_if_present(
     """
     若当前为 https://jp.mercari.com/sell/wizard ，点击「出品画面に戻る」返回出品表单。
     会在「选完商品类型」或「选完商品状态」等步骤后被调用（煤炉可能插入製品情報向导）。
-    优先 [data-testid=back-to-listing-button]，其次 main 下固定 XPath，再文案/role 兜底。
+    按文案「出品画面に戻る」点击（data-testid / role / has-text 兜底，不用 XPath）。
     返回 True 表示检测到向导页并已尝试点击返回。
     """
     try:
@@ -328,7 +398,6 @@ async def _leave_sell_wizard_if_present(
                 "data-testid",
                 page.locator(f'[data-testid="{SELL_WIZARD_BACK_BUTTON_TESTID}"]'),
             ),
-            ("xpath_main_div2_button", page.locator(f"xpath={SELL_WIZARD_BACK_BUTTON_XPATH}")),
             ("role_button", page.get_by_role("button", name=SELL_WIZARD_BACK_TEXT)),
             ("role_link", page.get_by_role("link", name=SELL_WIZARD_BACK_TEXT)),
         ]
@@ -700,10 +769,28 @@ async def post_to_market(
     # ── 步骤 12：点击出品（出售）按钮 ───────────────────────────────────── #
     report("submit", "正在点击出品按钮提交…")
     try:
-        submit_loc = page.locator('xpath=//*[@id="main"]/form/div[3]/div[1]/button')
-        await submit_loc.first.wait_for(state="visible", timeout=element_timeout_ms)
-        await submit_loc.first.scroll_into_view_if_needed()
-        await submit_loc.first.click()
+        main = page.locator("#main")
+        clicked_submit = False
+        for btn_text in SUBMIT_BUTTON_TEXTS:
+            try:
+                loc = main.get_by_role("button", name=btn_text).first
+                await loc.wait_for(state="visible", timeout=element_timeout_ms)
+                await loc.scroll_into_view_if_needed()
+                await loc.click(timeout=element_timeout_ms)
+                clicked_submit = True
+                log.info("[post_to_market] 已通过文案「%s」点击出品按钮", btn_text)
+                break
+            except Exception:
+                continue
+        if not clicked_submit:
+            await _click_by_texts(
+                page,
+                SUBMIT_BUTTON_TEXTS,
+                scope=main,
+                element_timeout_ms=element_timeout_ms,
+                selectors="button",
+                log_prefix="[post_to_market]",
+            )
         log.info("[post_to_market] 已点击出品按钮，等待页面跳转…")
 
         # 等待跳转到 https://jp.mercari.com/sell
@@ -717,25 +804,20 @@ async def post_to_market(
 
         result["url_after_submit"] = page.url
 
-        # 检查出品完成提示文本
         SUCCESS_TEXT = "出品が完了しました"
-        CONFIRM_SPAN_XPATH = (
-            '/html/body/div[4]/div/div[2]/div[2]/div/div[1]/span'
-        )
         try:
-            span_loc = page.locator(f"xpath={CONFIRM_SPAN_XPATH}")
-            await span_loc.first.wait_for(state="visible", timeout=10_000)
-            span_text = (await span_loc.first.inner_text()).strip()
+            success_loc = page.get_by_text(SUCCESS_TEXT, exact=False).first
+            await success_loc.wait_for(state="visible", timeout=10_000)
+            span_text = (await success_loc.inner_text()).strip()
             result["submit_message"] = span_text
-            if span_text == SUCCESS_TEXT:
+            if SUCCESS_TEXT in span_text:
                 result["submitted"] = True
                 log.info("[post_to_market] 出品成功：%s", span_text)
             else:
                 result["submitted"] = False
                 log.warning("[post_to_market] 出品提示文本异常: %s", span_text)
         except Exception as exc:
-            # 找不到提示框时以页面 URL 判断是否跳转成功
-            log.warning("[post_to_market] 未找到出品完成提示框: %s", exc)
+            log.warning("[post_to_market] 未找到出品完成提示: %s", exc)
             result["submit_message"] = ""
             result["submitted"] = "sell" in page.url
     except Exception as exc:
@@ -779,10 +861,15 @@ async def _select_category(
     """
     if report:
         report("category", "正在选择商品类型（カテゴリー）…")
-    # 点击表单内的「カテゴリー」链接，进入类别选择页面
-    cat_link = page.locator(f"xpath={CATEGORY_LINK_XPATH}")
-    await cat_link.first.wait_for(state="visible", timeout=element_timeout_ms)
-    await cat_link.first.click()
+    # 点击「カテゴリーを選択する」进入类别选择页面
+    main = page.locator("#main")
+    await _click_by_texts(
+        page,
+        CATEGORY_ENTRY_TEXTS,
+        scope=main,
+        element_timeout_ms=element_timeout_ms,
+        log_prefix="[category]",
+    )
     await page.wait_for_load_state("domcontentloaded", timeout=page_load_timeout_ms)
 
     # 按层级依次点击
@@ -1174,59 +1261,79 @@ async def _select_shipping_method(
     page_load_timeout_ms: int,
 ) -> None:
     """
-    点击配送方法入口链接 → 在新页面中点击对应 radio → 点击确认按钮。
-
-    支持方法：
-      undecided   → 未定
-      rakuraku    → らくらくメルカリ便
-      yuuyu       → ゆうゆうメルカリ便
-      tanome      → 梱包・発送たのメル便
-      regular_mail→ 跳过（XPath 未确认）
+    点击「配送の方法を選択する」→ /sell/shipping_methods 页按文案选方式 → 点「更新する」确认。
     """
-    radio_xpath = SHIPPING_METHOD_XPATH.get(shipping_method, "")
-    if not radio_xpath:
+    ja_label = SHIPPING_METHOD_ITEM_JA.get(shipping_method)
+    if not ja_label:
         log.warning("[shipping_method] 未知或未支持方法: %s，跳过", shipping_method)
         return
 
-    # 点击表单内的「配送の方法」链接
-    link_loc = page.locator(f"xpath={SHIPPING_METHOD_LINK_XPATH}")
-    await link_loc.first.wait_for(state="visible", timeout=element_timeout_ms)
-    await link_loc.first.click()
+    main = page.locator("#main")
+    await _click_by_texts(
+        page,
+        SHIPPING_METHOD_ENTRY_TEXTS,
+        scope=main,
+        element_timeout_ms=element_timeout_ms,
+        log_prefix="[shipping_method]",
+    )
+    try:
+        await page.wait_for_url(f"**/{SHIPPING_METHODS_URL_FRAGMENT}**", timeout=page_load_timeout_ms)
+    except Exception:
+        pass
     await page.wait_for_load_state("domcontentloaded", timeout=page_load_timeout_ms)
 
-    # 若选择「未定」，需先点击折叠标题展开选项列表
+    methods_main = page.locator("#main")
+    row_sel = "label, fieldset, li, button, [role='radio'], [role='button'], div"
+
+    # 「未定」可能在折叠区，先尝试展开
     if shipping_method == "undecided":
-        expand_loc = page.locator(f"xpath={SHIPPING_METHOD_UNDECIDED_EXPAND_XPATH}")
         try:
-            await expand_loc.first.wait_for(state="visible", timeout=element_timeout_ms)
-            await expand_loc.first.click()
+            expand = methods_main.locator(row_sel).filter(has_text="未定").first
+            await expand.wait_for(state="visible", timeout=element_timeout_ms)
+            await expand.scroll_into_view_if_needed()
+            await expand.click(timeout=element_timeout_ms)
             log.info("[shipping_method] 已展开「未定」选项组")
             await page.wait_for_timeout(400)
         except Exception as exc:
             log.warning("[shipping_method] 展开「未定」折叠失败: %s", exc)
 
-    # 点击 radio
-    radio_loc = page.locator(f"xpath={radio_xpath}")
-    await radio_loc.first.wait_for(state="attached", timeout=element_timeout_ms)
-    await radio_loc.first.scroll_into_view_if_needed()
     try:
-        await radio_loc.first.click(force=True, timeout=element_timeout_ms)
+        item = methods_main.locator(row_sel).filter(has_text=ja_label).first
+        await item.wait_for(state="visible", timeout=element_timeout_ms)
     except Exception:
-        pass
-    log.info("[shipping_method] 已选 %s", shipping_method)
+        item = page.locator(row_sel).filter(has_text=ja_label).first
+        await item.wait_for(state="visible", timeout=element_timeout_ms)
+    await item.scroll_into_view_if_needed()
+    try:
+        await item.click(timeout=element_timeout_ms)
+    except Exception:
+        radio = item.locator("input[type='radio']").first
+        if await radio.count() > 0:
+            await radio.click(force=True, timeout=element_timeout_ms)
+        else:
+            raise
+    log.info("[shipping_method] 已选 %s（%s）", shipping_method, ja_label)
     await page.wait_for_timeout(300)
 
-    # 点击确认按钮
-    confirm_loc = page.locator(f"xpath={SHIPPING_METHOD_CONFIRM_XPATH}")
-    try:
-        await confirm_loc.first.wait_for(state="visible", timeout=element_timeout_ms)
-        await confirm_loc.first.click()
-        log.info("[shipping_method] 已点击确认按钮")
-    except Exception as exc:
-        log.warning("[shipping_method] 确认按钮点击失败: %s", exc)
+    await _click_button_by_text(
+        page,
+        SHIPPING_METHOD_CONFIRM_TEXT,
+        element_timeout_ms=element_timeout_ms,
+        log_prefix="[shipping_method]",
+    )
+    log.info("[shipping_method] 已点击「%s」", SHIPPING_METHOD_CONFIRM_TEXT)
 
-    # 等待返回表单页
     await asyncio.sleep(0.5)
+    try:
+        await page.wait_for_function(
+            """() => {
+                const href = location.href || '';
+                return href.includes('sell/create') || !href.includes('shipping_methods');
+            }""",
+            timeout=min(22_000, page_load_timeout_ms),
+        )
+    except Exception:
+        pass
     try:
         await page.wait_for_load_state("domcontentloaded", timeout=page_load_timeout_ms)
     except Exception:
