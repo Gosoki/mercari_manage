@@ -2,7 +2,7 @@
 """
 煤炉账号「自动数据获取」后台调度。
 
-开启且 status=active 的账号，按 fetch_interval 节流；在账号配置的子任务中按需执行（与同账号 run_meilu_serial 串行）：
+开启且 status=active 的账号，按 fetch_interval 节流；在账号配置的子任务中按需执行（与同账号 run_meilu_serial_async 串行）：
 - auto_fetch_order_status → batch_refresh_orders_info（订单页「更新状态」）
 - auto_fetch_order_list → sync_new_data（订单页「更新列表」）
 - auto_fetch_on_sale → sync_on_sale_items_from_mercari（在售页「从煤炉同步」）
@@ -23,7 +23,7 @@ from typing import Optional
 from .db_manage.models.meilu_account import MeiluAccountModel
 from .operation_mercari.on_sale_items_sync import sync_on_sale_items_from_mercari
 from .operation_mercari.sync_data import batch_refresh_orders_info, sync_new_data
-from .web_drive.account_serial_queue import queue_key_for_meilu_account, run_meilu_serial
+from .web_drive.account_serial_queue import queue_key_for_meilu_account, run_meilu_serial_async
 
 log = logging.getLogger(__name__)
 
@@ -97,22 +97,22 @@ def _account_due(item: MeiluAccountModel, now: datetime) -> bool:
     return elapsed >= _interval_seconds(iv)
 
 
-def _run_auto_fetch_for_account(aid: int, item: MeiluAccountModel) -> None:
+async def _run_auto_fetch_for_account(aid: int, item: MeiluAccountModel) -> None:
     st = _normalize_row_is_open(getattr(item, "auto_fetch_order_status", 0))
     li = _normalize_row_is_open(getattr(item, "auto_fetch_order_list", 0))
     os_ = _normalize_row_is_open(getattr(item, "auto_fetch_on_sale", 0))
     if not (st or li or os_):
         return
 
-    def _body():
+    async def _body():
         if st:
-            batch_refresh_orders_info(account_id=aid)
+            await batch_refresh_orders_info(account_id=aid)
         if li:
-            sync_new_data(account_id=aid)
+            await sync_new_data(account_id=aid)
         if os_:
-            sync_on_sale_items_from_mercari(account_id=aid)
+            await sync_on_sale_items_from_mercari(account_id=aid)
 
-    run_meilu_serial(queue_key_for_meilu_account(aid), _body)
+    await run_meilu_serial_async(queue_key_for_meilu_account(aid), _body)
 
 
 def _mark_last_at(aid: int) -> None:
@@ -123,7 +123,7 @@ def _mark_last_at(aid: int) -> None:
     item.save()
 
 
-def run_meilu_auto_fetch_tick() -> None:
+async def run_meilu_auto_fetch_tick() -> None:
     raw = (os.environ.get("MEILU_AUTO_FETCH") or "1").strip().lower()
     if raw in ("0", "false", "no", "off"):
         return
@@ -147,7 +147,7 @@ def run_meilu_auto_fetch_tick() -> None:
             if not _any_auto_task_enabled(item):
                 continue
             log.info("[meilu_auto_fetch] 开始账号 id=%s seller_id=%s", aid, sid)
-            _run_auto_fetch_for_account(int(aid), item)
+            await _run_auto_fetch_for_account(int(aid), item)
             _mark_last_at(int(aid))
             log.info("[meilu_auto_fetch] 完成账号 id=%s", aid)
         except Exception:
@@ -167,7 +167,7 @@ async def meilu_auto_fetch_loop() -> None:
     log.info("[meilu_auto_fetch] 后台循环已启动，tick=%ss", sec)
     while True:
         try:
-            await asyncio.to_thread(run_meilu_auto_fetch_tick)
+            await run_meilu_auto_fetch_tick()
         except Exception:
             log.exception("[meilu_auto_fetch] tick 外层异常")
         await asyncio.sleep(sec)

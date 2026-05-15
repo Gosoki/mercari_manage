@@ -7,7 +7,7 @@ from typing import List, Optional
 from ..db_manage.database import DatabaseManager
 from ..db_manage.models.order import OrderModel
 from ..db_manage.models.order_outbound_line import OrderOutboundLineModel
-from ..web_drive.account_serial_queue import queue_key_for_meilu_account, run_meilu_serial
+from ..web_drive.account_serial_queue import queue_key_for_meilu_account, run_meilu_serial_async
 from ..operation_mercari.sync_data import resolve_account_id_by_seller_id
 from ..operation_mercari.get_order.get_in_progress_order.get_order_info import apply_item_info_to_order
 from ..operation_mercari.get_order.description_mgmt_ids import (
@@ -501,7 +501,7 @@ def list_orders(
 
 
 @router.post("/refresh-info")
-def refresh_order_info(data: RefreshOrderInfoBody):
+async def refresh_order_info(data: RefreshOrderInfoBody):
     """WebDriver 打开 jp.mercari.com/transaction/m{订单号}，MITM 截获 transaction_evidences/get 后更新状态、金额等字段。"""
     order_no = (data.order_no or "").strip()
     if not order_no:
@@ -517,8 +517,8 @@ def refresh_order_info(data: RefreshOrderInfoBody):
             detail="未找到与该卖家ID绑定的 active 煤炉账号，请在账号管理中配置 seller_id",
         )
 
-    def _do_refresh() -> dict:
-        err = apply_item_info_to_order(order_no, account_id=aid, expected_seller_id=du)
+    async def _do_refresh() -> dict:
+        err = await apply_item_info_to_order(order_no, account_id=aid, expected_seller_id=du)
         if err == "order_not_found":
             raise HTTPException(status_code=404, detail="本地不存在该订单号")
         if err == "seller_mismatch":
@@ -541,7 +541,7 @@ def refresh_order_info(data: RefreshOrderInfoBody):
         return rows[0].to_dict()
 
     try:
-        return run_meilu_serial(queue_key_for_meilu_account(int(aid)), _do_refresh)
+        return await run_meilu_serial_async(queue_key_for_meilu_account(int(aid)), _do_refresh)
     except TimeoutError as exc:
         raise HTTPException(status_code=504, detail=str(exc)) from exc
 

@@ -23,7 +23,7 @@ from ....ssl_mitm_proxy.capture_config import (
     read_on_sale_list_response,
 )
 from ....ssl_mitm_proxy.runner import default_mitm_proxy_url, start_mitm_proxy
-from ....web_drive import get_web_drive_manager, run_browser_async
+from ....web_drive import get_web_drive_manager
 
 _API_BASE = "https://api.mercari.jp/items/get_items"
 LISTINGS_PAGE_URL = "https://jp.mercari.com/mypage/listings"
@@ -125,7 +125,7 @@ async def _fetch_on_sale_via_browser_impl(
     return items, meta
 
 
-def fetch_on_sale_list_items(
+async def fetch_on_sale_list_items(
     seller_id: int,
     account_id: Optional[int] = None,
     timeout: int = 90,
@@ -140,17 +140,8 @@ def fetch_on_sale_list_items(
         raise RuntimeError(
             "在售列表改为网页+MITM 截获后，必须提供 account_id（同步入口会传入煤炉账号主键）"
         )
-
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return run_browser_async(
-            _fetch_on_sale_via_browser_impl(
-                int(account_id),
-                int(seller_id),
-                timeout=int(timeout),
-            )
-        )
-    raise RuntimeError(
-        "fetch_on_sale_list_items 须在无运行中 event loop 的线程内调用（例如 FastAPI 同步路由）"
+    return await _fetch_on_sale_via_browser_impl(
+        int(account_id),
+        int(seller_id),
+        timeout=int(timeout),
     )

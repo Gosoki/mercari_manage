@@ -33,7 +33,7 @@ from ....ssl_mitm_proxy.capture_config import (
     read_trading_list_response,
 )
 from ....ssl_mitm_proxy.runner import default_mitm_proxy_url, start_mitm_proxy
-from ....web_drive import get_web_drive_manager, run_browser_async
+from ....web_drive import get_web_drive_manager
 from .get_order_info import apply_item_info_to_order
 
 _API_URL = "https://api.mercari.jp/items/get_items"
@@ -204,7 +204,7 @@ def _upsert_order(order_data: Dict[str, Any]) -> str:
     return "updated"
 
 
-def fetch_open_order_items(
+async def fetch_open_order_items(
     seller_id: int,
     account_id: Optional[int] = None,
     timeout: int = 90,
@@ -216,22 +216,14 @@ def fetch_open_order_items(
         raise RuntimeError(
             "出售中列表改为网页+MITM 截获后，必须提供 account_id（同步入口会传入煤炉账号主键）"
         )
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return run_browser_async(
-            _fetch_trading_list_via_browser_impl(
-                int(account_id),
-                int(seller_id),
-                timeout=int(timeout),
-            )
-        )
-    raise RuntimeError(
-        "fetch_open_order_items 须在无运行中 event loop 的线程内调用（例如 FastAPI 同步路由）"
+    return await _fetch_trading_list_via_browser_impl(
+        int(account_id),
+        int(seller_id),
+        timeout=int(timeout),
     )
 
 
-def fetch_and_sync_open_orders(
+async def fetch_and_sync_open_orders(
     seller_id: int,
     account_id: Optional[int] = None,
 ) -> Dict[str, Any]:
@@ -244,7 +236,7 @@ def fetch_and_sync_open_orders(
     """
     items: List[Dict[str, Any]]
     meta: Dict[str, Any]
-    items, meta = fetch_open_order_items(seller_id=seller_id, account_id=account_id)
+    items, meta = await fetch_open_order_items(seller_id=seller_id, account_id=account_id)
 
     stats = {
         "total": len(items),
@@ -263,7 +255,7 @@ def fetch_and_sync_open_orders(
             stats[result] += 1
             iid = item.get("id")
             if iid and result in ("inserted", "updated"):
-                err = apply_item_info_to_order(str(iid), account_id=account_id)
+                err = await apply_item_info_to_order(str(iid), account_id=account_id)
                 if err is None:
                     stats["info_enriched"] += 1
                 else:

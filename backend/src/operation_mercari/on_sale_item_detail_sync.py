@@ -239,7 +239,7 @@ def _persist_listing_description_for_item(
         return
 
 
-def fetch_detail_and_sync_inventory(
+async def fetch_detail_and_sync_inventory(
     item_id: str,
     account_id: Optional[int] = None,
 ) -> Dict[str, Any]:
@@ -248,7 +248,7 @@ def fetch_detail_and_sync_inventory(
 
     :return: { api: 原始响应, sync: { updated, inventory_id, mercari_item_id, on_sale_quantity, message } }
     """
-    resp = fetch_mercari_item_get(item_id, account_id=account_id)
+    resp = await fetch_mercari_item_get(item_id, account_id=account_id)
     sync: Dict[str, Any] = {
         "updated": False,
         "inventory_id": None,

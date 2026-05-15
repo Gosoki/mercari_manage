@@ -5,10 +5,9 @@ from .account_serial_queue import (
     GLOBAL_QUEUE_KEY,
     queue_key_for_meilu_account,
     resolve_meilu_account_id,
-    run_meilu_serial,
+    run_meilu_serial_async,
     shutdown_serial_executors,
 )
-from .async_runner import run_browser_async
 from .manager import EdgeWebDriveManager, get_web_drive_manager
 from .paths import profile_dir_for, profiles_root, validate_account_key
 
@@ -20,8 +19,7 @@ __all__ = [
     "profiles_root",
     "queue_key_for_meilu_account",
     "resolve_meilu_account_id",
-    "run_browser_async",
-    "run_meilu_serial",
+    "run_meilu_serial_async",
     "shutdown_serial_executors",
     "validate_account_key",
 ]

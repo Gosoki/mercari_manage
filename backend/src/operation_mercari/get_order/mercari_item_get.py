@@ -21,7 +21,7 @@ from ...ssl_mitm_proxy.capture_config import (
     read_item_get_response,
 )
 from ...ssl_mitm_proxy.runner import default_mitm_proxy_url, start_mitm_proxy
-from ...web_drive import get_web_drive_manager, run_browser_async
+from ...web_drive import get_web_drive_manager
 
 _ITEM_GET_BASE = "https://api.mercari.jp/items/get"
 # 与 App / 测试样例一致的查询参数（顺序固定便于抓包对照）
@@ -135,7 +135,7 @@ async def _fetch_mercari_item_get_via_browser_impl(
     return body
 
 
-def fetch_mercari_item_get(
+async def fetch_mercari_item_get(
     item_id: str,
     account_id: Optional[int] = None,
     *,
@@ -151,17 +151,8 @@ def fetch_mercari_item_get(
         raise RuntimeError(
             "商品详情改为网页+MITM 截获后，必须提供 account_id（获取详情接口会解析煤炉账号主键）"
         )
-
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return run_browser_async(
-            _fetch_mercari_item_get_via_browser_impl(
-                str(item_id).strip(),
-                int(account_id),
-                timeout=int(timeout),
-            )
-        )
-    raise RuntimeError(
-        "fetch_mercari_item_get 须在无运行中 event loop 的线程内调用（例如 FastAPI 同步路由）"
+    return await _fetch_mercari_item_get_via_browser_impl(
+        str(item_id).strip(),
+        int(account_id),
+        timeout=int(timeout),
     )

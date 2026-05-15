@@ -255,7 +255,7 @@ def upsert_on_sale_item_row(row: Dict[str, Any]) -> str:
     return "inserted"
 
 
-def sync_on_sale_items_from_mercari(account_id: Optional[int] = None) -> Dict[str, Any]:
+async def sync_on_sale_items_from_mercari(account_id: Optional[int] = None) -> Dict[str, Any]:
     """
     从煤炉拉取在售列表（网页出品一覧触发的 items/get_items，on_sale,stop）并同步本地：
 
@@ -274,7 +274,7 @@ def sync_on_sale_items_from_mercari(account_id: Optional[int] = None) -> Dict[st
     """
     aid, sid = _resolve_account_and_seller(account_id)
     seller_key = str(int(sid))
-    items, meta = fetch_on_sale_list_items(seller_id=sid, account_id=aid)
+    items, meta = await fetch_on_sale_list_items(seller_id=sid, account_id=aid)
 
     incoming_ids = {
         str(it.get("id") or "").strip()

@@ -11,7 +11,7 @@ from ..db_manage.models.warehouse import WarehouseModel
 from ..web_drive.account_serial_queue import (
     queue_key_for_meilu_account,
     resolve_meilu_account_id,
-    run_meilu_serial,
+    run_meilu_serial_async,
 )
 from ..operation_mercari.on_sale_item_detail_sync import fetch_detail_and_sync_inventory
 from ..operation_mercari.on_sale_items_sync import (
@@ -232,7 +232,7 @@ class FetchOnSaleDetailRequest(PydanticModel):
 
 
 class FetchOnSaleDetailsBatchRequest(PydanticModel):
-    """同一账号下批量 items/get：在 run_meilu_serial 内串行执行，避免多请求并发抢占 WebDriver。"""
+    """同一账号下批量 items/get：在 run_meilu_serial_async 内串行执行，避免多请求并发抢占 WebDriver。"""
     item_ids: List[str]
     account_id: Optional[int] = None
 
@@ -322,7 +322,7 @@ def list_on_sale_by_item_ids(item_ids: str):
 
 
 @router.post("/sync")
-def sync_on_sale(data: SyncOnSaleRequest):
+async def sync_on_sale(data: SyncOnSaleRequest):
     """
     从煤炉拉取在售列表并同步本地：使用对应账号 Edge（meilu_{id} profile）经 MITM 打开
     jp.mercari.com/mypage/listings，截获 api.mercari.jp/items/get_items 响应。
@@ -331,7 +331,7 @@ def sync_on_sale(data: SyncOnSaleRequest):
     """
     try:
         aid = resolve_meilu_account_id(data.account_id)
-        result = run_meilu_serial(
+        result = await run_meilu_serial_async(
             queue_key_for_meilu_account(aid),
             lambda: sync_on_sale_items_from_mercari(account_id=aid),
         )
@@ -345,7 +345,7 @@ def sync_on_sale(data: SyncOnSaleRequest):
 
 
 @router.post("/fetch-detail")
-def fetch_on_sale_item_detail(data: FetchOnSaleDetailRequest):
+async def fetch_on_sale_item_detail(data: FetchOnSaleDetailRequest):
     """
     使用对应账号 Edge（MITM）打开 ``https://jp.mercari.com/item/m{item_id}``，
     截获 api.mercari.jp/items/get 响应；解析 data.description 中的「管理ID / 管理番号 / バーコード」，
@@ -375,7 +375,7 @@ def fetch_on_sale_item_detail(data: FetchOnSaleDetailRequest):
 
     try:
         qk = queue_key_for_meilu_account(int(account_id))
-        payload = run_meilu_serial(
+        payload = await run_meilu_serial_async(
             qk,
             lambda: fetch_detail_and_sync_inventory(item_id, account_id=account_id),
         )
@@ -390,10 +390,10 @@ def fetch_on_sale_item_detail(data: FetchOnSaleDetailRequest):
 
 
 @router.post("/fetch-details-batch")
-def fetch_on_sale_item_details_batch(data: FetchOnSaleDetailsBatchRequest):
+async def fetch_on_sale_item_details_batch(data: FetchOnSaleDetailsBatchRequest):
     """
     对多个 item_id 依次执行 fetch_detail_and_sync_inventory，且整段只提交一次
-    run_meilu_serial（与单条 fetch-detail、在售同步同一队列键 FIFO），避免多 HTTP
+    run_meilu_serial_async（与单条 fetch-detail、在售同步同一队列键 FIFO），避免多 HTTP
     并发在同一账号下抢占 Edge / MITM。
     """
     raw_ids = data.item_ids or []
@@ -417,13 +417,13 @@ def fetch_on_sale_item_details_batch(data: FetchOnSaleDetailsBatchRequest):
         aid = resolve_meilu_account_id(data.account_id)
         qk = queue_key_for_meilu_account(int(aid))
 
-        def _run_batch() -> Dict[str, Any]:
+        async def _run_batch() -> Dict[str, Any]:
             results: List[Dict[str, Any]] = []
             ok_synced = 0
             not_ok = 0
             for iid in cleaned:
                 try:
-                    payload = fetch_detail_and_sync_inventory(iid, account_id=aid)
+                    payload = await fetch_detail_and_sync_inventory(iid, account_id=aid)
                     sync = payload.get("sync") if isinstance(payload.get("sync"), dict) else {}
                     if sync.get("updated"):
                         ok_synced += 1
@@ -441,7 +441,7 @@ def fetch_on_sale_item_details_batch(data: FetchOnSaleDetailsBatchRequest):
                 "results": results,
             }
 
-        out = run_meilu_serial(qk, _run_batch)
+        out = await run_meilu_serial_async(qk, _run_batch)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except TimeoutError as exc:

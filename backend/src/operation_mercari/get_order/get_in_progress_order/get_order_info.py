@@ -30,7 +30,7 @@ from ....ssl_mitm_proxy.capture_config import (
     read_transaction_evidence_response,
 )
 from ....ssl_mitm_proxy.runner import default_mitm_proxy_url, start_mitm_proxy
-from ....web_drive import get_web_drive_manager, run_browser_async
+from ....web_drive import get_web_drive_manager
 from ....routes.cost_expenses import deduct_packaging_total_from_order_net_income
 
 _TRANSACTION_EVIDENCE_GET_PATH = "https://api.mercari.jp/transaction_evidences/get"
@@ -203,7 +203,7 @@ def _seller_shipping_fee_explicitly_zero(v: Any) -> bool:
         return False
 
 
-def fetch_item_info(
+async def fetch_item_info(
     item_id: str,
     account_id: Optional[int] = None,
     *,
@@ -216,18 +216,10 @@ def fetch_item_info(
         raise RuntimeError(
             "订单详情改为网页+MITM 截获后，必须提供 account_id（刷新接口会解析煤炉账号主键）"
         )
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return run_browser_async(
-            _fetch_item_info_via_browser_impl(
-                str(item_id).strip(),
-                int(account_id),
-                timeout=int(timeout),
-            )
-        )
-    raise RuntimeError(
-        "fetch_item_info 须在无运行中 event loop 的线程内调用（例如 FastAPI 同步路由）"
+    return await _fetch_item_info_via_browser_impl(
+        str(item_id).strip(),
+        int(account_id),
+        timeout=int(timeout),
     )
 
 
@@ -319,7 +311,7 @@ def extract_order_info_fields(response: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def apply_item_info_to_order(
+async def apply_item_info_to_order(
     item_id: str,
     account_id: Optional[int] = None,
     expected_seller_id: Optional[str] = None,
@@ -333,7 +325,7 @@ def apply_item_info_to_order(
         return "empty_item_id"
 
     try:
-        resp = fetch_item_info(item_id, account_id=account_id)
+        resp = await fetch_item_info(item_id, account_id=account_id)
     except Exception as exc:
         return f"request:{exc}"
 

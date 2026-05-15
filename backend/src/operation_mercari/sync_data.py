@@ -96,7 +96,7 @@ def history_sync_precheck(account_id: Optional[int] = None) -> Dict[str, Any]:
     }
 
 
-def sync_open_orders(
+async def sync_open_orders(
     account_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
@@ -116,8 +116,8 @@ def sync_open_orders(
         raise RuntimeError(
             "订单表中已存在该卖家的订单数据（data_user 与卖家 ID 一致），禁止重复执行「获取历史数据」。"
         )
-    trading = fetch_and_sync_open_orders(seller_id=sid, account_id=aid)
-    history = fetch_and_sync_history_orders(seller_id=sid, account_id=aid)
+    trading = await fetch_and_sync_open_orders(seller_id=sid, account_id=aid)
+    history = await fetch_and_sync_history_orders(seller_id=sid, account_id=aid)
 
     t_ic = trading.get("total_item_count")
     if t_ic is None:
@@ -140,7 +140,7 @@ def sync_open_orders(
     }
 
 
-def sync_new_data(account_id: Optional[int] = None) -> Dict[str, Any]:
+async def sync_new_data(account_id: Optional[int] = None) -> Dict[str, Any]:
     """
     增量同步出售中订单：WebDriver 打开取引中一覧 + MITM 截获 trading 列表；按本地水印只对尚未入库的 item 入库；
     入库顺序与列表顺序相反（倒序入库）。每条成功写入后 ``apply_item_info_to_order`` 打开取引页截获详情并回填扩展字段。
@@ -159,7 +159,7 @@ def sync_new_data(account_id: Optional[int] = None) -> Dict[str, Any]:
     )
     watermark_order_no = latest_rows[0].order_no if latest_rows else None
 
-    items, meta = fetch_open_order_items(seller_id=sid, account_id=aid)
+    items, meta = await fetch_open_order_items(seller_id=sid, account_id=aid)
 
     raw_ids: List[str] = []
     for it in items:
@@ -208,7 +208,7 @@ def sync_new_data(account_id: Optional[int] = None) -> Dict[str, Any]:
         if result == "skipped" or not iid:
             continue
         try:
-            err = apply_item_info_to_order(str(iid), account_id=aid)
+            err = await apply_item_info_to_order(str(iid), account_id=aid)
             if err is None:
                 stats["info_enriched"] += 1
             else:
@@ -225,7 +225,7 @@ def sync_new_data(account_id: Optional[int] = None) -> Dict[str, Any]:
     return stats
 
 
-def batch_refresh_orders_info(account_id: Optional[int] = None) -> Dict[str, Any]:
+async def batch_refresh_orders_info(account_id: Optional[int] = None) -> Dict[str, Any]:
     """
     从订单表选出未完成且 data_user 非空的行，逐条 WebDriver 打开取引页 + MITM 截获 transaction_evidences/get（与列表「刷新」相同）。
 
@@ -254,7 +254,7 @@ def batch_refresh_orders_info(account_id: Optional[int] = None) -> Dict[str, Any
         if aid is None:
             stats["skipped_no_account"] += 1
             continue
-        err = apply_item_info_to_order(
+        err = await apply_item_info_to_order(
             order_no, account_id=aid, expected_seller_id=data_user
         )
         if err:

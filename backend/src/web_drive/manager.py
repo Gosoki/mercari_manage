@@ -4,7 +4,7 @@
 Cookie 与站点数据随目录持久化；不同账号对应不同子浏览器配置目录。
 
 Playwright 异步驱动绑定到「当前线程 + 当前 event loop」：
-- FastAPI 的 async 路由跑在 uvicorn 主事件循环；sync 路由在线程池里 ``asyncio.run()``，每次都会新建并关闭 loop。
+- 煤炉浏览器任务在 uvicorn 主事件循环上 ``await`` 执行（见 ``run_meilu_serial_async``），同一账号串行、不同账号可并行。
 - 若在线程间共享同一个 Playwright 实例，或复用已随 loop 关闭而失效的实例，会触发
   ``'NoneType' object has no attribute 'send'``。
 因此每个 **操作系统线程** 使用独立的 Playwright / contexts（``threading.local()``）。
