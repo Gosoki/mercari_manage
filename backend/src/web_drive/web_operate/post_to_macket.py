@@ -6,7 +6,7 @@ Mercari 出品自动化：打开 https://jp.mercari.com/sell/create 并填写表
   前置  确保 Switch 开关处于 false（关闭）状态
    1.  图片上传（写真を追加）
    2.  填写商品名称
-   3.  选择商品类型（文案入口 + position；若进入 /sell/wizard 则浏览器后退）
+   3.  选择商品类型（文案入口 + position；选完后等待 5s 并处理延迟 /sell/wizard）
    4.  选择商品状態（文案入口；若进入 /sell/wizard 则浏览器后退）
    5.  填写商品说明
    6.  选择快递費負担
@@ -42,6 +42,9 @@ SALE_ELEMENT_TIMEOUT_MS = 8_000
 # 选类型/状态后可能进入 sell/wizard（煤炉中间向导页），用浏览器后退离开
 SELL_WIZARD_URL_FRAGMENT = "sell/wizard"
 SELL_WIZARD_BROWSER_BACK_TIMEOUT_MS = 12_000
+# 选完商品类型后固定等待，应对煤炉延迟跳入 sell/wizard（秒）
+SELL_WIZARD_POST_CATEGORY_WAIT_S = 5.0
+SELL_WIZARD_POST_CATEGORY_POLL_S = 0.4
 # go_back 失败时兜底：页面内「出品画面に戻る」或 XPath
 SELL_WIZARD_BACK_TEXT = "出品画面に戻る"
 SELL_WIZARD_BACK_BUTTON_TESTID = "back-to-listing-button"
@@ -562,6 +565,63 @@ async def _leave_sell_wizard_if_present(
         return True
 
 
+async def _wait_post_category_for_delayed_sell_wizard(
+    page: Any,
+    *,
+    element_timeout_ms: int,
+    report: Optional[Callable[[str, str], None]] = None,
+) -> bool:
+    """
+    商品类型选完后固定等待 SELL_WIZARD_POST_CATEGORY_WAIT_S 秒再继续下一步。
+    等待期间轮询 URL，若延迟跳入 sell/wizard 则立即模拟浏览器后退。
+    返回 True 表示等待期间曾处理过向导页。
+    """
+    wait_s = SELL_WIZARD_POST_CATEGORY_WAIT_S
+    poll_s = SELL_WIZARD_POST_CATEGORY_POLL_S
+    if report:
+        report(
+            "category_settle",
+            f"商品类型已选，等待 {int(wait_s)} 秒以应对可能的向导页跳转…",
+        )
+    log.info(
+        "[category] 选完类型，等待 %.1fs（轮询延迟 sell/wizard）",
+        wait_s,
+    )
+    print(f"[出品] 类型选择完成，等待 {wait_s:.0f}s …", flush=True)
+
+    handled = False
+    elapsed = 0.0
+    while elapsed < wait_s:
+        chunk = min(poll_s, wait_s - elapsed)
+        await asyncio.sleep(chunk)
+        elapsed += chunk
+        try:
+            url = str(page.url or "")
+        except Exception:
+            url = ""
+        if not _url_is_sell_wizard(url):
+            continue
+        log.info("[category] 等待期间检测到 sell/wizard（已等待 %.1fs）", elapsed)
+        if await _leave_sell_wizard_if_present(
+            page, element_timeout_ms=element_timeout_ms, report=report
+        ):
+            handled = True
+
+    try:
+        url = str(page.url or "")
+    except Exception:
+        url = ""
+    if _url_is_sell_wizard(url):
+        log.info("[category] 等待结束后仍位于 sell/wizard，尝试后退")
+        if await _leave_sell_wizard_if_present(
+            page, element_timeout_ms=element_timeout_ms, report=report
+        ):
+            handled = True
+
+    log.info("[category] 类型后等待结束（%.1fs），当前 URL=%s", wait_s, page.url)
+    return handled
+
+
 async def _ensure_left_sell_wizard(
     page: Any,
     result: Dict[str, Any],
@@ -804,8 +864,15 @@ async def post_to_market(
                     page_load_timeout_ms=page_load_timeout_ms,
                     report=report,
                 )
+                delayed_wizard = await _wait_post_category_for_delayed_sell_wizard(
+                    page,
+                    element_timeout_ms=element_timeout_ms,
+                    report=report,
+                )
                 result["category_selected"] = True
-                result["sell_wizard_back_clicked"] = bool(wizard_back)
+                result["sell_wizard_back_clicked"] = bool(
+                    wizard_back or delayed_wizard
+                )
             except ListingAborted:
                 raise
             except Exception as exc:
