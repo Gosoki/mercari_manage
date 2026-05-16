@@ -76,6 +76,7 @@ export const productTypeCategoryMappingApi = {
 export const inventoryApi = {
   list: (params) => http.get('/inventory', { params }),
   get: (id) => http.get(`/inventory/${id}`),
+  pendingOutboundLines: (id) => http.get(`/inventory/${id}/pending-outbound-lines`),
   findByBarcode: (barcode) => http.get(`/inventory/barcode/${encodeURIComponent(barcode)}`),
   findByImage: (file) => {
     const fd = new FormData()

@@ -13,6 +13,7 @@ from PIL import Image, ImageOps
 from ..auth import require_auth
 from ..db_manage.database import DatabaseManager
 from ..image_storage import is_base64_image, save_base64_image, delete_image_file, get_image_root, save_upload_image
+from ..db_manage.models.order_outbound_line import OrderOutboundLineModel
 
 router = APIRouter(prefix="/api/inventory", tags=["inventory"])
 # 公开路由：缩略图等无需登录即可访问（图片本身已通过静态文件公开）
@@ -763,6 +764,15 @@ def stock_out_inventory(pid: int, data: StockInRequest):
         raise
     new_qty = db.execute_query("SELECT quantity FROM [inventory] WHERE id = ?", (pid,))
     return {"success": True, "new_quantity": (new_qty[0][0] if new_qty else 0), "inventory_id": pid}
+
+
+@router.get("/{pid}/pending-outbound-lines")
+def list_inventory_pending_outbound_lines(pid: int):
+    """库存展开：该商品在非终态订单中尚未出库的明细行。"""
+    if not _inventory_exists(pid):
+        raise HTTPException(status_code=404, detail="商品不存在")
+    items = OrderOutboundLineModel.list_pending_for_inventory(pid)
+    return {"inventory_id": pid, "items": items}
 
 
 @router.get("/{pid}")

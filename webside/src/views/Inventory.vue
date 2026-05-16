@@ -95,6 +95,7 @@
     <el-card shadow="never" class="table-card">
       <div class="table-scroll">
       <el-table
+        ref="inventoryTableRef"
         :data="pagedList"
         v-loading="loading"
         stripe
@@ -107,15 +108,19 @@
       >
         <el-table-column type="expand" width="44">
           <template #default="{ row }">
-            <div class="inventory-expand-wrap" v-loading="getInventoryExpandSlot(row.id)?.loading">
-              <el-table
-                v-if="mercariItemIds(row).length"
-                :data="getInventoryExpandRows(row)"
-                size="small"
-                border
-                class="inventory-expand-inner-table"
-                empty-text="暂无在售商品数据"
-              >
+            <div
+              v-if="inventoryRowExpandShowsContent(row) || isInventoryExpandLoading(row)"
+              class="inventory-expand-wrap"
+              v-loading="isInventoryExpandLoading(row)"
+            >
+              <div v-if="getInventoryExpandRows(row).length" class="inventory-expand-section">
+                <div class="inventory-expand-section-title">在售商品</div>
+                <el-table
+                  :data="getInventoryExpandRows(row)"
+                  size="small"
+                  border
+                  class="inventory-expand-inner-table"
+                >
                 <el-table-column label="商品ID" prop="item_id" min-width="130" align="center" />
                 <el-table-column label="标题" prop="name" min-width="220" align="left" show-overflow-tooltip />
                 <el-table-column label="卖家" prop="seller_name" min-width="120" align="center" show-overflow-tooltip />
@@ -135,8 +140,35 @@
                 <el-table-column label="更新" width="150" align="center">
                   <template #default="{ row: r }">{{ formatUnixTs(r.updated) }}</template>
                 </el-table-column>
-              </el-table>
-              <el-empty v-else description="暂无煤炉商品ID" :image-size="48" />
+                </el-table>
+              </div>
+              <div v-if="getInventoryOutboundExpandRows(row).length" class="inventory-expand-section">
+                <div class="inventory-expand-section-title">待出库商品</div>
+                <el-table
+                  :data="getInventoryOutboundExpandRows(row)"
+                  size="small"
+                  border
+                  class="inventory-expand-inner-table"
+                >
+                  <el-table-column label="订单号" prop="order_no" min-width="140" align="left" show-overflow-tooltip />
+                  <el-table-column label="订单状态" width="110" align="center">
+                    <template #default="{ row: line }">
+                      <el-tag :type="orderStatusTagType(line.order_status)" size="small" effect="light">
+                        {{ displayOrderStatus(line.order_status) }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="类型" width="88" align="center">
+                    <template #default="{ row: line }">{{ outboundLineKindLabel(line) }}</template>
+                  </el-table-column>
+                  <el-table-column label="标识" prop="management_id" min-width="120" align="center" show-overflow-tooltip />
+                  <el-table-column label="件数" prop="quantity" width="72" align="center" />
+                  <el-table-column label="买家" prop="buyer_name" min-width="100" align="left" show-overflow-tooltip />
+                  <el-table-column label="订单金额¥" width="100" align="center">
+                    <template #default="{ row: line }">{{ Number(line.order_amount || 0) }}</template>
+                  </el-table-column>
+                </el-table>
+              </div>
             </div>
           </template>
         </el-table-column>
@@ -234,14 +266,8 @@
             <div v-else class="editable-cell" @click="openOwnerInline(row)">{{ displayOwnerName(row) }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="仓库" min-width="100" align="center" header-align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.inv_wh_name || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="所属货架" min-width="100" align="center" header-align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.inv_shelf_name || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="货架号码" min-width="100" align="center" header-align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.inv_shelf_code || '-' }}</template>
+        <el-table-column label="仓库位置" min-width="160" align="left" header-align="left" show-overflow-tooltip>
+          <template #default="{ row }">{{ displayWarehouseLocation(row) }}</template>
         </el-table-column>
         <el-table-column label="单价" prop="price" width="120" align="center" header-align="center" sortable="custom">
           <template #default="{ row }">
@@ -1132,6 +1158,7 @@ import {
 import SingleListingFormDialog from '@/components/SingleListingFormDialog.vue'
 
 const list = ref([])
+const inventoryTableRef = ref(null)
 const loading = ref(false)
 /** 表头排序：custom 模式，在 sortedList 中处理 */
 const inventorySortProp = ref('')
@@ -1933,6 +1960,13 @@ function displayProductTypeName(row) {
   return text || ''
 }
 
+function displayWarehouseLocation(row) {
+  const parts = [row?.inv_wh_name, row?.inv_shelf_name, row?.inv_shelf_code]
+    .map((v) => String(v ?? '').trim())
+    .filter(Boolean)
+  return parts.length ? parts.join('-') : '-'
+}
+
 function displayOwnerName(row) {
   const ownerId = row?.owner_user_id ?? null
   if (ownerId != null) {
@@ -2525,14 +2559,93 @@ function mercariItemIds(row) {
   return out
 }
 
+/** 行是否可能有二级列表（煤炉 ID 或待出库数量） */
+function inventoryRowCanExpand(row) {
+  if (!row) return false
+  if (Number(row.pending_outbound_qty || 0) > 0) return true
+  return mercariItemIds(row).length > 0
+}
+
+function inventoryRowExpandHasContent(row) {
+  return getInventoryExpandRows(row).length > 0 || getInventoryOutboundExpandRows(row).length > 0
+}
+
+function inventoryRowExpandShowsContent(row) {
+  const slot = getInventoryExpandSlot(row?.id)
+  if (!slot) return false
+  if (!slot.loaded && !slot.outboundLoaded) return false
+  return inventoryRowExpandHasContent(row)
+}
+
+function collapseInventoryRow(row) {
+  nextTick(() => {
+    inventoryTableRef.value?.toggleRowExpansion?.(row, false)
+  })
+}
+
 function getInventoryExpandSlot(inventoryId) {
   return inventoryExpandById.value[inventoryId] || null
+}
+
+function createInventoryExpandSlot() {
+  return {
+    loading: false,
+    loaded: false,
+    rows: [],
+    outboundLoading: false,
+    outboundLoaded: false,
+    outboundRows: []
+  }
+}
+
+function isInventoryExpandLoading(row) {
+  if (!inventoryRowCanExpand(row)) return false
+  const slot = getInventoryExpandSlot(row?.id)
+  if (!slot) return false
+  return Boolean(slot.loading || slot.outboundLoading)
 }
 
 function getInventoryExpandRows(row) {
   const slot = getInventoryExpandSlot(row?.id)
   if (!slot || !Array.isArray(slot.rows)) return []
   return slot.rows
+}
+
+function getInventoryOutboundExpandRows(row) {
+  const slot = getInventoryExpandSlot(row?.id)
+  if (!slot || !Array.isArray(slot.outboundRows)) return []
+  return slot.outboundRows
+}
+
+const orderStatusMap = {
+  pending: { label: '待处理', tag: 'info' },
+  trading: { label: '交易中', tag: 'warning' },
+  wait_payment: { label: '待支付', tag: 'warning' },
+  wait_shipping: { label: '待发货', tag: 'warning' },
+  wait_review: { label: '待评价', tag: 'primary' },
+  done: { label: '已完成', tag: 'success' },
+  sold_out: { label: '已售完', tag: 'info' },
+  cancelled: { label: '已取消', tag: 'info' },
+  cancel_request: { label: '取消申请中', tag: 'danger' }
+}
+
+function displayOrderStatus(status) {
+  const key = String(status ?? '').trim()
+  if (!key) return '-'
+  return orderStatusMap[key]?.label || key
+}
+
+function orderStatusTagType(status) {
+  const key = String(status ?? '').trim()
+  return orderStatusMap[key]?.tag || 'info'
+}
+
+function outboundLineKindLabel(line) {
+  const k = line?.line_kind
+  if (k === 'bundle_title') return '组合标题'
+  if (k === 'manual') return '手动添加'
+  if (k === 'barcode') return '条码'
+  return '管理ID'
 }
 
 function formatUnixTs(sec) {
@@ -2556,13 +2669,7 @@ function onSaleStatusTagType(status) {
   return onSaleStatusMap[key]?.tag || 'info'
 }
 
-async function ensureInventoryExpandLoaded(row) {
-  const id = row?.id
-  if (!id) return
-  if (!inventoryExpandById.value[id]) {
-    inventoryExpandById.value[id] = { loading: false, loaded: false, rows: [] }
-  }
-  const slot = inventoryExpandById.value[id]
+async function loadInventoryOnSaleExpand(row, slot) {
   if (slot.loading || slot.loaded) return
   const itemIds = mercariItemIds(row)
   if (!itemIds.length) {
@@ -2585,10 +2692,61 @@ async function ensureInventoryExpandLoaded(row) {
   }
 }
 
+async function loadInventoryOutboundExpand(row, slot) {
+  if (slot.outboundLoading || slot.outboundLoaded) return
+  if (Number(row?.pending_outbound_qty || 0) <= 0) {
+    slot.outboundRows = []
+    slot.outboundLoaded = true
+    return
+  }
+  slot.outboundLoading = true
+  try {
+    const res = await inventoryApi.pendingOutboundLines(row.id)
+    slot.outboundRows = Array.isArray(res?.items) ? res.items : []
+    slot.outboundLoaded = true
+  } catch {
+    slot.outboundRows = []
+    slot.outboundLoaded = true
+  } finally {
+    slot.outboundLoading = false
+  }
+}
+
+async function ensureInventoryExpandLoaded(row) {
+  const id = row?.id
+  if (!id || !inventoryRowCanExpand(row)) return
+  if (!inventoryExpandById.value[id]) {
+    inventoryExpandById.value[id] = createInventoryExpandSlot()
+  }
+  const slot = inventoryExpandById.value[id]
+  const tasks = []
+  if (mercariItemIds(row).length && !slot.loaded && !slot.loading) {
+    tasks.push(loadInventoryOnSaleExpand(row, slot))
+  } else if (!mercariItemIds(row).length && !slot.loaded) {
+    slot.rows = []
+    slot.loaded = true
+  }
+  if (Number(row.pending_outbound_qty || 0) > 0 && !slot.outboundLoaded && !slot.outboundLoading) {
+    tasks.push(loadInventoryOutboundExpand(row, slot))
+  } else if (!slot.outboundLoaded) {
+    slot.outboundRows = []
+    slot.outboundLoaded = true
+  }
+  if (tasks.length) await Promise.all(tasks)
+}
+
 function onInventoryExpandChange(row, expandedRows) {
   const opened = Array.isArray(expandedRows) && expandedRows.some((r) => r?.id === row?.id)
   if (!opened) return
-  ensureInventoryExpandLoaded(row)
+  if (!inventoryRowCanExpand(row)) {
+    collapseInventoryRow(row)
+    return
+  }
+  ensureInventoryExpandLoaded(row).then(() => {
+    if (!inventoryRowExpandHasContent(row)) {
+      collapseInventoryRow(row)
+    }
+  })
 }
 
 const pagedList = computed(() => {
@@ -3245,6 +3403,9 @@ function rowClassName({ row }) {
   }
   if (listingPickMode.value && !isListingPickSelectable(row)) {
     classes.push('listing-pick-row-disabled')
+  }
+  if (!inventoryRowCanExpand(row)) {
+    classes.push('inventory-row-no-expand')
   }
   return classes.filter(Boolean).join(' ')
 }
@@ -4322,9 +4483,24 @@ onBeforeUnmount(() => {
   line-height: 22px;
 }
 /* ---- 库存展开：二级表格 ---- */
+:deep(.el-table__body tr.inventory-row-no-expand .el-table__expand-column) {
+  pointer-events: none;
+}
+:deep(.el-table__body tr.inventory-row-no-expand .el-table__expand-column .el-table__expand-icon) {
+  visibility: hidden;
+}
 .inventory-expand-wrap {
   padding: 8px 12px 12px 48px;
-  min-height: 48px;
+  min-height: 0;
+}
+.inventory-expand-section + .inventory-expand-section {
+  margin-top: 14px;
+}
+.inventory-expand-section-title {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
 }
 .inventory-expand-inner-table {
   width: 100%;

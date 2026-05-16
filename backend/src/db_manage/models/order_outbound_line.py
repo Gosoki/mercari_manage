@@ -163,3 +163,46 @@ class OrderOutboundLineModel(BaseModel):
             "shelf_code",
         ]
         return [dict(zip(keys, r)) for r in rows]
+
+    @classmethod
+    def list_pending_for_inventory(cls, inventory_id: int) -> List[Dict[str, Any]]:
+        """某库存商品关联的待出库明细（非终态订单且未确认出库）。"""
+        iid = int(inventory_id or 0)
+        if iid <= 0:
+            return []
+        db = cls().db
+        term_ph = ",".join("?" * len(TERMINAL_ORDER_STATUSES))
+        sql = f"""
+            SELECT
+                l.id,
+                l.order_no,
+                l.management_id,
+                l.line_kind,
+                l.quantity,
+                l.sort_index,
+                COALESCE(l.is_stocked_out, 0) AS is_stocked_out,
+                o.status AS order_status,
+                COALESCE(o.amount, 0) AS order_amount,
+                COALESCE(o.customer_name, '') AS buyer_name
+            FROM [{cls.get_table_name()}] l
+            INNER JOIN [orders] o ON o.[order_no] = l.[order_no]
+            WHERE l.[inventory_id] = ?
+              AND COALESCE(l.[is_stocked_out], 0) = 0
+              AND o.[status] NOT IN ({term_ph})
+            ORDER BY o.[order_no] ASC, l.[sort_index] ASC, l.[id] ASC
+        """
+        bind: Tuple[Any, ...] = (iid,) + TERMINAL_ORDER_STATUSES
+        rows = db.execute_query(sql, bind)
+        keys = [
+            "id",
+            "order_no",
+            "management_id",
+            "line_kind",
+            "quantity",
+            "sort_index",
+            "is_stocked_out",
+            "order_status",
+            "order_amount",
+            "buyer_name",
+        ]
+        return [dict(zip(keys, r)) for r in rows]
