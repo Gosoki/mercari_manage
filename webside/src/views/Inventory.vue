@@ -141,34 +141,13 @@
           </template>
         </el-table-column>
         <el-table-column label="管理番号" prop="id" width="100" align="center" header-align="center" />
-        <el-table-column label="正面图" width="76" align="center" header-align="center">
+        <el-table-column label="商品图" width="76" align="center" header-align="center">
           <template #default="{ row }">
             <el-image
               v-if="inventoryRowPrimaryImage(row)"
               class="order-thumb"
               :src="thumbUrl(inventoryRowPrimaryImage(row))"
               :preview-src-list="inventoryRowImages(row).length ? inventoryRowImages(row) : [inventoryRowPrimaryImage(row)]"
-              :hide-on-click-modal="true"
-              :preview-teleported="true"
-              :z-index="4000"
-              fit="cover"
-              referrerpolicy="no-referrer"
-              lazy
-            >
-              <template #error>
-                <span class="thumb-fallback">-</span>
-              </template>
-            </el-image>
-            <span v-else class="thumb-fallback">-</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="背面图" width="76" align="center" header-align="center">
-          <template #default="{ row }">
-            <el-image
-              v-if="inventoryRowSecondImage(row)"
-              class="order-thumb"
-              :src="thumbUrl(inventoryRowSecondImage(row))"
-              :preview-src-list="inventoryRowImages(row).length > 1 ? inventoryRowImages(row).slice(1) : [inventoryRowSecondImage(row)]"
               :hide-on-click-modal="true"
               :preview-teleported="true"
               :z-index="4000"

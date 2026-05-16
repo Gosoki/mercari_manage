@@ -369,17 +369,6 @@ def _adjust_combined_source_stock(cur, items: list[dict], combo_delta: int) -> N
         )
 
 
-def _is_system_admin(claims: dict) -> bool:
-    username = (claims.get("username") or "").strip()
-    if username == "admin":
-        return True
-    rows = db.execute_query(
-        "SELECT 1 FROM [users] WHERE username = ? AND display_name = ? LIMIT 1",
-        (username, "系统管理员"),
-    )
-    return bool(rows)
-
-
 def _convert_image_payload(image_value: Optional[str], prefix: str) -> Optional[str]:
     if image_value is None:
         return None
@@ -614,15 +603,13 @@ async def upload_inventory_image(file: UploadFile = File(...)):
 
 
 @router.post("/combine")
-def create_combined_inventory(data: CombinedInventoryCreate, claims: dict = Depends(require_auth)):
+def create_combined_inventory(data: CombinedInventoryCreate, _claims: dict = Depends(require_auth)):
     """将一件或多件库存商品组合成一个新的库存商品，并扣减来源库存（单 SKU 时通过 components 数量表示每套几件）。"""
     combo_quantity = int(data.quantity or 0)
     if combo_quantity <= 0:
         raise HTTPException(status_code=400, detail="组合商品库存数量必须大于0")
     if data.warehouse_id is not None and not _warehouse_exists(data.warehouse_id):
         raise HTTPException(status_code=400, detail="所属货架不存在")
-    if data.owner_user_id is not None and not _is_system_admin(claims):
-        raise HTTPException(status_code=403, detail="仅系统管理员可修改商品归属")
     if data.owner_user_id is not None and not _user_exists(data.owner_user_id):
         raise HTTPException(status_code=400, detail="商品归属用户不存在")
 
@@ -787,13 +774,11 @@ def get_inventory(pid: int):
 
 
 @router.post("")
-def create_inventory(data: InventoryCreate, claims: dict = Depends(require_auth)):
+def create_inventory(data: InventoryCreate, _claims: dict = Depends(require_auth)):
     if not (data.barcode or "").strip():
         raise HTTPException(status_code=400, detail="条形码必填")
     if data.warehouse_id is not None and not _warehouse_exists(data.warehouse_id):
         raise HTTPException(status_code=400, detail="所属货架不存在")
-    if data.owner_user_id is not None and not _is_system_admin(claims):
-        raise HTTPException(status_code=403, detail="仅系统管理员可修改商品归属")
     if data.owner_user_id is not None and not _user_exists(data.owner_user_id):
         raise HTTPException(status_code=400, detail="商品归属用户不存在")
     paths = _resolve_paths_for_create(data)
@@ -838,7 +823,7 @@ def create_inventory(data: InventoryCreate, claims: dict = Depends(require_auth)
 
 
 @router.put("/{pid}")
-def update_inventory(pid: int, data: InventoryUpdate, claims: dict = Depends(require_auth)):
+def update_inventory(pid: int, data: InventoryUpdate, _claims: dict = Depends(require_auth)):
     if not _inventory_exists(pid):
         raise HTTPException(status_code=404, detail="商品不存在")
     update_data = data.model_dump(exclude_unset=True)
@@ -895,8 +880,6 @@ def update_inventory(pid: int, data: InventoryUpdate, claims: dict = Depends(req
             raise HTTPException(status_code=400, detail="所属货架不存在")
     if 'owner_user_id' in update_data:
         new_owner_user_id = update_data['owner_user_id']
-        if new_owner_user_id != old_owner_user_id and not _is_system_admin(claims):
-            raise HTTPException(status_code=403, detail="仅系统管理员可修改商品归属")
         if new_owner_user_id is not None and not _user_exists(new_owner_user_id):
             raise HTTPException(status_code=400, detail="商品归属用户不存在")
     allowed_fields = {
