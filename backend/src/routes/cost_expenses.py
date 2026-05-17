@@ -378,6 +378,14 @@ def create_cost_expense(data: CostExpenseCreate):
         source.quantity = source_original_quantity
         source.save()
         raise
+    if bound_order_no and synced_type == "包装材料":
+        order_rows = OrderModel.find_all(
+            where="[order_no] = ?", params=(bound_order_no,), limit=1
+        )
+        if order_rows:
+            order_rows[0].packaging_waived = 0
+            order_rows[0].save()
+
     try:
         _apply_order_net_income_cost(bound_order_no, expense_total)
     except Exception:

@@ -71,6 +71,10 @@ class RefreshOrderInfoBody(PydanticModel):
     data_user: str
 
 
+class OrderPackagingWaiveBody(PydanticModel):
+    order_no: str
+
+
 class OrderUpdate(PydanticModel):
     order_no: Optional[str] = None
     order_date: Optional[int] = None
@@ -507,6 +511,22 @@ def list_orders(
         page=page,
         page_size=page_size,
     )
+
+
+@router.post("/packaging-waive")
+def waive_order_packaging(data: OrderPackagingWaiveBody):
+    """待评价/已完成：确认本单不使用包材后不再标红。"""
+    order_no = (data.order_no or "").strip()
+    if not order_no:
+        raise HTTPException(status_code=400, detail="订单号不能为空")
+    rows = OrderModel.find_all(where="[order_no] = ?", params=(order_no,), limit=1)
+    if not rows:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    item = rows[0]
+    item.packaging_waived = 1
+    if not item.save():
+        raise HTTPException(status_code=500, detail="保存失败")
+    return item.to_dict()
 
 
 @router.post("/refresh-info")

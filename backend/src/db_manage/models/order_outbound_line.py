@@ -16,6 +16,18 @@ TERMINAL_ORDER_STATUSES: Tuple[str, ...] = (
     "cancel_request",
 )
 
+# 列表「未关联任何出库库存」标红：仅取消类不提示；已完成仍可能缺出库明细
+OUTBOUND_ALERT_SKIP_STATUSES: Tuple[str, ...] = (
+    "cancelled",
+    "cancel_request",
+)
+
+# 列表需登记包材（或确认不使用）的状态
+PACKAGING_CHECK_STATUSES: Tuple[str, ...] = (
+    "wait_review",
+    "done",
+)
+
 
 class OrderOutboundLineModel(BaseModel):
     """order_outbound_lines：一行对应说明里解析出的一个管理 ID 或一条条码（映射 inventory）。"""

@@ -1743,16 +1743,32 @@ function outboundLineRowClassName({ row }) {
   return isOutboundLineOwnerUnmatched(row) ? 'on-sale-stock-alert-row' : ''
 }
 
-/** 主表行标红：明细归属异常、无任何已关联库存、或「待评价」仍有未出库 */
+/** 主表行标红：与后端 order_needs_alert 一致（出库/包材/待评价待出库等） */
 function isOrderAlertRow(row) {
   if (!row || typeof row !== 'object') return false
+  if (Number(row.order_needs_alert ?? 0) === 1) return true
   if (Number(row.has_owner_unmatched_outbound || 0) === 1) return true
   if (Number(row.has_no_bound_outbound || 0) === 1) return true
-  if (String(row.status || '').trim() !== 'wait_review') return false
-  return Number(row.pending_outbound_qty || 0) > 0
+  if (Number(row.has_packaging_pending || 0) === 1) return true
+  if (String(row.status || '').trim() === 'wait_review') {
+    return Number(row.pending_outbound_qty || 0) > 0
+  }
+  return false
 }
 
-const displayList = computed(() => (Array.isArray(list.value) ? list.value : []))
+const displayList = computed(() => {
+  const arr = Array.isArray(list.value) ? [...list.value] : []
+  arr.sort((a, b) => {
+    const aa = isOrderAlertRow(a) ? 0 : 1
+    const ba = isOrderAlertRow(b) ? 0 : 1
+    if (aa !== ba) return aa - ba
+    const ta = Number(a.purchase_time || a.order_updated_at || a.order_date || 0)
+    const tb = Number(b.purchase_time || b.order_updated_at || b.order_date || 0)
+    if (tb !== ta) return tb - ta
+    return (Number(b.id) || 0) - (Number(a.id) || 0)
+  })
+  return arr
+})
 
 function orderRowClassName({ row }) {
   return isOrderAlertRow(row) ? 'on-sale-stock-alert-row' : ''
@@ -1968,8 +1984,16 @@ async function submitPackagingExpense() {
     return
   }
   if (itemName === PACKAGING_ITEM_NONE) {
-    packagingDialogVisible.value = false
-    ElMessage.success('已确认本单不使用包材（未登记包材支出）')
+    packagingSubmitting.value = true
+    try {
+      await orderApi.waivePackaging({ order_no: orderNo })
+      packagingDialogVisible.value = false
+      ElMessage.success('已确认本单不使用包材')
+      await loadPackagingExpenses(orderNo)
+      await load()
+    } finally {
+      packagingSubmitting.value = false
+    }
     return
   }
   if (unitPrice <= 0) {

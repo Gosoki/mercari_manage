@@ -155,7 +155,9 @@ export const orderApi = {
   remove: (id) => http.delete(`/orders/${id}`),
   /** 单行 items/get 刷新：传 order_no + data_user（卖家ID），与煤炉账号 seller_id 对应 */
   refreshInfo: (data, axiosConfig = {}) =>
-    http.post('/orders/refresh-info', data, { timeout: 60000, ...axiosConfig })
+    http.post('/orders/refresh-info', data, { timeout: 60000, ...axiosConfig }),
+  /** 待评价/已完成：确认本单不使用包材 */
+  waivePackaging: (data) => http.post('/orders/packaging-waive', data)
 }
 
 // 在售商品（本地缓存 items/get_items）
