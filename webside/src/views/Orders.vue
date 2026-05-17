@@ -1660,14 +1660,18 @@ function outboundLineRowClassName({ row }) {
   return isOutboundLineOwnerUnmatched(row) ? 'on-sale-stock-alert-row' : ''
 }
 
-function isOrderOwnerUnmatchedAlert(row) {
-  return Number(row?.has_owner_unmatched_outbound || 0) === 1
+/** 主表行标红：出库明细归属异常，或「待评价」仍有未出库商品 */
+function isOrderAlertRow(row) {
+  if (!row || typeof row !== 'object') return false
+  if (Number(row.has_owner_unmatched_outbound || 0) === 1) return true
+  if (String(row.status || '').trim() !== 'wait_review') return false
+  return Number(row.pending_outbound_qty || 0) > 0
 }
 
 const displayList = computed(() => (Array.isArray(list.value) ? list.value : []))
 
 function orderRowClassName({ row }) {
-  return isOrderOwnerUnmatchedAlert(row) ? 'on-sale-stock-alert-row' : ''
+  return isOrderAlertRow(row) ? 'on-sale-stock-alert-row' : ''
 }
 
 async function reloadOutboundLinesExpand(orderNo) {
