@@ -1156,6 +1156,7 @@ import {
   configApi
 } from '@/api/index.js'
 import SingleListingFormDialog from '@/components/SingleListingFormDialog.vue'
+import { warehouseShelfLeafLabel } from '@/utils/warehouseLabel.js'
 
 const list = ref([])
 const inventoryTableRef = ref(null)
@@ -2206,8 +2207,7 @@ const warehouseTreeMeta = computed(() => {
         const id = Number(w.id)
         const leafVal = `WHS:${w.id}`
         if (Number.isFinite(id)) idToPath.set(id, [l1Val, l2Val, leafVal])
-        const code = String(w?.name ?? '').trim() || '（未设货架号）'
-        return { value: leafVal, label: code, children: [] }
+        return { value: leafVal, label: warehouseShelfLeafLabel(w), children: [] }
       })
       midNodes.push({ value: l2Val, label: labelMid, children: leaves })
     }

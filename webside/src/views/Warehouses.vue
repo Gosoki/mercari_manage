@@ -115,6 +115,7 @@
                 </div>
               </template>
               <el-table :data="sub.shelves" border stripe size="small" class="shelf-subtable shelf-no-table">
+                <el-table-column label="货架主键" prop="id" width="88" align="center" />
                 <el-table-column label="货架号" prop="name" min-width="120" />
                 <el-table-column label="位置" prop="location" min-width="130" />
                 <el-table-column label="描述" prop="description" min-width="160" show-overflow-tooltip />
@@ -140,6 +141,9 @@
 
     <el-dialog v-model="dialogVisible" :title="shelfDialogTitle" width="460px" destroy-on-close>
       <el-form :model="form" :rules="rules" ref="formRef" label-width="92px">
+        <el-form-item v-if="form.id" label="货架主键">
+          <el-input :model-value="String(form.id)" disabled />
+        </el-form-item>
         <el-form-item label="所属仓库" prop="warehouse">
           <el-input v-model="form.warehouse" clearable />
         </el-form-item>
@@ -210,6 +214,7 @@
 
       <el-divider content-position="left">货架位与删除</el-divider>
       <el-table :data="renameDialogShelves" border stripe size="small" max-height="280" class="rename-shelf-table">
+        <el-table-column label="货架主键" prop="id" width="88" align="center" />
         <el-table-column label="货架号" prop="name" min-width="100" />
         <el-table-column label="货架名称" min-width="100" show-overflow-tooltip>
           <template #default="{ row }">{{ row.shelf_name || '—' }}</template>
@@ -303,7 +308,7 @@ import { computed, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { warehouseApi } from '@/api/index.js'
-import { warehouseShelfLabel } from '@/utils/warehouseLabel.js'
+import { warehouseShelfLabel, warehouseShelfLeafLabel } from '@/utils/warehouseLabel.js'
 
 const DEFAULT_WAREHOUSE = '默认仓库'
 
@@ -516,7 +521,7 @@ const migrateTargetCascaderOptions = computed(() => {
           .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN'))
           .map((r) => ({
             value: `SID:${r.id}`,
-            label: String(r?.name ?? '').trim() || '（未设货架号）',
+            label: warehouseShelfLeafLabel(r),
             children: [],
           })),
       })),
@@ -798,25 +803,20 @@ async function submit() {
   await formRef.value.validate()
   submitting.value = true
   try {
-    if (form.value.id) {
-      await warehouseApi.update(form.value.id, {
-        warehouse: form.value.warehouse,
-        name: (form.value.name || '').trim() || null,
-        shelf_name: (form.value.shelf_name || '').trim() || null,
-        location: form.value.location,
-        description: form.value.description
-      })
-    } else {
-      const rawCode = (form.value.name || '').trim()
-      await warehouseApi.create({
-        warehouse: form.value.warehouse,
-        name: rawCode || null,
-        shelf_name: (form.value.shelf_name || '').trim() || null,
-        location: form.value.location,
-        description: form.value.description
-      })
+    const payload = {
+      warehouse: form.value.warehouse,
+      name: (form.value.name || '').trim() || null,
+      shelf_name: (form.value.shelf_name || '').trim() || null,
+      location: form.value.location,
+      description: form.value.description
     }
-    ElMessage.success('保存成功')
+    if (form.value.id) {
+      await warehouseApi.update(form.value.id, payload)
+      ElMessage.success('保存成功')
+    } else {
+      const created = await warehouseApi.create(payload)
+      ElMessage.success(`保存成功，货架主键：${created?.id ?? '—'}`)
+    }
     dialogVisible.value = false
     load()
   } catch (e) {

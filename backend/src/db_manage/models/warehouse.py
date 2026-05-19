@@ -28,7 +28,7 @@ class WarehouseModel(BaseModel):
                 'not_null': False,
                 'default': None,
             },
-            # 货架名称（展示用）；业务唯一键为 (warehouse, name) 中的 name，即货架号
+            # 货架名称（展示用）；业务主键为 id；同一仓库下货架号可重复
             'shelf_name': {
                 'type': 'TEXT',
                 'not_null': False,
@@ -62,7 +62,7 @@ class WarehouseModel(BaseModel):
             {
                 'name': 'idx_warehouses_warehouse_name',
                 'columns': ['warehouse', 'name'],
-                'unique': True,
+                'unique': False,
             },
         ]
 

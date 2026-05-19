@@ -10,7 +10,7 @@ db = DatabaseManager()
 
 
 class WarehouseCreate(PydanticModel):
-    name: Optional[str] = None  # 货架号（同一仓库内非空时唯一）；可为空表示暂未编号
+    name: Optional[str] = None  # 货架号（可重复）；可为空表示暂未编号
     warehouse: Optional[str] = "默认仓库"
     shelf_name: Optional[str] = None  # 货架名称（展示）
     location: Optional[str] = None
@@ -47,10 +47,6 @@ def _norm_shelf_code(n: Optional[str]) -> Optional[str]:
         return None
     t = str(n).strip()
     return t if t else None
-
-
-def _shelf_codes_equal(a: Optional[str], b: Optional[str]) -> bool:
-    return _norm_shelf_code(a) == _norm_shelf_code(b)
 
 
 def _norm_shelf_name_key(s: Optional[str]) -> Optional[str]:
@@ -106,8 +102,6 @@ def _safe_remove_default_template_shelf(name: str, exclude_id: int) -> None:
 def create_warehouse(data: WarehouseCreate):
     wh_key = WarehouseModel.normalize_warehouse_key(data.warehouse)
     nm = _norm_shelf_code(data.name)
-    if nm is not None and WarehouseModel.find_by_warehouse_and_name(wh_key, nm):
-        raise HTTPException(status_code=400, detail="该仓库下货架号已存在")
     sn = (data.shelf_name or "").strip() or None
     wh = WarehouseModel(
         name=nm,
@@ -138,20 +132,6 @@ def rename_warehouse_group(data: RenameWarehouseGroupBody):
     targets = [w for w in all_rows if row_wh_key(w) == old_key]
     if not targets:
         raise HTTPException(status_code=404, detail="未找到该仓库")
-    target_ids = {w.id for w in targets}
-    for w in targets:
-        if _norm_shelf_code(w.name) is None:
-            continue
-        for other in all_rows:
-            if other.id in target_ids:
-                continue
-            if row_wh_key(other) != new_key:
-                continue
-            if _shelf_codes_equal(other.name, w.name):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"目标仓库「{new_key}」下已存在货架号「{w.name}」，请先处理冲突后再改名",
-                )
     for w in targets:
         w.warehouse = new_key
         if not w.save():
@@ -245,10 +225,6 @@ def update_warehouse(wid: int, data: WarehouseUpdate):
         patch["warehouse"] if "warehouse" in patch else wh.warehouse
     )
     next_name = _norm_shelf_code(patch["name"]) if "name" in patch else wh.name
-    if _norm_shelf_code(next_name) is not None:
-        other = WarehouseModel.find_by_warehouse_and_name(next_wh, next_name)
-        if other and other.id != wid:
-            raise HTTPException(status_code=400, detail="该仓库下货架号已存在")
     if "name" in patch:
         wh.name = next_name
     if "warehouse" in patch:

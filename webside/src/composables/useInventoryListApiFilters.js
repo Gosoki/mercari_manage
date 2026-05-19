@@ -9,6 +9,7 @@ import {
   authApi,
   productTypeCategoryMappingApi,
 } from '@/api/index.js'
+import { warehouseShelfLeafLabel } from '@/utils/warehouseLabel.js'
 
 const HIDE_NO_WAREHOUSE_SLOT_STORAGE_KEY = 'mercari.inventory.hideNoWarehouseSlot'
 
@@ -164,8 +165,7 @@ export function useInventoryListApiFilters(scheduleReload) {
           const id = Number(w.id)
           const leafVal = `WHS:${w.id}`
           if (Number.isFinite(id)) idToPath.set(id, [l1Val, l2Val, leafVal])
-          const code = String(w?.name ?? '').trim() || '（未设货架号）'
-          return { value: leafVal, label: code, children: [] }
+          return { value: leafVal, label: warehouseShelfLeafLabel(w), children: [] }
         })
         midNodes.push({ value: l2Val, label: labelMid, children: leaves })
       }

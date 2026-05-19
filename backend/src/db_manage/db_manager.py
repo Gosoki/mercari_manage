@@ -198,6 +198,36 @@ class DBManager:
         print("[OK] warehouses name 可空迁移完成")
         return True
 
+    def _migrate_warehouses_drop_shelf_code_unique(self) -> bool:
+        """同一仓库下允许重复货架号：移除 (warehouse, name) 唯一索引，改为普通索引。"""
+        db = self.db
+        if not db.table_exists("warehouses"):
+            return True
+        info = db.execute_query(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_warehouses_warehouse_name'"
+        )
+        if not info:
+            db.execute_update(
+                "CREATE INDEX IF NOT EXISTS idx_warehouses_warehouse_name "
+                "ON [warehouses]([warehouse], [name])"
+            )
+            return True
+        sql_def = (info[0][0] or "").upper()
+        if "UNIQUE" not in sql_def:
+            return True
+        print("正在迁移 warehouses：允许同仓库重复货架号 ...")
+        try:
+            db.execute_update("DROP INDEX idx_warehouses_warehouse_name")
+            db.execute_update(
+                "CREATE INDEX IF NOT EXISTS idx_warehouses_warehouse_name "
+                "ON [warehouses]([warehouse], [name])"
+            )
+        except Exception as e:
+            print(f"[错误] warehouses 去唯一约束迁移失败: {e}")
+            return False
+        print("[OK] warehouses 去唯一约束迁移完成")
+        return True
+
     def _migrate_ptcm_to_independent_module(self) -> bool:
         """
         将 product_type_category_mappings 从 product_type_id 迁移到纯文本 product_type。
@@ -393,6 +423,8 @@ class DBManager:
         if not self._migrate_warehouses_composite_unique():
             return False
         if not self._migrate_warehouses_name_nullable():
+            return False
+        if not self._migrate_warehouses_drop_shelf_code_unique():
             return False
         return True
 
