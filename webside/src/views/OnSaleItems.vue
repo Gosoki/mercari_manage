@@ -24,21 +24,6 @@
               :value="s.value"
             />
           </el-select>
-          <el-select
-            v-model="filters.status"
-            placeholder="商品状态"
-            clearable
-            filterable
-            style="max-width: 180px; width: 100%"
-            @change="onFilterChange"
-          >
-            <el-option
-              v-for="opt in onSaleStatusFilterOptions"
-              :key="opt.value"
-              :label="opt.label"
-              :value="opt.value"
-            />
-          </el-select>
         </el-col>
         <el-col :xs="24" :md="10" class="search-actions">
           <el-button type="primary" :icon="Download" :loading="syncLoading" @click="openSyncDialog">
@@ -336,7 +321,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import { onSaleItemApi, meiluAccountApi, webDriveApi } from '@/api/index.js'
 
-/** 煤炉商品 item.status → 中文（与 API 原始值对应，筛选仍传英文枚举） */
+/** 煤炉商品 item.status → 中文（与 API 原始值对应） */
 const onSaleStatusMap = {
   on_sale: { label: '出售中', tag: 'success' },
   stop: { label: '暂停出售', tag: 'warning' },
@@ -352,11 +337,6 @@ const onSaleStatusMap = {
   private: { label: '非公开', tag: 'info' },
   pending: { label: '待处理', tag: 'info' },
 }
-
-const onSaleStatusFilterOptions = Object.entries(onSaleStatusMap).map(([value, o]) => ({
-  value,
-  label: o.label,
-}))
 
 function onSaleStatusLabel(status) {
   if (status == null || status === '') return '-'
@@ -426,7 +406,6 @@ const pageSize = ref(20)
 const filters = ref({
   keyword: '',
   seller_id: '',
-  status: '',
 })
 
 const sellerFromAccounts = ref([])
@@ -467,7 +446,6 @@ function listParams() {
   const p = { page: page.value, page_size: pageSize.value }
   if (filters.value.keyword?.trim()) p.keyword = filters.value.keyword.trim()
   if (filters.value.seller_id?.trim()) p.seller_id = filters.value.seller_id.trim()
-  if (filters.value.status?.trim()) p.status = filters.value.status.trim()
   return p
 }
 
