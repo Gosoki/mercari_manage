@@ -1209,6 +1209,19 @@ const categories = ref([])
 const warehouses = ref([])
 const productTypes = ref([])
 const ownerUsers = ref([])
+/** 种子账号 admin（展示名「系统管理员」）等：商品归属为此类用户时需标红顶置 */
+const systemAdminOwnerUserIdSet = computed(() => {
+  const set = new Set()
+  for (const u of ownerUsers.value || []) {
+    const username = String(u?.username || '').trim()
+    const display = String(u?.display_name || '').trim()
+    if (username === 'admin' || display === '系统管理员') {
+      const id = Number(u?.id)
+      if (Number.isFinite(id) && id > 0) set.add(id)
+    }
+  }
+  return set
+})
 const keyword = ref('')
 const filterCat = ref(null)
 const filterWarehouse = ref(null)
@@ -2393,6 +2406,36 @@ function isInventoryZeroStockOnSaleAlert(row) {
   return Number.isFinite(qty) && qty <= 0
 }
 
+/** 未设置商品归属（与订单出库「归属不匹配」口径一致） */
+function isInventoryNoOwner(row) {
+  if (!row || typeof row !== 'object') return false
+  const ou = row.owner_user_id
+  if (ou == null || ou === '') return true
+  const n = Number(ou)
+  return !Number.isFinite(n) || n <= 0
+}
+
+/** 商品归属为系统管理员（默认 admin 账号） */
+function isInventorySystemAdminOwner(row) {
+  if (!row || typeof row !== 'object') return false
+  const ou = row.owner_user_id
+  if (ou == null || ou === '') return false
+  const n = Number(ou)
+  if (!Number.isFinite(n) || n <= 0) return false
+  if (systemAdminOwnerUserIdSet.value.has(n)) return true
+  const name = String(row.owner_user_name || displayOwnerName(row) || '').trim()
+  return name === '系统管理员'
+}
+
+function isInventoryOwnerNeedsAlert(row) {
+  return isInventoryNoOwner(row) || isInventorySystemAdminOwner(row)
+}
+
+/** 需标红顶置：零库存仍在售，或无归属/归属系统管理员 */
+function isInventoryAlertRow(row) {
+  return isInventoryZeroStockOnSaleAlert(row) || isInventoryOwnerNeedsAlert(row)
+}
+
 const sortedInventoryList = computed(() => {
   const arr = [...list.value]
   const prop = inventorySortProp.value
@@ -2400,8 +2443,8 @@ const sortedInventoryList = computed(() => {
   const mult = order === 'ascending' ? 1 : -1
 
   function alertOrder(a, b) {
-    const aa = isInventoryZeroStockOnSaleAlert(a) ? 0 : 1
-    const ba = isInventoryZeroStockOnSaleAlert(b) ? 0 : 1
+    const aa = isInventoryAlertRow(a) ? 0 : 1
+    const ba = isInventoryAlertRow(b) ? 0 : 1
     if (aa !== ba) return aa - ba
     return 0
   }
@@ -3483,7 +3526,7 @@ function toggleListingPickRow(row) {
 
 function rowClassName({ row }) {
   const classes = []
-  if (isInventoryZeroStockOnSaleAlert(row)) {
+  if (isInventoryAlertRow(row)) {
     classes.push('on-sale-stock-alert-row')
   }
   if (listingPickMode.value && listingPickIds.value.has(row?.id)) {
@@ -5185,7 +5228,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-/* 库存为 0 但仍有在售：与「在售商品」页相同的标红行（顶置由 sortedInventoryList 排序保证） */
+/* 告警行：零库存仍在售 / 无归属 / 归属系统管理员（顶置由 sortedInventoryList 排序保证） */
 .el-table tr.on-sale-stock-alert-row {
   --el-table-tr-bg-color: #3a1517;
 }
