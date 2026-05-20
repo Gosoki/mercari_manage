@@ -716,21 +716,34 @@ async def post_to_market(
         else:
             log.warning("无法解析图片路径，跳过: %s", u)
 
-    report("open_session", "正在启动浏览器并打开出品页…")
-    # ── 1. 启动/复用会话并导航到出品页 ──────────────────────────────────── #
-    await manager.open_session(
-        account_key,
-        headless=False,
+    from ..paths import (
+        meilu_account_key,
+        meilu_id_from_account_key,
+        meilu_listing_key,
+        seed_listing_profile_from_account,
+    )
+
+    account_id = meilu_id_from_account_key(account_key)
+    if account_id is None:
+        raise ValueError(f"无效的 account_key: {account_key}")
+    main_key = meilu_account_key(account_id)
+    listing_key = meilu_listing_key(account_id)
+    seed_listing_profile_from_account(account_id)
+
+    report("open_session", "正在启动独立有头浏览器并打开出品页…")
+    # ── 1. 独立有头 profile（meilu_{id}__listing），不复用系统预启动主窗口 ── #
+    await manager.ensure_session_for_listing(
+        listing_key,
+        main_account_key=main_key,
         start_url=SELL_CREATE_URL,
         proxy_server=ps,
-        interactive=True,
     )
 
     s = manager._prepare_async()
     async with s.lock:  # type: ignore[union-attr]
-        ctx = s.contexts.get(account_key)
+        ctx = s.contexts.get(listing_key)
         if ctx is None or not manager._is_context_alive(ctx):
-            raise RuntimeError(f"会话启动失败: {account_key}")
+            raise RuntimeError(f"会话启动失败: {listing_key}")
         page = ctx.pages[-1] if ctx.pages else await ctx.new_page()
 
     # ── 2. 等待页面可交互 ────────────────────────────────────────────────── #
@@ -744,7 +757,8 @@ async def post_to_market(
             pass
 
     result: Dict[str, Any] = {
-        "account_key": account_key,
+        "account_key": listing_key,
+        "main_account_key": main_key,
         "url": page.url,
         "switch_checked": None,
         "switch_clicked": False,
@@ -1118,10 +1132,10 @@ async def post_to_market(
         if report:
             report("close_browser", "出品成功，正在关闭浏览器…")
         try:
-            await manager.close_session(account_key, force=True)
+            await manager.close_session(listing_key, force=True)
             result["browser_closed"] = True
-            log.info("[post_to_market] 出品成功，已关闭浏览器会话: %s", account_key)
-            print(f"[出品] 出品成功，已关闭浏览器: {account_key}", flush=True)
+            log.info("[post_to_market] 出品成功，已关闭浏览器会话: %s", listing_key)
+            print(f"[出品] 出品成功，已关闭浏览器: {listing_key}", flush=True)
         except Exception as exc:
             result["browser_closed"] = False
             result["browser_close_error"] = str(exc)

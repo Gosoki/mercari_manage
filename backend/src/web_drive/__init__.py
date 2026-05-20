@@ -12,9 +12,11 @@ from .manager import EdgeWebDriveManager, get_web_drive_manager
 from .paths import (
     meilu_account_key,
     meilu_automation_key,
+    meilu_listing_key,
     profile_dir_for,
     profiles_root,
     seed_automation_profile_from_account,
+    seed_listing_profile_from_account,
     validate_account_key,
 )
 from .persistent_browser import (
@@ -29,8 +31,10 @@ __all__ = [
     "get_web_drive_manager",
     "meilu_account_key",
     "meilu_automation_key",
+    "meilu_listing_key",
     "profile_dir_for",
     "seed_automation_profile_from_account",
+    "seed_listing_profile_from_account",
     "profiles_root",
     "queue_key_for_meilu_account",
     "resolve_meilu_account_id",

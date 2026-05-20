@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 
 _ACCOUNT_KEY_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 _MEILU_AUTO_SUFFIX = "__auto"
+_MEILU_LISTING_SUFFIX = "__listing"
 
 # 从主 profile 复制到 __auto，尽量带上煤炉登录态（主窗口打开时部分文件可能被锁，跳过即可）
 _AUTH_SEED_REL_PATHS: List[str] = [
@@ -71,6 +72,11 @@ def meilu_automation_key(account_id: int) -> str:
     return f"meilu_{int(account_id)}{_MEILU_AUTO_SUFFIX}"
 
 
+def meilu_listing_key(account_id: int) -> str:
+    """库存出品自动化：独立有头 profile，与系统预启动的 ``meilu_{id}`` 主窗口并行。"""
+    return f"meilu_{int(account_id)}{_MEILU_LISTING_SUFFIX}"
+
+
 def meilu_id_from_account_key(account_key: str) -> Optional[int]:
     key = (account_key or "").strip()
     if not key.startswith("meilu_"):
@@ -78,23 +84,17 @@ def meilu_id_from_account_key(account_key: str) -> Optional[int]:
     tail = key[6:]
     if tail.endswith(_MEILU_AUTO_SUFFIX):
         tail = tail[: -len(_MEILU_AUTO_SUFFIX)]
+    elif tail.endswith(_MEILU_LISTING_SUFFIX):
+        tail = tail[: -len(_MEILU_LISTING_SUFFIX)]
     try:
         return int(tail)
     except ValueError:
         return None
 
 
-def seed_automation_profile_from_account(account_id: int) -> None:
-    """
-    将 ``meilu_{id}`` 主 profile 的登录相关文件同步到 ``meilu_{id}__auto``，
-    供无头 MITM 使用（主 profile 正被有头 Edge 占用时可能部分复制失败，忽略即可）。
-    """
-    main_key = meilu_account_key(account_id)
-    auto_key = meilu_automation_key(account_id)
-    src_root = profile_dir_for(main_key)
-    dst_root = profile_dir_for(auto_key)
+def _seed_profile_auth_files(src_root: str, dst_root: str, *, log_label: str) -> None:
+    """将主 profile 登录相关文件复制到目标 profile（目标目录正被占用时可能部分失败，忽略即可）。"""
     os.makedirs(os.path.join(dst_root, "Default"), exist_ok=True)
-
     for rel in _AUTH_SEED_REL_PATHS:
         src = os.path.join(src_root, rel)
         dst = os.path.join(dst_root, rel)
@@ -109,4 +109,32 @@ def seed_automation_profile_from_account(account_id: int) -> None:
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
                 shutil.copy2(src, dst)
         except Exception as exc:
-            log.debug("seed automation profile skip %s: %s", rel, exc)
+            log.debug("seed %s profile skip %s: %s", log_label, rel, exc)
+
+
+def seed_automation_profile_from_account(account_id: int) -> None:
+    """
+    将 ``meilu_{id}`` 主 profile 的登录相关文件同步到 ``meilu_{id}__auto``，
+    供无头 MITM 使用（主 profile 正被有头 Edge 占用时可能部分复制失败，忽略即可）。
+    """
+    main_key = meilu_account_key(account_id)
+    auto_key = meilu_automation_key(account_id)
+    _seed_profile_auth_files(
+        profile_dir_for(main_key),
+        profile_dir_for(auto_key),
+        log_label="automation",
+    )
+
+
+def seed_listing_profile_from_account(account_id: int) -> None:
+    """
+    将 ``meilu_{id}`` 主 profile 的登录相关文件同步到 ``meilu_{id}__listing``，
+    供库存出品有头自动化使用。
+    """
+    main_key = meilu_account_key(account_id)
+    listing_key = meilu_listing_key(account_id)
+    _seed_profile_auth_files(
+        profile_dir_for(main_key),
+        profile_dir_for(listing_key),
+        log_label="listing",
+    )

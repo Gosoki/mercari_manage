@@ -422,6 +422,40 @@ class EdgeWebDriveManager:
                 interactive=False,
             )
 
+    async def ensure_session_for_listing(
+        self,
+        listing_account_key: str,
+        *,
+        main_account_key: str,
+        start_url: Optional[str],
+        proxy_server: Optional[str],
+    ) -> Dict[str, Any]:
+        """
+        库存出品：在 ``meilu_{id}__listing`` 独立 profile 上启动有头会话并打开出品页。
+        不触碰系统预启动的 ``meilu_{id}`` 主窗口；尽量从主会话同步 Cookie。
+        """
+        listing_key = validate_account_key(listing_account_key)
+        main_key = validate_account_key(main_account_key)
+        async with self._serialize_profile(listing_key):
+            await self._close_session_unlocked(listing_key, force=True)
+            opened = await self._open_session_impl(
+                listing_key,
+                headless=False,
+                start_url=start_url,
+                proxy_server=proxy_server,
+                interactive=True,
+                restore_tabs=False,
+            )
+            n_cookies = await self.copy_cookies_between_sessions(main_key, listing_key)
+            u = (start_url or "").strip()
+            if n_cookies > 0 and u:
+                try:
+                    await self.reload_active_tab(listing_key, u)
+                except Exception:
+                    pass
+            opened["cookies_copied_from_main"] = n_cookies
+            return opened
+
     async def close_session_if_automation(self, account_key: str) -> Dict[str, Any]:
         """关闭 ``__auto`` 自动化会话；主 profile 有头会话请用 ``close_session``。"""
         return await self.close_session(account_key, force=True)

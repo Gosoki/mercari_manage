@@ -160,8 +160,8 @@ def listing_post_progress(job_id: str):
 @router.post("/listing/post-to-market")
 async def post_to_market(body: PostToMarketBody):
     """
-    启动（或复用）指定账号的 Edge 持久化会话（SSL 中间人代理），
-    导航到 https://jp.mercari.com/sell/create，并自动完成全部表单步骤：
+    在独立有头 profile（``meilu_{id}__listing``，不复用系统预启动的 ``meilu_{id}`` 主窗口）
+    经 SSL 中间人代理打开 https://jp.mercari.com/sell/create，并自动完成全部表单步骤：
       · Switch 检查 → 图片上传 → 商品名/说明填写
       · 商品类型选择 → 販売タイプ+价格 → 发货天数 → 发货地址
     """
