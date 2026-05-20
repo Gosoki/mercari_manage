@@ -105,6 +105,13 @@ if %errorlevel% neq 0 (
     echo - start_mercari.bat 已复制
 )
 
+copy /y "scripts\release\restart.bat" "Releases\%VERSION%\restart.bat" >nul
+if %errorlevel% neq 0 (
+    echo [警告] 未复制 restart.bat ^(请确认存在 scripts\release\restart.bat^)
+) else (
+    echo - restart.bat 已复制
+)
+
 if not exist "Releases\%VERSION%\log" mkdir "Releases\%VERSION%\log"
 
 echo.

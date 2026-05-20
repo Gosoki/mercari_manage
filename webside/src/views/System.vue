@@ -1,11 +1,14 @@
 <template>
   <div>
     <el-card shadow="never" class="search-card">
-      <el-row justify="end">
+      <div class="sys-top-actions">
+        <el-button type="danger" :loading="restarting" @click="confirmRestartSystem">
+          <el-icon><RefreshRight /></el-icon> 重启系统
+        </el-button>
         <el-button type="primary" @click="openUserDialog">
           <el-icon><Plus /></el-icon> 新增用户
         </el-button>
-      </el-row>
+      </div>
     </el-card>
 
     <el-row :gutter="16">
@@ -54,18 +57,6 @@
         </el-card>
       </el-col>
     </el-row>
-
-    <el-card shadow="never" class="search-card">
-      <template #header>
-        <div class="card-title">系统维护</div>
-      </template>
-      <p class="sys-maint-tip">
-        重启将关闭当前后端进程（含煤炉浏览器与 MITM 代理），约数秒后自动拉起新进程。进行中的自动化任务会被中断。
-      </p>
-      <el-button type="danger" :loading="restarting" @click="confirmRestartSystem">
-        <el-icon><RefreshRight /></el-icon> 重启系统
-      </el-button>
-    </el-card>
 
     <el-card shadow="never" class="search-card">
       <template #header>
@@ -413,6 +404,13 @@ onMounted(async () => {
   margin-bottom: 16px;
   border-radius: 8px;
 }
+.sys-top-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
 .table-card {
   border-radius: 8px;
   margin-bottom: 16px;
@@ -427,12 +425,5 @@ onMounted(async () => {
 }
 .listing-def-form {
   max-width: 720px;
-}
-.sys-maint-tip {
-  margin: 0 0 16px;
-  font-size: 13px;
-  color: #64748b;
-  line-height: 1.5;
-  max-width: 640px;
 }
 </style>
