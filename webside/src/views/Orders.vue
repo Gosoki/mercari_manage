@@ -201,20 +201,14 @@
                           @confirm="stockOutLine(row, line)"
                         >
                           <template #reference>
-                            <el-tooltip
-                              :disabled="canStockOutLine(line)"
-                              content="请先在库存中为该商品指定仓库"
-                              placement="top"
+                            <el-button
+                              size="small"
+                              type="primary"
+                              :loading="lineStockingKey === outboundLineKey(row.order_no, line.id)"
+                              :disabled="!canStockOutLine(line)"
                             >
-                              <el-button
-                                size="small"
-                                type="primary"
-                                :loading="lineStockingKey === outboundLineKey(row.order_no, line.id)"
-                                :disabled="!canStockOutLine(line)"
-                              >
-                                出库
-                              </el-button>
-                            </el-tooltip>
+                              出库
+                            </el-button>
                           </template>
                         </el-popconfirm>
                       </div>
@@ -1723,17 +1717,9 @@ function formatGoodsRatio(v) {
   return `${(n * 100).toFixed(2)}%`
 }
 
-function outboundLineHasWarehouse(line) {
-  const wid = line?.inventory_warehouse_id
-  if (wid == null || wid === '') return false
-  const n = Number(wid)
-  return Number.isFinite(n) && n > 0
-}
-
 function canStockOutLine(line) {
   if (Number(line?.is_stocked_out || 0) === 1) return false
   if (line?.inventory_id == null) return false
-  if (!outboundLineHasWarehouse(line)) return false
   const qty = Math.max(1, Number(line?.quantity || 1))
   // 出库按钮按“是否仍有待出库”判断，不以前端当前库存拦截。
   // 库存/并发等最终校验交由后端接口处理。
