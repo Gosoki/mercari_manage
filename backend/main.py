@@ -86,12 +86,43 @@ async def startup():
 
     asyncio.create_task(meilu_auto_fetch_loop())
 
-    # 为所有活跃煤炉账号预启动持久化无头浏览器（后台任务，不阻塞 HTTP 服务启动）
-    # 若启动失败，首次操作时会懒启动；可通过环境变量 PERSISTENT_BROWSER_AUTO_START=0 关闭
-    if os.environ.get("PERSISTENT_BROWSER_AUTO_START", "1").strip().lower() not in ("0", "false", "no", "off"):
-        from src.web_drive.persistent_browser import startup_browsers_for_all_active_accounts
+    async def _startup_web_drive_browsers() -> None:
+        # 煤炉账号页「打开浏览器」：有头 meilu_{id}；INTERACTIVE_BROWSER_AUTO_START=0 可关闭
+        if os.environ.get("INTERACTIVE_BROWSER_AUTO_START", "1").strip().lower() not in (
+            "0",
+            "false",
+            "no",
+            "off",
+        ):
+            from src.web_drive.interactive_browser import (
+                startup_interactive_browsers_for_all_active_accounts,
+            )
 
-        asyncio.create_task(startup_browsers_for_all_active_accounts())
+            await startup_interactive_browsers_for_all_active_accounts()
+
+        # 自动化无头 meilu_{id}__auto；PERSISTENT_BROWSER_AUTO_START=0 可关闭
+        if os.environ.get("PERSISTENT_BROWSER_AUTO_START", "1").strip().lower() not in (
+            "0",
+            "false",
+            "no",
+            "off",
+        ):
+            from src.web_drive.persistent_browser import startup_browsers_for_all_active_accounts
+
+            await startup_browsers_for_all_active_accounts()
+
+    if os.environ.get("INTERACTIVE_BROWSER_AUTO_START", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    ) or os.environ.get("PERSISTENT_BROWSER_AUTO_START", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    ):
+        asyncio.create_task(_startup_web_drive_browsers())
 
 
 @app.on_event("shutdown")
