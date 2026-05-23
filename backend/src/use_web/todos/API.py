@@ -14,7 +14,7 @@ from typing import Optional
 from fastapi import APIRouter
 
 from .units.todos_query import list_kinds, list_todos
-from .units.todos_sync import sync_todos
+from .units.todos_sync import fetch_todo_transaction_detail, sync_todos
 
 router = APIRouter()
 
@@ -44,3 +44,4 @@ def _list_kinds_endpoint():
 router.add_api_route("", _list_todos_endpoint, methods=["GET"])
 router.add_api_route("/kinds", _list_kinds_endpoint, methods=["GET"])
 router.add_api_route("/sync", sync_todos, methods=["POST"])
+router.add_api_route("/{todo_id}/transaction-detail", fetch_todo_transaction_detail, methods=["POST"])

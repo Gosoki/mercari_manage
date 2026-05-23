@@ -5,5 +5,8 @@ export const todosApi = {
   list: (params) => http.get('/use_web/todos', { params }),
   kinds: () => http.get('/use_web/todos/kinds'),
   sync: (data, axiosConfig = {}) =>
-    http.post('/use_web/todos/sync', data, { timeout: 0, ...axiosConfig })
+    http.post('/use_web/todos/sync', data, { timeout: 0, ...axiosConfig }),
+  /** 处理按钮：打开浏览器到 transaction 页并抓取 DOM 字段 */
+  fetchTransactionDetail: (todoId, axiosConfig = {}) =>
+    http.post(`/use_web/todos/${encodeURIComponent(todoId)}/transaction-detail`, {}, { timeout: 0, ...axiosConfig })
 }

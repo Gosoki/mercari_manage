@@ -159,6 +159,123 @@
         <el-button type="primary" :loading="syncLoading" @click="confirmSync">开始同步</el-button>
       </template>
     </el-dialog>
+
+    <!-- 交易详情面板：通用的「煤炉数据 → 管理软件」表单 -->
+    <el-dialog
+      v-model="detailDialogVisible"
+      :title="`交易详情  ${detail.item_id || ''}`"
+      width="1080px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <template #header="{ titleId, titleClass }">
+        <div class="detail-header">
+          <span :id="titleId" :class="titleClass">交易详情 <code>{{ detail.item_id || '-' }}</code></span>
+          <div class="detail-header-actions">
+            <el-button size="small" :loading="detailLoading" @click="onDetailRefresh">刷新抓取</el-button>
+            <el-button size="small" type="primary" link @click="onOpenMercariPage">打开煤炉页 ↗</el-button>
+          </div>
+        </div>
+      </template>
+
+      <div v-loading="detailLoading" class="detail-body">
+        <!-- 左栏：商品 / 发送元 / 买家 / 发货 -->
+        <div class="detail-col detail-col-left">
+          <section class="detail-section">
+            <div class="detail-section-title">商品</div>
+            <div class="detail-row">
+              <div class="detail-label">商品名</div>
+              <div class="detail-value">
+                <el-input
+                  v-model="detail.product_name"
+                  size="default"
+                  placeholder="（待抓取或输入商品名）"
+                  clearable
+                />
+              </div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">商品 ID</div>
+              <div class="detail-value">
+                <el-link :href="mercariItemUrl(detail.item_id)" target="_blank" type="primary" :underline="false">
+                  {{ detail.item_id || dash }}
+                </el-link>
+              </div>
+            </div>
+            <div v-if="detail.photo_url" class="detail-photo-wrap">
+              <el-image
+                :src="detail.photo_url"
+                :preview-src-list="[detail.photo_url]"
+                :preview-teleported="true"
+                fit="cover"
+                referrerpolicy="no-referrer"
+                class="detail-photo"
+              />
+            </div>
+          </section>
+
+          <section class="detail-section">
+            <div class="detail-section-title">发送元</div>
+            <div v-if="detail.sender_address" class="detail-block">{{ detail.sender_address }}</div>
+            <div v-else class="detail-empty">待抓取</div>
+          </section>
+
+          <section class="detail-section">
+            <div class="detail-section-title">买家</div>
+            <div class="detail-buyer">
+              <div class="detail-buyer-name">{{ detail.buyer_name || dash }}</div>
+              <el-tag v-if="detail.buyer_verified" type="success" size="small" effect="light">本人確認済</el-tag>
+              <span v-if="detail.sender_id" class="detail-buyer-id">ID: {{ detail.sender_id }}</span>
+            </div>
+          </section>
+
+          <section class="detail-section">
+            <div class="detail-section-title">发货</div>
+            <div class="detail-shipping-status">
+              <span class="detail-label">当前状态</span>
+              <span class="detail-value">{{ detail.current_shipping_status || dash }}</span>
+            </div>
+            <div class="detail-shipping-actions">
+              <el-button
+                size="default"
+                :disabled="!detail.has_size_location_btn"
+                @click="onClickShippingSizeLocation"
+              >
+                选择商品尺寸与发货地
+              </el-button>
+              <el-button
+                size="default"
+                :disabled="!detail.has_change_method_btn"
+                @click="onClickShippingChangeMethod"
+              >
+                修改发货方式
+              </el-button>
+            </div>
+            <div class="detail-empty-hint">两个按钮根据煤炉页面实际可见状态启用；抓取前默认禁用。</div>
+          </section>
+        </div>
+
+        <!-- 右栏：消息 / 交流（占满整个右侧） -->
+        <div class="detail-col detail-col-right">
+          <section class="detail-section detail-section-grow">
+            <div class="detail-section-title">消息 / 交流</div>
+            <div v-if="detail.messages && detail.messages.length" class="detail-messages">
+              <div v-for="(m, i) in detail.messages" :key="i" class="detail-msg">
+                <div v-if="m.from" class="detail-msg-from">{{ m.from }}</div>
+                <div class="detail-msg-text">{{ m.text }}</div>
+                <div v-if="m.at" class="detail-msg-at">{{ m.at }}</div>
+              </div>
+            </div>
+            <div v-else class="detail-empty">待抓取</div>
+          </section>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="detailDialogVisible = false">关闭</el-button>
+        <el-button type="primary" :disabled="detailLoading" @click="onDetailSubmit">完成处理</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -201,6 +318,33 @@ const kindOptions = ref([])
 const syncDialogVisible = ref(false)
 const syncDialog = reactive({ account_id: null })
 const syncLoading = ref(false)
+
+// ─── 交易详情面板 ───
+// 后端抓取接口未接入；先用本地 row 已有字段填充，其他字段留 null 显示占位
+const dash = '—'
+const detailDialogVisible = ref(false)
+const detailLoading = ref(false)
+const currentRow = ref(null)
+const detail = reactive(createEmptyDetail())
+
+function createEmptyDetail() {
+  return {
+    // 本地 todo_items 即可得
+    item_id: '',
+    item_name: '',
+    photo_url: '',
+    buyer_name: '',
+    sender_id: '',
+    // 抓取交易页才有
+    product_name: '',
+    sender_address: null,
+    buyer_verified: false,
+    current_shipping_status: null,
+    has_size_location_btn: false,
+    has_change_method_btn: false,
+    messages: [], // [{ from, text, at }]
+  }
+}
 
 function listParams() {
   const p = { page: page.value, page_size: pageSize.value }
@@ -313,9 +457,70 @@ function mercariItemUrl(itemId) {
 }
 
 function onProcess(row) {
-  // TODO: 处理按钮的具体行为待定（本地标完成 / 打开煤炉商品页 / 二者皆有）
-  ElMessage.info(`处理 todo #${row.id}（功能待实现）`)
+  currentRow.value = row
+  Object.assign(detail, createEmptyDetail(), {
+    item_id: row.item_id || '',
+    item_name: row.item_name || '',
+    photo_url: row.photo_url || '',
+    buyer_name: buyerNameFromMessage(row.message) || '',
+    sender_id: row.sender_id || '',
+  })
+  detailDialogVisible.value = true
+  // 自动启动浏览器抓取真实数据
+  onDetailRefresh()
 }
+
+async function onDetailRefresh() {
+  if (!currentRow.value?.id) return
+  if (!currentRow.value?.item_id) {
+    ElMessage.warning('该代办无关联 item_id，无法打开交易页')
+    return
+  }
+  detailLoading.value = true
+  try {
+    const d = await todosApi.fetchTransactionDetail(currentRow.value.id)
+    if (!d || typeof d !== 'object') {
+      ElMessage.warning('未拿到交易页数据')
+      return
+    }
+    // 合并抓取结果；本地预填的字段（item_id/photo_url 等）保留
+    const merged = { ...d }
+    // 部分字段可能为 null，避免覆盖本地预填值
+    if (merged.buyer_name == null) delete merged.buyer_name
+    Object.assign(detail, merged)
+    ElMessage.success('交易页数据已抓取')
+  } catch (e) {
+    // axios 拦截器已弹错误；此处保留兜底
+    if (!e?.response) ElMessage.error(e?.message || '抓取失败')
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function onOpenMercariPage() {
+  const iid = String(detail.item_id || '').trim()
+  if (!iid) {
+    ElMessage.warning('无 item_id，无法打开')
+    return
+  }
+  window.open(`https://jp.mercari.com/transaction/${iid}`, '_blank', 'noopener')
+}
+
+function onClickShippingSizeLocation() {
+  // TODO: 调后端在浏览器内点击「商品サイズと発送場所を選択する」
+  ElMessage.info('该操作将由后端浏览器自动化完成（待实现）')
+}
+
+function onClickShippingChangeMethod() {
+  // TODO: 调后端在浏览器内点击「発送方法を変更する」
+  ElMessage.info('该操作将由后端浏览器自动化完成（待实现）')
+}
+
+function onDetailSubmit() {
+  // TODO: 完成处理 → 本地标完成 + 关闭面板（具体动作待定）
+  ElMessage.info('完成处理动作待定')
+}
+
 
 function buyerNameFromMessage(msg) {
   const s = String(msg || '')
@@ -416,5 +621,161 @@ onMounted(() => {
   color: var(--el-text-color-secondary);
   font-size: 12px;
   line-height: 1.5;
+}
+
+/* ─── 交易详情面板 ─── */
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.detail-header code {
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+.detail-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.detail-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  min-height: 560px;
+  max-height: 70vh;
+}
+.detail-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+}
+.detail-col-right {
+  /* 右栏只放消息，撑满整个 dialog 高度 */
+  height: 100%;
+}
+.detail-section {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--el-fill-color-blank);
+}
+.detail-section-grow {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.detail-section-title {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+  border-bottom: 1px dashed var(--el-border-color-lighter);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+.detail-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+  font-size: 13px;
+}
+.detail-label {
+  width: 84px;
+  flex-shrink: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.detail-value {
+  flex: 1;
+  word-break: break-all;
+  color: var(--el-text-color-primary);
+}
+.detail-block {
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-primary);
+  padding: 4px 0;
+}
+.detail-empty {
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
+  padding: 8px 0;
+  text-align: center;
+}
+.detail-empty-hint {
+  color: var(--el-text-color-placeholder);
+  font-size: 11px;
+  margin-top: 6px;
+}
+.detail-photo-wrap {
+  margin-top: 8px;
+}
+.detail-photo {
+  width: 100%;
+  max-width: 200px;
+  height: auto;
+  border-radius: 6px;
+}
+.detail-buyer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.detail-buyer-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+.detail-buyer-id {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.detail-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.detail-msg {
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: var(--el-fill-color);
+}
+.detail-msg-from {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 4px;
+}
+.detail-msg-text {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.detail-msg-at {
+  font-size: 10px;
+  color: var(--el-text-color-placeholder);
+  margin-top: 4px;
+  text-align: right;
+}
+.detail-shipping-status {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0 10px;
+  font-size: 13px;
+}
+.detail-shipping-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 </style>
