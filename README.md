@@ -41,7 +41,7 @@ mercari/
 │       ├── auth.py             # JWT 签发与校验
 │       ├── db_manage/          # 数据库与模型
 │       ├── image_storage.py    # 商品图片目录
-│       ├── operation_mercari/  # 煤炉 API 调用与同步逻辑
+│       ├── use_mercari/  # 煤炉 API 调用与同步逻辑
 │       └── routes/             # REST 路由（auth、orders、products、…）
 ├── webside/
 │   ├── package.json

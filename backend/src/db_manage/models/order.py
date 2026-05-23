@@ -332,7 +332,7 @@ class OrderModel(BaseModel):
         end_ts: Optional[int] = None,
         owner_user_id: int = 0,
     ) -> Dict[str, Any]:
-        from ...order_goods_ratio import split_order_money_for_owner_user
+        from ...use_web.orders.units.order_goods_ratio import split_order_money_for_owner_user
 
         db = cls().db
         base_sql, params = cls._build_list_filter(
@@ -553,7 +553,7 @@ class OrderModel(BaseModel):
         ]
         items = [dict(zip(keys, row)) for row in rows]
         if owner_user_id is not None and int(owner_user_id) > 0:
-            from ...order_goods_ratio import split_order_money_for_owner_user
+            from ...use_web.orders.units.order_goods_ratio import split_order_money_for_owner_user
 
             oid = int(owner_user_id)
             for row in items:

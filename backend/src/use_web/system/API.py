@@ -1,0 +1,73 @@
+# -*- coding: utf-8 -*-
+"""系统管理 API 模块（对应前端 /system 页面 + 4 个二级页面）。
+
+层级蓝图注册：
+- 从 use_web/API.py 接收前缀 /mercariV2/src/use_web/system
+- 完整 URL 示例:
+    POST /mercariV2/src/use_web/system/restart
+    GET  /mercariV2/src/use_web/system/cost-records
+    GET  /mercariV2/src/use_web/system/warehouses
+
+聚合：
+- 一级：系统重启 + 用户管理 + 出品默认值 + SSL MITM 代理控制
+- 二级：cost_records / cost_expenses / warehouses / categories
+"""
+
+from fastapi import APIRouter
+
+from .units.system_handler import RestartOut, restart_system
+from .units.users_handler import list_users, create_user, change_password
+from .units.app_config_handler import (
+    ListingDefaultsOut,
+    get_listing_defaults,
+    put_listing_defaults,
+)
+from .units.ssl_mitm_handler import (
+    download_ca_cert,
+    get_last_capture,
+    get_status,
+    post_start,
+    post_stop,
+)
+
+# 二级子模块 router
+from .cost_records.API import router as cost_records_router
+from .cost_expenses.API import router as cost_expenses_router
+from .warehouses.API import router as warehouses_router
+from .categories.API import router as categories_router
+from .transactions.API import router as transactions_router
+from .product_type_category_mappings.API import router as ptcm_router
+
+router = APIRouter()
+
+# ===== 一级端点：系统主页 =====
+# 系统重启
+router.add_api_route("/restart", restart_system, methods=["POST"], response_model=RestartOut)
+
+# 用户管理（System 页面"用户管理"区）
+router.add_api_route("/users", list_users, methods=["GET"])
+router.add_api_route("/users", create_user, methods=["POST"])
+router.add_api_route("/change-password", change_password, methods=["POST"])
+
+# 应用配置（出品默认值）
+router.add_api_route("/listing-defaults", get_listing_defaults, methods=["GET"], response_model=ListingDefaultsOut)
+router.add_api_route("/listing-defaults", put_listing_defaults, methods=["PUT"], response_model=ListingDefaultsOut)
+
+# SSL MITM 代理控制
+router.add_api_route("/ssl-mitm/status", get_status, methods=["GET"])
+router.add_api_route("/ssl-mitm/start", post_start, methods=["POST"])
+router.add_api_route("/ssl-mitm/stop", post_stop, methods=["POST"])
+router.add_api_route("/ssl-mitm/ca-cert", download_ca_cert, methods=["GET"])
+router.add_api_route("/ssl-mitm/last-capture", get_last_capture, methods=["GET"])
+
+# ===== 二级页面（嵌套到 /system 下） =====
+router.include_router(cost_records_router, prefix="/cost-records", tags=["cost-records"])
+router.include_router(cost_expenses_router, prefix="/cost-expenses", tags=["cost-expenses"])
+router.include_router(warehouses_router, prefix="/warehouses", tags=["warehouses"])
+router.include_router(categories_router, prefix="/categories", tags=["categories"])
+router.include_router(transactions_router, prefix="/transactions", tags=["transactions"])
+router.include_router(
+    ptcm_router,
+    prefix="/product-type-category-mappings",
+    tags=["product-type-category-mappings"],
+)

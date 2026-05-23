@@ -92,7 +92,7 @@ backend/
     │   ├── on_sale_items.py         # Mercari listing sync display
     │   ├── warehouses.py            # Warehouse & shelf location management
     │   └── [other routes]
-    ├── operation_mercari/           # Mercari API & sync logic
+    ├── use_mercari/           # Mercari API & sync logic
     │   ├── API.py                   # FastAPI router for /api/mercari endpoints
     │   ├── sync_data.py             # Mercari API client wrapper
     │   ├── mercari_req_scheduling.py # Async request scheduling
