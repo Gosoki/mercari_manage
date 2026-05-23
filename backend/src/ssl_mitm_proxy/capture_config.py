@@ -83,7 +83,7 @@ def parse_capture_target(
     - ``GET /items/get_items``: 提取 seller_id + status（用于 dpop_list / dpop_on_sale_list）
     - ``GET /transaction_evidences/get``: 提取 item_id（用于 dpop_info）
     - ``GET /items/get``: 提取 item_id（用于 dpop_item_get_info）
-    - ``POST /services/todolist/v1/list``: 代办事项列表（POST，无 query）
+    - ``POST /services/todolist/v1/list``: 待办事项列表（POST，无 query）
     """
     try:
         m = (method or "").strip().upper()
@@ -469,7 +469,7 @@ def read_transaction_evidence_response(item_id: str) -> Optional[Dict[str, Any]]
             return None
 
 
-# ============ 代办事项 services/todolist/v1/list ============
+# ============ 待办事项 services/todolist/v1/list ============
 # 请求路径不含 seller_id，多账号通过 run_meilu_serial_async 串行隔离；
 # 单一 latest 文件即可，同步函数进入时 clear、抓取后 read。
 

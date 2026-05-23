@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-代办事项 →「处理」按钮：打开 https://jp.mercari.com/transaction/<item_id>，
+待办事项 →「处理」按钮：打开 https://jp.mercari.com/transaction/<item_id>，
 通过 **MITM 抓两个关键 API** 还原交易详情字段（不再做 DOM 爬取）：
 
 - GET ``api.mercari.jp/shipping/get_info?transaction_evidence_id=...``
@@ -222,11 +222,11 @@ async def fetch_transaction_detail(todo_id: int) -> Dict[str, Any]:
     """打开有头浏览器到 transaction 页 → MITM 等两个 API → 解析返回。"""
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
-        raise ValueError(f"代办事项 id={todo_id} 不存在")
+        raise ValueError(f"待办事项 id={todo_id} 不存在")
 
     item_id = (todo.item_id or "").strip()
     if not item_id:
-        raise ValueError("该代办无关联 item_id，无法打开交易页")
+        raise ValueError("该待办无关联 item_id，无法打开交易页")
 
     aid = int(todo.account_id)
     local_sender_id = (todo.sender_id or "").strip() or None
@@ -318,10 +318,10 @@ async def send_transaction_message(todo_id: int, text: str) -> Dict[str, Any]:
     """
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
-        raise ValueError(f"代办事项 id={todo_id} 不存在")
+        raise ValueError(f"待办事项 id={todo_id} 不存在")
     item_id = (todo.item_id or "").strip()
     if not item_id:
-        raise ValueError("该代办无关联 item_id")
+        raise ValueError("该待办无关联 item_id")
     body = (text or "").strip()
     if not body:
         raise ValueError("消息内容不能为空")
@@ -395,7 +395,7 @@ async def start_select_shipping_class(todo_id: int) -> Dict[str, Any]:
     """
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
-        raise ValueError(f"代办事项 id={todo_id} 不存在")
+        raise ValueError(f"待办事项 id={todo_id} 不存在")
     aid = int(todo.account_id)
 
     mgr = get_web_drive_manager()
@@ -451,7 +451,7 @@ async def confirm_shipping_selection(
     """
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
-        raise ValueError(f"代办事项 id={todo_id} 不存在")
+        raise ValueError(f"待办事项 id={todo_id} 不存在")
     aid = int(todo.account_id)
     class_text = (class_text or "").strip()
     if not class_text:
@@ -542,7 +542,7 @@ async def submit_transaction_review(todo_id: int, text: str) -> Dict[str, Any]:
     """
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
-        raise ValueError(f"代办事项 id={todo_id} 不存在")
+        raise ValueError(f"待办事项 id={todo_id} 不存在")
     body = (text or "").strip()
     if not body:
         raise ValueError("评价文本不能为空")
@@ -670,7 +670,7 @@ async def click_change_shipping_method(todo_id: int) -> Dict[str, Any]:
     """点 transaction 页的「発送方法を変更する」（导航到修改发送方式页；后续由用户在浏览器内手动）。"""
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
-        raise ValueError(f"代办事项 id={todo_id} 不存在")
+        raise ValueError(f"待办事项 id={todo_id} 不存在")
     aid = int(todo.account_id)
 
     mgr = get_web_drive_manager()

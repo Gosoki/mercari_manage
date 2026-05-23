@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-代办事项（Mercari /todos 页 services/todolist/v1/list 返回项）本地缓存表。
+待办事项（Mercari /todos 页 services/todolist/v1/list 返回项）本地缓存表。
 
 字段与 backend/test_json/待办/req.json 中 data[] 单项对齐：
 - 顶层 uuid / kind / title / message / photo_url / photo_type / status
@@ -15,7 +15,7 @@ from ..base_model import BaseModel
 
 
 class TodoItemModel(BaseModel):
-    """代办事项"""
+    """待办事项"""
 
     @classmethod
     def get_table_name(cls) -> str:

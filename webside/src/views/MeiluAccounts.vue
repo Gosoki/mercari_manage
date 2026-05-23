@@ -146,7 +146,7 @@
                 :true-value="1"
                 :false-value="0"
                 @change="onAutoFetchTaskChange"
-              >代办：从煤炉同步</el-checkbox>
+              >待办：从煤炉同步</el-checkbox>
             </div>
           </el-form-item>
           <el-form-item label="间隔" prop="fetch_interval">
@@ -242,7 +242,7 @@ function autoFetchTasksLabel(row) {
   if (row.auto_fetch_order_status === 1) parts.push('订单状态')
   if (row.auto_fetch_order_list === 1) parts.push('订单列表')
   if (row.auto_fetch_on_sale === 1) parts.push('在售同步')
-  if (row.auto_fetch_todos === 1) parts.push('代办同步')
+  if (row.auto_fetch_todos === 1) parts.push('待办同步')
   return parts.join('、')
 }
 

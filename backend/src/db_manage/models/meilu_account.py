@@ -94,7 +94,7 @@ class MeiluAccountModel(BaseModel):
                 'not_null': True,
                 'default': 0,
             },
-            # 代办事项页「从煤炉同步」对应的自动开关
+            # 待办事项页「从煤炉同步」对应的自动开关
             'auto_fetch_todos': {
                 'type': 'INTEGER',
                 'not_null': True,

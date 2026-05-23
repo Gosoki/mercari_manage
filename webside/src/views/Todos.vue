@@ -136,7 +136,7 @@
       />
     </el-card>
 
-    <el-dialog v-model="syncDialogVisible" title="从煤炉同步代办事项" width="420">
+    <el-dialog v-model="syncDialogVisible" title="从煤炉同步待办事项" width="420">
       <el-form label-width="80px">
         <el-form-item label="账号">
           <el-select v-model="syncDialog.account_id" placeholder="选择账号" clearable filterable style="width: 100%">
@@ -572,7 +572,7 @@ function createEmptyDetail() {
 const replyLoading = ref(false)
 const reviewLoading = ref(false)
 
-// 当前代办是否是「评价买家」类型 → 切换为取引評価表单
+// 当前待办是否是「评价买家」类型 → 切换为取引評価表单
 // 条件：kind === 'ReviewedSeller' 且 title === '評価をしてください'
 const isReviewedSeller = computed(() => {
   const kind = (currentRow.value?.kind || '').trim()
@@ -724,7 +724,7 @@ function onProcess(row) {
 async function onDetailRefresh() {
   if (!currentRow.value?.id) return
   if (!currentRow.value?.item_id) {
-    ElMessage.warning('该代办无关联 item_id，无法打开交易页')
+    ElMessage.warning('该待办无关联 item_id，无法打开交易页')
     return
   }
   detailLoading.value = true
@@ -860,7 +860,7 @@ async function onSubmitReview() {
       ElMessage.success(`检测到「取引が完了しました」，已关闭浏览器并刷新订单状态${note}`)
       // 浏览器已由后端关闭；这里关 dialog（onDetailDialogClose 里的 closeBrowser 是幂等的）
       detailDialogVisible.value = false
-      load() // 刷新代办列表（todo 已软删，列表中应消失）
+      load() // 刷新待办列表（todo 已软删，列表中应消失）
     } else {
       ElMessage.warning('已提交但未检测到「取引が完了しました」，请在浏览器内手动确认')
     }

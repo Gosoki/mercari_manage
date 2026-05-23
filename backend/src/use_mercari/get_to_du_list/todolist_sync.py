@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-代办事项同步入口：
+待办事项同步入口：
 
 - 解析单个 todo（拆 args、转毫秒时间戳）
 - 按 ``(account_id, uuid)`` UPSERT 到 ``todo_items``
@@ -203,7 +203,7 @@ def _resolve_account_id(account_id: Optional[int]) -> int:
 
 
 async def sync_todos_from_mercari(account_id: Optional[int] = None) -> Dict[str, Any]:
-    """从煤炉拉取代办事项并同步本地 ``todo_items``。"""
+    """从煤炉拉取待办事项并同步本地 ``todo_items``。"""
     aid = _resolve_account_id(account_id)
     log.info("[todolist] 开始同步 account_id=%s", aid)
 

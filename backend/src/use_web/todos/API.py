@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""代办事项 API 路由（对应前端 /todos 页面）。
+"""待办事项 API 路由（对应前端 /todos 页面）。
 
 层级蓝图注册：
 - 从 use_web/API.py 接收前缀 /mercariV2/src/use_web/todos

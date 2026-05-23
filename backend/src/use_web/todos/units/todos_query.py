@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-代办事项查询：分页 + 多条件过滤；联表 meilu_accounts 取 account_name 用于前端显示。
+待办事项查询：分页 + 多条件过滤；联表 meilu_accounts 取 account_name 用于前端显示。
 """
 
 from typing import Any, Dict, List, Optional

@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 TODOS_PAGE_URL = "https://jp.mercari.com/todos"
 
 # 防御性单次同步上限：8 条/页的极限场景下 20 页 = 160 条；
-# 实际账号代办通常 < 50 条，远不会触底。
+# 实际账号待办通常 < 50 条，远不会触底。
 _MAX_PAGES = 20
 _PER_PAGE_TIMEOUT_SEC = 45
 
