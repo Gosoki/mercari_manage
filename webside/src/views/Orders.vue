@@ -46,8 +46,22 @@
           </el-select>
         </el-col>
         <el-col :xs="24" :md="8" class="search-actions">
-          <el-button type="success" :icon="RefreshRight" @click="openSyncDialog('newData')">更新列表</el-button>
-          <el-button type="primary" :icon="Refresh" @click="openSyncDialog('statusRefresh')">更新状态</el-button>
+          <el-select
+            v-model="globalAccountId"
+            placeholder="选择煤炉账号"
+            filterable
+            class="sync-account-select"
+            :loading="mercariAccountStore.loading"
+          >
+            <el-option
+              v-for="acc in mercariAccountStore.activeAccounts"
+              :key="acc.id"
+              :label="acc.account_name"
+              :value="acc.id"
+            />
+          </el-select>
+          <el-button type="success" :icon="RefreshRight" :loading="syncLoading && syncMode === 'newData'" @click="runSync('newData')">更新列表</el-button>
+          <el-button type="primary" :icon="Refresh" :loading="syncLoading && syncMode === 'statusRefresh'" @click="runSync('statusRefresh')">更新状态</el-button>
         </el-col>
       </el-row>
     </el-card>
@@ -521,33 +535,6 @@
       </template>
     </el-dialog>
 
-    <!-- 同步订单弹窗 -->
-    <el-dialog v-model="syncDialogVisible" :title="syncDialogTitle" width="420px" destroy-on-close>
-      <el-form label-width="86px">
-        <el-form-item label="煤炉账号">
-          <el-select
-            v-model="syncAccountId"
-            :placeholder="accountOptions.length ? '' : '暂无活跃账号'"
-            style="width: 100%"
-            :loading="accountsLoading"
-          >
-            <el-option
-              v-for="acc in accountOptions"
-              :key="acc.id"
-              :label="acc.account_name"
-              :value="acc.id"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="syncDialogVisible = false">取消</el-button>
-        <el-button type="success" :loading="syncLoading" @click="confirmSyncDialog">
-          {{ syncMode === 'statusRefresh' ? '开始刷新状态' : '开始同步' }}
-        </el-button>
-      </template>
-    </el-dialog>
-
     <el-dialog
       v-model="manualOutboundDialogVisible"
       title="手动添加出库"
@@ -940,17 +927,23 @@
 
 <script setup>
 import { ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { RefreshRight, Refresh, Plus, Minus } from '@element-plus/icons-vue'
 import {
   orderApi,
   mercariApi,
-  meiluAccountApi,
   inventoryApi,
   costExpenseApi,
   costRecordApi,
   authApi,
 } from '@/api/index.js'
+import { useMercariAccountStore } from '@/stores/mercariAccount.js'
+
+const mercariAccountStore = useMercariAccountStore()
+const globalAccountId = computed({
+  get: () => mercariAccountStore.selectedId,
+  set: (v) => mercariAccountStore.setSelected(v),
+})
 import {
   useInventoryListApiFilters,
   warehouseCascaderProps,
@@ -1239,80 +1232,47 @@ const formOrderStatusOptions = computed(() => {
   return base
 })
 
-// ---- 同步订单弹窗（更新列表 / 更新状态 共用）----
-const syncDialogVisible = ref(false)
+// ---- 同步订单（更新列表 / 更新状态 共用，账号选择见工具栏全局下拉）----
 const syncLoading = ref(false)
-const syncAccountId = ref(null)
 /** newData：增量入库出售中；statusRefresh：库内未完成订单批量刷新（与单行「刷新」相同接口） */
 const syncMode = ref('newData')
-const accountOptions = ref([])
-const accountsLoading = ref(false)
 
-const syncDialogTitle = computed(() =>
-  syncMode.value === 'statusRefresh'
-    ? '批量更新订单状态'
-    : '更新出售中列表（增量入库）'
-)
-
-async function openSyncDialog(mode = 'newData') {
-  syncMode.value = mode
-  syncAccountId.value = null
-  syncDialogVisible.value = true
-  accountsLoading.value = true
-  try {
-    const res = await meiluAccountApi.list({ page: 1, page_size: 100 })
-    accountOptions.value = (res.items || []).filter(a => a.status === 'active')
-    const first = accountOptions.value[0]
-    syncAccountId.value = first?.id ?? null
-  } catch (_) {
-    accountOptions.value = []
-    syncAccountId.value = null
-  } finally {
-    accountsLoading.value = false
+async function runSync(mode = 'newData') {
+  if (syncLoading.value) return
+  const aid = mercariAccountStore.selectedId
+  if (!aid) {
+    ElMessage.warning('请先在右上角选择煤炉账号')
+    return
   }
-}
-
-async function confirmSyncDialog() {
-  if (syncMode.value === 'statusRefresh') {
-    await confirmStatusRefresh()
-  } else {
-    await confirmSync()
-  }
-}
-
-async function confirmSync() {
-  syncLoading.value = true
+  const name = mercariAccountStore.selectedAccountName || `#${aid}`
+  const actionLabel = mode === 'statusRefresh' ? '批量更新订单状态' : '更新出售中列表（增量入库）'
   try {
-    const payload = {}
-    if (syncAccountId.value) payload.account_id = syncAccountId.value
-    const res = await mercariApi.syncNewData(payload)
-    const d = res.data || {}
-    ElMessage.success(
-      `更新完成：接口 ${d.api_item_count ?? 0} 条，待入库新单 ${d.pending_new ?? 0} 条，新增 ${d.inserted ?? 0} 条（回填详情 ${d.info_enriched ?? 0} 条）`
+    await ElMessageBox.confirm(
+      `将使用账号「${name}」${actionLabel}，是否继续？`,
+      '确认同步',
+      { type: 'info', confirmButtonText: '开始', cancelButtonText: '取消' },
     )
-    syncDialogVisible.value = false
-    load()
-    loadStats()
-  } finally {
-    syncLoading.value = false
+  } catch {
+    return
   }
-}
-
-async function confirmStatusRefresh() {
+  syncMode.value = mode
   syncLoading.value = true
   try {
-    const payload = {}
-    if (syncAccountId.value) payload.account_id = syncAccountId.value
-    const res = await mercariApi.batchRefreshInfo(payload)
-    const d = res.data || {}
-    const failed = d.failed?.length ?? 0
-    const msg = `状态刷新完成：待处理 ${d.total ?? 0} 条，成功 ${d.ok ?? 0}，无对应煤炉账号跳过 ${d.skipped_no_account ?? 0}，失败 ${failed}`
-    if (failed > 0) {
-      ElMessage.warning(msg)
+    const payload = { account_id: aid }
+    if (mode === 'statusRefresh') {
+      const res = await mercariApi.batchRefreshInfo(payload)
+      const d = res.data || {}
+      const failed = d.failed?.length ?? 0
+      const msg = `状态刷新完成：待处理 ${d.total ?? 0} 条，成功 ${d.ok ?? 0}，无对应煤炉账号跳过 ${d.skipped_no_account ?? 0}，失败 ${failed}`
+      if (failed > 0) ElMessage.warning(msg)
+      else ElMessage.success(msg)
     } else {
-      ElMessage.success(msg)
+      const res = await mercariApi.syncNewData(payload)
+      const d = res.data || {}
+      ElMessage.success(
+        `更新完成：接口 ${d.api_item_count ?? 0} 条，待入库新单 ${d.pending_new ?? 0} 条，新增 ${d.inserted ?? 0} 条（回填详情 ${d.info_enriched ?? 0} 条）`
+      )
     }
-    syncDialogVisible.value = false
     load()
     loadStats()
   } finally {
@@ -2331,6 +2291,7 @@ watch(isMobile, (mobile) => {
 onMounted(async () => {
   updateViewportState()
   window.addEventListener('resize', updateViewportState)
+  mercariAccountStore.ensureLoaded()
   try {
     const users = await authApi.listUsers()
     ownerUsers.value = Array.isArray(users) ? users : []
@@ -2424,6 +2385,9 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px;
+}
+.sync-account-select {
+  width: 180px;
 }
 .table-card {
   border-radius: 8px;

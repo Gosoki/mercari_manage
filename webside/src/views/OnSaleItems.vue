@@ -26,7 +26,21 @@
           </el-select>
         </el-col>
         <el-col :xs="24" :md="10" class="search-actions">
-          <el-button type="primary" :icon="Download" :loading="syncLoading" @click="openSyncDialog">
+          <el-select
+            v-model="globalAccountId"
+            placeholder="选择煤炉账号"
+            filterable
+            class="sync-account-select"
+            :loading="mercariAccountStore.loading"
+          >
+            <el-option
+              v-for="acc in mercariAccountStore.activeAccounts"
+              :key="acc.id"
+              :label="acc.account_name"
+              :value="acc.id"
+            />
+          </el-select>
+          <el-button type="primary" :icon="Download" :loading="syncLoading" @click="runSync">
             从煤炉同步
           </el-button>
         </el-col>
@@ -290,28 +304,6 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="syncVisible" title="从煤炉同步在售列表" width="420px" destroy-on-close>
-      <el-form label-width="88px">
-        <el-form-item label="煤炉账号">
-          <el-select
-            v-model="syncAccountId"
-            style="width: 100%"
-            :loading="accountsLoading"
-          >
-            <el-option
-              v-for="acc in accountOptions"
-              :key="acc.id"
-              :label="acc.account_name"
-              :value="acc.id"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="syncVisible = false">取消</el-button>
-        <el-button type="primary" :loading="syncLoading" @click="runSync">开始同步</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -321,6 +313,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import { onSaleItemApi, meiluAccountApi, webDriveApi } from '@/api/index.js'
 import { parseMgmtIdsFromDescription } from '@/utils/mgmtIdCipher.js'
+import { useMercariAccountStore } from '@/stores/mercariAccount.js'
+
+const mercariAccountStore = useMercariAccountStore()
+const globalAccountId = computed({
+  get: () => mercariAccountStore.selectedId,
+  set: (v) => mercariAccountStore.setSelected(v),
+})
 
 /** 煤炉商品 item.status → 中文（与 API 原始值对应） */
 const onSaleStatusMap = {
@@ -354,10 +353,6 @@ const loading = ref(false)
 /** 正在请求 items/get 的商品 ID（trim 后） */
 const detailLoadingIds = ref(new Set())
 const syncLoading = ref(false)
-const syncVisible = ref(false)
-const syncAccountId = ref(null)
-const accountOptions = ref([])
-const accountsLoading = ref(false)
 
 /** 查看详情弹窗 */
 const detailViewVisible = ref(false)
@@ -758,39 +753,35 @@ async function fetchItemDetail(row) {
   await fetchItemDetailForItemId(row.item_id)
 }
 
-async function openSyncDialog() {
-  syncVisible.value = true
-  syncAccountId.value = null
-  accountsLoading.value = true
-  try {
-    const res = await meiluAccountApi.list({ page: 1, page_size: 100 })
-    accountOptions.value = (res.items || []).filter((a) => a.status === 'active')
-    syncAccountId.value = accountOptions.value[0]?.id ?? null
-  } catch {
-    accountOptions.value = []
-    syncAccountId.value = null
-  } finally {
-    accountsLoading.value = false
-  }
-}
-
 async function runSync() {
+  if (syncLoading.value) return
+  const aid = mercariAccountStore.selectedId
+  if (!aid) {
+    ElMessage.warning('请先在右上角选择煤炉账号')
+    return
+  }
+  const name = mercariAccountStore.selectedAccountName || `#${aid}`
+  try {
+    await ElMessageBox.confirm(
+      `将使用账号「${name}」从煤炉同步在售列表，是否继续？`,
+      '确认同步',
+      { type: 'info', confirmButtonText: '开始', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
   syncLoading.value = true
   try {
-    const payload = {}
-    if (syncAccountId.value) payload.account_id = syncAccountId.value
-    const res = await onSaleItemApi.sync(payload, { timeout: 0 })
+    const res = await onSaleItemApi.sync({ account_id: aid }, { timeout: 0 })
     const d = res.data || {}
     ElMessage.success(
       `同步完成：煤炉 ${d.api_item_count ?? 0} 条，新增 ${d.inserted ?? 0}，更新 ${d.updated ?? 0}，标记删除 ${d.marked_deleted ?? 0}`
     )
-    syncVisible.value = false
     await load()
 
     const rawNewIds = Array.isArray(d.inserted_item_ids) ? d.inserted_item_ids : []
     const newIds = rawNewIds.map((x) => String(x ?? '').trim()).filter(Boolean)
     if (newIds.length > 0) {
-      const aid = syncAccountId.value
       const batchRes = await onSaleItemApi.fetchDetailsBatch(
         { account_id: aid, item_ids: newIds },
         { timeout: 0 }
@@ -825,6 +816,7 @@ async function loadSellerAccounts() {
 }
 
 onMounted(() => {
+  mercariAccountStore.ensureLoaded()
   loadSellerAccounts()
   load()
 })
@@ -849,6 +841,9 @@ onMounted(() => {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px;
+}
+.sync-account-select {
+  width: 180px;
 }
 .table-card {
   border-radius: 8px;

@@ -44,7 +44,21 @@
           </el-checkbox>
         </el-col>
         <el-col :xs="24" :md="8" class="search-actions">
-          <el-button type="primary" :icon="Download" :loading="syncLoading" @click="openSyncDialog">
+          <el-select
+            v-model="globalAccountId"
+            placeholder="选择煤炉账号"
+            filterable
+            class="sync-account-select"
+            :loading="mercariAccountStore.loading"
+          >
+            <el-option
+              v-for="acc in mercariAccountStore.activeAccounts"
+              :key="acc.id"
+              :label="acc.account_name"
+              :value="acc.id"
+            />
+          </el-select>
+          <el-button type="primary" :icon="Download" :loading="syncLoading" @click="runSync">
             从煤炉同步
           </el-button>
         </el-col>
@@ -136,31 +150,7 @@
       />
     </el-card>
 
-    <el-dialog v-model="syncDialogVisible" title="从煤炉同步待办事项" width="420">
-      <el-form label-width="80px">
-        <el-form-item label="账号">
-          <el-select v-model="syncDialog.account_id" placeholder="选择账号" clearable filterable style="width: 100%">
-            <el-option
-              v-for="a in accountOptions"
-              :key="a.id"
-              :label="a.label"
-              :value="a.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <div class="dialog-hint">
-            未选择则按系统中第一个「启用 + active」的账号同步。
-          </div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="syncDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="syncLoading" @click="confirmSync">开始同步</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 交易详情面板：通用的「煤炉数据 → 管理软件」表单 -->
+<!-- 交易详情面板：通用的「煤炉数据 → 管理软件」表单 -->
     <el-dialog
       v-model="detailDialogVisible"
       :title="`交易详情  ${detail.item_id || ''}`"
@@ -401,6 +391,13 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import { todosApi, meiluAccountApi } from '@/api'
+import { useMercariAccountStore } from '@/stores/mercariAccount.js'
+
+const mercariAccountStore = useMercariAccountStore()
+const globalAccountId = computed({
+  get: () => mercariAccountStore.selectedId,
+  set: (v) => mercariAccountStore.setSelected(v),
+})
 
 const KIND_LABELS = {
   WaitShippingCard: '待发货',
@@ -532,8 +529,6 @@ const filters = ref({
 const accountOptions = ref([])
 const kindOptions = ref([])
 
-const syncDialogVisible = ref(false)
-const syncDialog = reactive({ account_id: null })
 const syncLoading = ref(false)
 
 // ─── 交易详情面板 ───
@@ -658,15 +653,26 @@ function onPageSizeChange(s) {
   load()
 }
 
-function openSyncDialog() {
-  syncDialog.account_id = filters.value.account_id || null
-  syncDialogVisible.value = true
-}
-
-async function confirmSync() {
+async function runSync() {
+  if (syncLoading.value) return
+  const aid = mercariAccountStore.selectedId
+  if (!aid) {
+    ElMessage.warning('请先在右上角选择煤炉账号')
+    return
+  }
+  const name = mercariAccountStore.selectedAccountName || `#${aid}`
+  try {
+    await ElMessageBox.confirm(
+      `将使用账号「${name}」从煤炉同步待办事项，是否继续？`,
+      '确认同步',
+      { type: 'info', confirmButtonText: '开始', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
   syncLoading.value = true
   try {
-    const d = await todosApi.sync({ account_id: syncDialog.account_id || null }) || {}
+    const d = (await todosApi.sync({ account_id: aid })) || {}
     ElMessageBox.alert(
       `账号 #${d.account_id ?? '-'} 同步完成：` +
         `新增 ${d.inserted ?? 0} 条，更新 ${d.updated ?? 0} 条，` +
@@ -674,7 +680,6 @@ async function confirmSync() {
       '同步结果',
       { type: 'success', confirmButtonText: '确定' },
     )
-    syncDialogVisible.value = false
     await Promise.all([load(), loadKindOptions()])
   } catch (e) {
     ElMessage.error(e?.message || '同步失败')
@@ -897,6 +902,7 @@ function buyerNameFromMessage(msg) {
 }
 
 onMounted(() => {
+  mercariAccountStore.ensureLoaded()
   Promise.all([loadAccountOptions(), loadKindOptions()])
   load()
 })
@@ -920,7 +926,12 @@ onMounted(() => {
 .search-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+}
+.sync-account-select {
+  width: 180px;
 }
 .table-card {
   border-radius: 8px;
@@ -984,12 +995,6 @@ onMounted(() => {
   justify-content: flex-end;
   display: flex;
 }
-.dialog-hint {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 /* ─── 交易详情面板 ─── */
 .detail-header {
   display: flex;
