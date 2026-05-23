@@ -242,25 +242,30 @@ async def fetch_transaction_detail(todo_id: int) -> Dict[str, Any]:
     except Exception as exc:
         log.warning("[txdetail] seed __auto profile 失败（继续，使用磁盘旧 Cookie）：%s", exc)
 
-    # 浏览器打开前清空两个 latest 文件 + 取 since_ms，保证捕到的是本次新响应
-    clear_shipping_info_response_file()
-    clear_transaction_messages_response_file()
-    since_ms = int(time.time() * 1000)
-
     mgr = get_web_drive_manager()
     auto_key = meilu_automation_key(aid)
     proxy = default_mitm_proxy_url()
 
+    # ── Step 1: 先开 mercari 首页等 5s 刷新 cookie / refresh token ──
+    home_url = "https://jp.mercari.com/"
+    log.info("[txdetail] 先打开首页 %s 刷新 cookie", home_url)
     await mgr.ensure_session_for_mitm(
         auto_key,
-        start_url=url,
+        start_url=home_url,
         proxy_server=proxy,
         headless=False,
         start_minimized=False,
         block_images=False,
     )
+    await asyncio.sleep(5.0)
 
-    # 兜底再 goto 一次
+    # ── Step 2: 清空 latest 文件 + 取 since_ms（首页阶段的无关请求不会污染） ──
+    clear_shipping_info_response_file()
+    clear_transaction_messages_response_file()
+    since_ms = int(time.time() * 1000)
+
+    # ── Step 3: 跳转到交易页 ──
+    log.info("[txdetail] 跳转到交易页 %s", url)
     try:
         await mgr.reload_active_tab(auto_key, url)
     except Exception as exc:

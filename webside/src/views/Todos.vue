@@ -408,6 +408,7 @@ const KIND_LABELS = {
   TransactionWaitShippingFunds: '待发货',
   MerpayRealcardWaitActivation: 'Merpay 卡激活',
   ReviewedSeller: '待评价',
+  IncomingMessage: '待回复',
 }
 
 const DEFAULT_REPLY = 'ご購入いただきありがとうございます。これから発送の準備をさせていただきます。設定した期日内に発送予定ですので今しばらくお待ちください。取引終了までよろしくお願いいたします。'
@@ -512,6 +513,7 @@ const KIND_TAG_TYPES = {
   TransactionWaitShippingFunds: 'warning',
   MerpayRealcardWaitActivation: 'info',
   ReviewedSeller: 'success',
+  IncomingMessage: 'primary',
 }
 
 const list = ref([])
