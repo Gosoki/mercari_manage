@@ -4,7 +4,7 @@ Mercari 操作相关 API 路由
 
 层级蓝图注册：
 - 从 src/API.py 接收前缀 /mercariV2/src
-- 完整 URL 格式: /mercariV2/src/operation_mercari/<endpoint>
+- 完整 URL 格式: /mercariV2/src/use_mercari/<endpoint>
 """
 
 from typing import Optional
@@ -25,7 +25,7 @@ from .sync_data import (
     sync_open_orders,
 )
 
-router = APIRouter(prefix="/operation_mercari", tags=["operation-mercari"])
+router = APIRouter(prefix="/use_mercari", tags=["use-mercari"])
 
 
 class SyncOrdersRequest(PydanticModel):

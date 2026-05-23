@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 from ....db_manage.models.order import OrderModel
 from ....db_manage.models.order_outbound_line import OrderOutboundLineModel
-from ....order_goods_ratio import apply_bundle_title_ratio_pricing
+from .order_goods_ratio import apply_bundle_title_ratio_pricing
 from .orders_helpers import _validate_status_query, db
 
 

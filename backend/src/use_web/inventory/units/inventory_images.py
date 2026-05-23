@@ -9,7 +9,7 @@ from fastapi import HTTPException, UploadFile, File
 from PIL import Image
 
 from ....db_manage.database import DatabaseManager
-from ....image_storage import (
+from ...image_storage import (
     is_base64_image,
     save_base64_image,
     delete_image_file,

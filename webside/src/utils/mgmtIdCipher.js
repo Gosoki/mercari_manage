@@ -1,6 +1,6 @@
 /**
  * 管理番号 5 进制暗号：-=~<> 对应 0–4（低位在前）。
- * 与 backend/src/operation_mercari/mgmt_id_cipher.py 保持一致。
+ * 与 backend/src/use_mercari/mgmt_id_cipher.py 保持一致。
  */
 
 export const MGMT_CIPHER_ALPHABET = '-=~<>'

@@ -10,9 +10,9 @@ from ....web_drive.core.account_serial_queue import (
     resolve_meilu_account_id,
     run_meilu_serial_async,
 )
-from ....operation_mercari.on_sale_item_detail_sync import fetch_detail_and_sync_inventory
-from ....operation_mercari.on_sale_items_sync import sync_on_sale_items_from_mercari
-from ....operation_mercari.sync_data import resolve_account_id_by_seller_id
+from ....use_mercari.on_sale_item_detail_sync import fetch_detail_and_sync_inventory
+from ....use_mercari.on_sale_items_sync import sync_on_sale_items_from_mercari
+from ....use_mercari.sync_data import resolve_account_id_by_seller_id
 
 from .on_sale_items_models import (
     FetchOnSaleDetailRequest,

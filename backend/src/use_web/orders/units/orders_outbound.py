@@ -7,11 +7,11 @@ from fastapi import HTTPException
 
 from ....db_manage.models.order import OrderModel
 from ....db_manage.models.order_outbound_line import OrderOutboundLineModel
-from ....operation_mercari.get_order.description_mgmt_ids import (
+from ....use_mercari.get_order.description_mgmt_ids import (
     refresh_inventory_pending_outbound_qty,
 )
-from ....operation_mercari.get_order.get_in_progress_order.get_order_info import apply_item_info_to_order
-from ....operation_mercari.sync_data import resolve_account_id_by_seller_id
+from ....use_mercari.get_order.get_in_progress_order.get_order_info import apply_item_info_to_order
+from ....use_mercari.sync_data import resolve_account_id_by_seller_id
 from ....web_drive.core.account_serial_queue import queue_key_for_meilu_account, run_meilu_serial_async
 from .orders_helpers import _outbound_line_has_inventory_id, db
 from .orders_models import (

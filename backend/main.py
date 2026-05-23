@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from src.db_manage.db_manager import init_database
-from src.image_storage import ensure_image_dir
+from src.use_web.image_storage import ensure_image_dir
 from src.API import router as v2_router
 from src.app_paths import backend_root
 

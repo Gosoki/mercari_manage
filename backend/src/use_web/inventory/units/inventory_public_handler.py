@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 from PIL import Image, ImageOps
 
-from ....image_storage import get_image_root
+from ...image_storage import get_image_root
 
 
 def get_image_thumb(path: str, size: int = 300):

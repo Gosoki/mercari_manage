@@ -9,8 +9,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from .db_manage.database import DatabaseManager
-from .db_manage.models.order_outbound_line import OrderOutboundLineModel
+from ....db_manage.database import DatabaseManager
+from ....db_manage.models.order_outbound_line import OrderOutboundLineModel
 
 _db = DatabaseManager()
 

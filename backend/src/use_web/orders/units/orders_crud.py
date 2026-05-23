@@ -4,7 +4,7 @@ from fastapi import HTTPException
 
 from ....db_manage.models.order import OrderModel
 from ....db_manage.models.order_outbound_line import OrderOutboundLineModel
-from ....operation_mercari.get_order.description_mgmt_ids import (
+from ....use_mercari.get_order.description_mgmt_ids import (
     refresh_inventory_pending_outbound_qty,
     sync_outbound_lines_for_order,
 )

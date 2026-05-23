@@ -4,7 +4,7 @@ from fastapi import HTTPException, Depends
 
 from ....auth import require_auth
 from ....db_manage.database import DatabaseManager
-from ....image_storage import delete_image_file
+from ...image_storage import delete_image_file
 
 from .inventory_helpers import (
     _query_inventory_with_joins,

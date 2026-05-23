@@ -123,11 +123,11 @@ async def delete_mercari_item(
     from ...core.manager import EdgeWebDriveManager
     from ...core.mitm_session import mitm_automation_browser
     from ...core.paths import meilu_automation_key, meilu_id_from_account_key
-    from ....operation_mercari.get_order.get_on_sale.on_sale_list import (
+    from ....use_mercari.get_order.get_on_sale.on_sale_list import (
         LISTINGS_PAGE_URL,
         sync_on_sale_from_listings_browser_page,
     )
-    from ....operation_mercari.sync_data import _resolve_account_and_seller
+    from ....use_mercari.sync_data import _resolve_account_and_seller
     from ....ssl_mitm_proxy.capture_config import clear_on_sale_list_response_file
 
     if not isinstance(manager, EdgeWebDriveManager):

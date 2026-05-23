@@ -3,7 +3,7 @@ import { ElMessage } from 'element-plus'
 
 /**
  * V2 API axios 实例
- * - baseURL 指向 /mercariV2/src，各 API 模块用 '/use_web/<resource>' 或 '/operation_mercari' 拼接
+ * - baseURL 指向 /mercariV2/src，各 API 模块用 '/use_web/<resource>' 或 '/use_mercari' 拼接
  * - 例: http.get('/use_web/inventory') → /mercariV2/src/use_web/inventory
  */
 const http = axios.create({

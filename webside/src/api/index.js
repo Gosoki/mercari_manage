@@ -6,7 +6,7 @@
  *
  * V2 URL 结构：/mercariV2/src/<module>/<resource>/<endpoint>
  * - 大部分 API 在 use_web 模块下：/mercariV2/src/use_web/<resource>
- * - Mercari 同步业务在 operation_mercari 模块下：/mercariV2/src/operation_mercari/<endpoint>
+ * - Mercari 同步业务在 use_mercari 模块下：/mercariV2/src/use_mercari/<endpoint>
  */
 
 export { default as http } from './http'
