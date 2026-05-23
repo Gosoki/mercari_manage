@@ -2588,7 +2588,7 @@ function quantityTagType(q) {
  */
 function thumbUrl(src, size = 200) {
   if (!src || !src.startsWith('/imges/')) return src
-  return `/api/inventory/image-thumb?path=${encodeURIComponent(src)}&size=${size}`
+  return `/mercariV2/src/use_web/inventory/image-thumb?path=${encodeURIComponent(src)}&size=${size}`
 }
 
 /** 与旧字段 image_front / image_back 同步，便于依赖单列的逻辑与校验 */
