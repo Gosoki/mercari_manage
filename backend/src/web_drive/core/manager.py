@@ -308,12 +308,16 @@ class EdgeWebDriveManager:
         proxy_server: Optional[str] = None,
         interactive: Optional[bool] = None,
         restore_tabs: Optional[bool] = None,
+        start_minimized: bool = False,
     ) -> Dict[str, Any]:
         """
         :param interactive: 是否为「用户手动可见」会话（影响窗口前台 / 标签恢复行为）。
             默认：``headless=False`` 时为 True，``headless=True`` 时为 False。
         :param restore_tabs: 有头交互会话是否从 ``interactive_tabs.snapshot.json`` 恢复标签；
             默认 interactive 时为 True。
+        :param start_minimized: 启动时窗口最小化到任务栏（后台运行，不抢前台）。
+            ``headless=True`` 时无效。``interactive=True`` 仍会生效，此时跳过
+            ``--start-maximized``，改用 ``--start-minimized``。
         """
         key = validate_account_key(account_key)
         if interactive is None:
@@ -328,6 +332,7 @@ class EdgeWebDriveManager:
                 proxy_server=proxy_server,
                 interactive=interactive,
                 restore_tabs=bool(restore_tabs),
+                start_minimized=bool(start_minimized),
             )
 
     def is_interactive_session_running(self, account_key: str) -> bool:
