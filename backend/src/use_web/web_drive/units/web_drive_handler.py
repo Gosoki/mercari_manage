@@ -158,11 +158,17 @@ def listing_post_progress(job_id: str):
 
 async def post_to_market(body: PostToMarketBody):
     """
-    在独立有头 profile（``meilu_{id}__listing``，不复用系统预启动的 ``meilu_{id}`` 主窗口）
-    经 SSL 中间人代理打开 https://jp.mercari.com/sell/create，并自动完成全部表单步骤：
+    在账号主 profile（``meilu_{id}``）经 SSL 中间人代理打开 https://jp.mercari.com/sell/create，
+    并自动完成全部表单步骤（与订单页「更新列表」同模式，cookie 由 Edge 持久化自动维护）：
       · Switch 检查 → 图片上传 → 商品名/说明填写
       · 商品类型选择 → 販売タイプ+价格 → 发货天数 → 发货地址
+    经 ``run_meilu_serial_async`` 串行执行；浏览器在队列空闲后由队列自动关闭。
     """
+    from ....web_drive.core.account_serial_queue import (
+        queue_key_for_meilu_account,
+        run_meilu_serial_async,
+    )
+    from ....web_drive.core.paths import meilu_id_from_account_key
     from ....web_drive.listing.units.listing_progress import clear_listing_progress
     from ....web_drive.listing.units.post_to_macket import post_to_market as _do_post
     from ....ssl_mitm_proxy.runner import default_mitm_proxy_url
@@ -170,6 +176,10 @@ async def post_to_market(body: PostToMarketBody):
     jid = (body.progress_job_id or "").strip() or None
     if jid and not _LISTING_JOB_ID_RE.fullmatch(jid):
         raise HTTPException(status_code=400, detail="invalid progress_job_id")
+
+    account_id = meilu_id_from_account_key(body.account_key)
+    if account_id is None:
+        raise HTTPException(status_code=400, detail="无效的 account_key")
 
     try:
         proxy: Optional[str] = None
@@ -179,26 +189,34 @@ async def post_to_market(body: PostToMarketBody):
         # 从 DB 查询 category position 字段
         cat_pos = _get_category_positions(body.category_mapping_id)
 
-        data = await _do_post(
-            get_web_drive_manager(),
-            body.account_key,
-            name=body.name,
-            description=body.description,
-            image_urls=body.image_urls,
-            category_level1_pos=cat_pos.get("category_level1_pos"),
-            category_level2_pos=cat_pos.get("category_level2_pos"),
-            category_level3_pos=cat_pos.get("category_level3_pos"),
-            product_type_pos=cat_pos.get("product_type_pos"),
-            status=body.status,
-            shipping_payer=body.shipping_payer,
-            shipping_method=body.shipping_method,
-            sale_type=body.sale_type,
-            auction_duration=body.auction_duration,
-            price=body.price,
-            shipping_days=body.shipping_days,
-            shipping_from_area_id=body.shipping_from_area_id,
-            proxy_server=proxy,
-            progress_job_id=jid,
+        mgr = get_web_drive_manager()
+
+        async def _run() -> Dict[str, Any]:
+            return await _do_post(
+                mgr,
+                body.account_key,
+                name=body.name,
+                description=body.description,
+                image_urls=body.image_urls,
+                category_level1_pos=cat_pos.get("category_level1_pos"),
+                category_level2_pos=cat_pos.get("category_level2_pos"),
+                category_level3_pos=cat_pos.get("category_level3_pos"),
+                product_type_pos=cat_pos.get("product_type_pos"),
+                status=body.status,
+                shipping_payer=body.shipping_payer,
+                shipping_method=body.shipping_method,
+                sale_type=body.sale_type,
+                auction_duration=body.auction_duration,
+                price=body.price,
+                shipping_days=body.shipping_days,
+                shipping_from_area_id=body.shipping_from_area_id,
+                proxy_server=proxy,
+                progress_job_id=jid,
+            )
+
+        data = await run_meilu_serial_async(
+            queue_key_for_meilu_account(account_id),
+            _run,
         )
         return {"success": True, "data": data}
     except ValueError as exc:
