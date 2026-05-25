@@ -531,21 +531,10 @@ def apply_on_sale_list_sync(
             activated_item_ids, +1
         )
 
-    # 库存页二级列表：非出售中（含暂停、交易中、已从出品一覧消失等）不再保留 mercari_item_id 关联
-    strip_ids: set[str] = set()
-    for item in items:
-        iid_key = str(item.get("id") or "").strip()
-        if not iid_key:
-            continue
-        st = item.get("status")
-        st_s = (str(st).strip() if st is not None else "") or None
-        if not _is_active_on_sale(st_s, 0):
-            strip_ids.add(iid_key)
-    strip_ids.update(soft_deleted_ids)
-    stats["inventory_strip_item_ids_count"] = len(strip_ids)
-    stats["inventory_mercari_id_stripped_rows"] = _strip_mercari_item_ids_from_inventory(
-        strip_ids
-    )
+    # 注意：不再从 inventory.mercari_item_id 中剥离“非出售中 / 当次未返回”的煤炉 ID。
+    # 关联是由详情解析（管理番号 / バーコード）建立的强语义绑定；剥离仅对 INSERT 路径恢复，
+    # UPDATE 路径（在售→暂停→在售、翻页漏抓后又返回）一旦剥离即永久丢失，导致整行误标红。
+    # 展示侧 list_on_sale_by_item_ids 已按 _is_active_on_sale 过滤非出售中，库存页二级表不受影响。
 
     stats["marked_deleted"] = marked_deleted
     stats["restored"] = restored
