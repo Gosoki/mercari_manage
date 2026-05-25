@@ -12,9 +12,11 @@ from ....use_mercari.get_to_du_list.todolist_sync import (
     sync_todos_from_mercari,
 )
 from ....use_mercari.get_to_du_list.transaction_detail import (
+    SUPPORTED_REACTIONS,
     click_change_shipping_method,
     confirm_shipping_selection,
     fetch_transaction_detail,
+    send_message_reaction_by_index,
     send_transaction_message,
     start_select_shipping_class,
     submit_transaction_review,
@@ -31,6 +33,7 @@ from ....web_drive.core.manager import get_web_drive_manager
 from ....web_drive.core.paths import meilu_account_key
 from .todos_models import (
     ConfirmShippingSelectionRequest,
+    SendMessageReactionRequest,
     SendTransactionMessageRequest,
     SubmitTransactionReviewRequest,
     SyncTodosRequest,
@@ -244,6 +247,43 @@ async def change_shipping_method_endpoint(
         return await run_meilu_serial_async(
             queue_key_for_meilu_account(aid),
             lambda: click_change_shipping_method(int(todo_id), progress_job_id=jid),
+            suppress_idle_close=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        if jid:
+            clear_sync_progress(jid)
+
+
+async def send_message_reaction_endpoint(
+    todo_id: int, req: SendMessageReactionRequest
+) -> Dict[str, Any]:
+    """对买家某条消息发送 emoji 反应（前端用 reaction_index 定位）。"""
+    todo = TodoItemModel.find_by_id(id=int(todo_id))
+    if not todo:
+        raise HTTPException(status_code=404, detail="待办事项不存在")
+    aid = int(getattr(todo, "account_id", 0) or 0)
+    if not aid:
+        raise HTTPException(status_code=400, detail="待办事项缺少 account_id")
+    if (req.reaction or "").strip().lower() not in SUPPORTED_REACTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"reaction 非法（仅支持 {list(SUPPORTED_REACTIONS)}）",
+        )
+    jid = _validate_job_id(req.progress_job_id)
+    try:
+        return await run_meilu_serial_async(
+            queue_key_for_meilu_account(aid),
+            lambda: send_message_reaction_by_index(
+                int(todo_id),
+                req.reaction_index,
+                req.reaction,
+                message_id=req.message_id,
+                progress_job_id=jid,
+            ),
             suppress_idle_close=True,
         )
     except ValueError as exc:

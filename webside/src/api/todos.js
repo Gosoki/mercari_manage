@@ -18,6 +18,9 @@ export const todosApi = {
   /** 在已开浏览器内填回复并点击「取引メッセージを送る」 */
   sendTransactionMessage: (todoId, text, opts = {}, axiosConfig = {}) =>
     http.post(`/use_web/todos/${encodeURIComponent(todoId)}/send-message`, { text, ...opts }, { timeout: 60000, ...axiosConfig }),
+  /** 对买家某条消息发送 emoji 反应（reaction_index = 在 is_buyer 消息中的索引） */
+  sendMessageReaction: (todoId, payload, axiosConfig = {}) =>
+    http.post(`/use_web/todos/${encodeURIComponent(todoId)}/send-reaction`, payload, { timeout: 60000, ...axiosConfig }),
   /** 在已开浏览器（取引評価页）填评价并点击「購入者を評価して取引完了する」 */
   submitTransactionReview: (todoId, text, opts = {}, axiosConfig = {}) =>
     http.post(`/use_web/todos/${encodeURIComponent(todoId)}/submit-review`, { text, ...opts }, { timeout: 60000, ...axiosConfig }),

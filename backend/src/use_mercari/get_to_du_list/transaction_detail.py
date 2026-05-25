@@ -198,13 +198,18 @@ def _parse_messages(
         body_text = (m.get("body") or "").strip()
         if not body_text and not user.get("name"):
             continue
+        msg_id_raw = m.get("id")
+        msg_id = str(msg_id_raw).strip() if msg_id_raw is not None else ""
+        reaction = (m.get("reaction") or "").strip()
         out["messages"].append(
             {
+                "id": msg_id or None,
                 "from": (user.get("name") or "").strip() or None,
                 "text": body_text,
                 "at": _format_ts(m.get("created")),
                 "is_buyer": is_buyer,
                 "user_id": uid or None,
+                "reaction": reaction or None,
             }
         )
         if is_buyer and not out["buyer_name"]:
@@ -734,6 +739,139 @@ async def submit_transaction_review(
         "completed": completed,
         "order_refresh_error": order_refresh_error,
         "text_len": len(body),
+    }
+
+
+# ====================================================================
+# 取引メッセージのリアクション（emoji 反应）
+# ====================================================================
+
+# Mercari 取引メッセージの定型リアクション一覧
+# 値 → 煤炉実际渲染するアイコン（unicode emoji 与 reaction code 都允许）
+# Playwright 检测时优先按 `[aria-label*="..."]` / 文本匹配
+SUPPORTED_REACTIONS: Dict[str, Dict[str, str]] = {
+    "thumbsup": {"emoji": "👍", "aria": "thumbs up"},
+    "heart": {"emoji": "❤️", "aria": "heart"},
+    "smile": {"emoji": "😊", "aria": "smile"},
+    "pray": {"emoji": "🙏", "aria": "pray"},
+    "cry": {"emoji": "😢", "aria": "cry"},
+    "clap": {"emoji": "👏", "aria": "clap"},
+    "sparkles": {"emoji": "✨", "aria": "sparkles"},
+    "ok": {"emoji": "🙆", "aria": "ok"},
+}
+
+
+async def send_message_reaction_by_index(
+    todo_id: int,
+    reaction_index: int,
+    reaction: str,
+    *,
+    message_id: Optional[str] = None,
+    progress_job_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """按「页面上第 reaction_index 个 add-reaction-button」定位并点击反应表情。
+
+    前端调用时根据 ``messages.filter(is_buyer=true).indexOf(targetMessage)`` 计算 ``reaction_index``。
+    """
+    report = make_sync_reporter(progress_job_id)
+    report("resolve_todo", "正在准备发送反应表情…")
+    todo = TodoItemModel.find_by_id(id=int(todo_id))
+    if not todo:
+        raise ValueError(f"待办事项 id={todo_id} 不存在")
+    if reaction_index < 0:
+        raise ValueError("reaction_index 不能小于 0")
+    reaction_key = (reaction or "").strip().lower()
+    if reaction_key not in SUPPORTED_REACTIONS:
+        raise ValueError(f"reaction 取值非法：{reaction}（仅支持 {list(SUPPORTED_REACTIONS)}）")
+    rinfo = SUPPORTED_REACTIONS[reaction_key]
+    emoji_char = rinfo["emoji"]
+    aria_hint = rinfo["aria"]
+
+    aid = int(todo.account_id)
+    mgr = get_web_drive_manager()
+    auto_key = meilu_account_key(aid)
+
+    report("attach_browser", "正在连接已打开的浏览器交易页…")
+    try:
+        page = await mgr.active_tab_page(auto_key)
+    except Exception as exc:
+        raise RuntimeError("浏览器未打开或已关闭，请先点「处理」打开交易页") from exc
+
+    # ── Step 1: 找到第 reaction_index 个「add-reaction-button」并点击 ──
+    report("click_add_reaction", "正在点击「+」反应按钮…")
+    add_btns = page.locator('[data-testid="add-reaction-button"]')
+    try:
+        await add_btns.first.wait_for(state="visible", timeout=6000)
+    except Exception as exc:
+        raise RuntimeError(
+            f"未找到任何「+」反应按钮（可能该交易没有买家消息或页面未加载完；当前 URL: {page.url}）"
+        ) from exc
+    total = await add_btns.count()
+    if reaction_index >= total:
+        raise RuntimeError(
+            f"reaction_index={reaction_index} 越界（页面共 {total} 个反应按钮）"
+        )
+    target_btn = add_btns.nth(reaction_index)
+    try:
+        await target_btn.scroll_into_view_if_needed(timeout=2000)
+    except Exception:
+        pass
+    await target_btn.click()
+    log.info(
+        "[reaction] 已点击 add-reaction-button index=%s account_id=%s todo_id=%s",
+        reaction_index,
+        aid,
+        todo_id,
+    )
+
+    # ── Step 2: 等弹出层出现 + 点对应 emoji ──
+    report("pick_emoji", f"正在选择 emoji（{emoji_char}）…")
+    await asyncio.sleep(0.25)
+    # 候选策略：
+    #   1) [aria-label*="..."] （煤炉常用 aria-label 描述 emoji）
+    #   2) :has-text(emoji_char) （直接 unicode 文本匹配）
+    candidates = [
+        f'button[aria-label*="{aria_hint}" i]',
+        f'[role="button"][aria-label*="{aria_hint}" i]',
+        f'button:has-text("{emoji_char}")',
+        f'[role="button"]:has-text("{emoji_char}")',
+        f'span:has-text("{emoji_char}")',
+    ]
+    emoji_loc = None
+    last_err: Optional[Exception] = None
+    for sel in candidates:
+        try:
+            loc = page.locator(sel)
+            await loc.first.wait_for(state="visible", timeout=2500)
+            emoji_loc = loc.first
+            log.info("[reaction] emoji 选择器命中: %s", sel)
+            break
+        except Exception as exc:
+            last_err = exc
+            continue
+    if emoji_loc is None:
+        raise RuntimeError(
+            f"未找到 emoji「{emoji_char}」按钮（候选选择器均未匹配；"
+            f"当前 URL: {page.url}；最后一次错误：{last_err}）"
+        )
+    await emoji_loc.click()
+    log.info(
+        "[reaction] 已点击 emoji=%s reaction_key=%s account_id=%s",
+        emoji_char,
+        reaction_key,
+        aid,
+    )
+    await asyncio.sleep(0.5)
+
+    report("done", "反应表情已发送")
+    return {
+        "todo_id": int(todo_id),
+        "account_id": aid,
+        "reaction_index": reaction_index,
+        "reaction": reaction_key,
+        "emoji": emoji_char,
+        "message_id": message_id,
+        "sent": True,
     }
 
 

@@ -282,12 +282,56 @@
             <div v-if="detail.messages && detail.messages.length" class="detail-messages">
               <div
                 v-for="(m, i) in detail.messages"
-                :key="i"
+                :key="m.id || `idx-${i}`"
                 :class="['detail-msg', m.is_buyer ? 'detail-msg-buyer' : 'detail-msg-self']"
               >
                 <div v-if="m.from" class="detail-msg-from">{{ m.from }}<span v-if="!m.is_buyer" class="detail-msg-tag-self">（卖家）</span></div>
                 <div class="detail-msg-text">{{ m.text }}</div>
-                <div v-if="m.at" class="detail-msg-at">{{ m.at }}</div>
+                <div class="detail-msg-footer">
+                  <span v-if="m.at" class="detail-msg-at">{{ m.at }}</span>
+                  <span v-if="m.reaction" class="detail-msg-reaction">{{ emojiFor(m.reaction) }}</span>
+                  <!-- 仅在 IncomingMessage（待回复）类型 + 买家消息时显示反应按钮 -->
+                  <el-popover
+                    v-if="canReactToMessages && m.is_buyer && !m.reaction"
+                    :width="232"
+                    placement="bottom-end"
+                    trigger="click"
+                    popper-class="reaction-popover"
+                  >
+                    <template #reference>
+                      <button
+                        type="button"
+                        class="reaction-add-btn"
+                        :title="'反応を追加'"
+                        :aria-label="'反応を追加'"
+                        :disabled="reactionLoading"
+                      >
+                        <svg viewBox="0 0 24 24" width="18" height="18" class="reaction-add-btn-icon-smile">
+                          <path d="M9.21,11a.85.85,0,0,0,.84-.84.84.84,0,0,0-1.68,0A.85.85,0,0,0,9.21,11Z"/>
+                          <path d="M14.79,9.29a.84.84,0,0,0-.84.83.84.84,0,1,0,1.68,0A.84.84,0,0,0,14.79,9.29Z"/>
+                          <path d="M14.79,12.77H9.21a.7.7,0,0,0-.7.7,3.49,3.49,0,0,0,7,0A.7.7,0,0,0,14.79,12.77ZM12,15.56a2.09,2.09,0,0,1-2-1.39H14A2.09,2.09,0,0,1,12,15.56Z"/>
+                          <path d="M12,2A10,10,0,1,0,22,12,10,10,0,0,0,12,2Zm0,18.6A8.6,8.6,0,1,1,20.6,12,8.61,8.61,0,0,1,12,20.6Z"/>
+                        </svg>
+                        <svg viewBox="0 0 24 24" width="14" height="14" class="reaction-add-btn-icon-plus">
+                          <path d="M21,11H13V3a1,1,0,0,0-2,0v8H3a1,1,0,0,0,0,2h8v8a1,1,0,0,0,2,0V13h8a1,1,0,0,0,0-2Z"/>
+                        </svg>
+                      </button>
+                    </template>
+                    <div class="reaction-grid">
+                      <button
+                        v-for="opt in reactionOptions"
+                        :key="opt.key"
+                        type="button"
+                        class="reaction-grid-item"
+                        :title="opt.label"
+                        :disabled="reactionLoading"
+                        @click="onSendReaction(m, opt.key)"
+                      >
+                        <span class="reaction-grid-emoji">{{ opt.emoji }}</span>
+                      </button>
+                    </div>
+                  </el-popover>
+                </div>
               </div>
             </div>
             <div v-else class="detail-empty">待抓取</div>
@@ -597,6 +641,26 @@ function createEmptyDetail() {
 
 const replyLoading = ref(false)
 const reviewLoading = ref(false)
+const reactionLoading = ref(false)
+
+// 反应表情列表（与后端 SUPPORTED_REACTIONS 一一对应）
+const REACTION_OPTIONS = [
+  { key: 'thumbsup', emoji: '👍', label: 'いいね' },
+  { key: 'heart', emoji: '❤️', label: '好き' },
+  { key: 'smile', emoji: '😊', label: '笑顔' },
+  { key: 'pray', emoji: '🙏', label: 'ありがとう' },
+  { key: 'cry', emoji: '😢', label: '悲しい' },
+  { key: 'clap', emoji: '👏', label: '拍手' },
+  { key: 'sparkles', emoji: '✨', label: 'キラキラ' },
+  { key: 'ok', emoji: '🙆', label: 'OK' },
+]
+const REACTION_EMOJI_BY_KEY = Object.fromEntries(REACTION_OPTIONS.map((o) => [o.key, o.emoji]))
+const reactionOptions = REACTION_OPTIONS
+function emojiFor(key) {
+  if (!key) return ''
+  // 后端有可能直接返回 emoji 字符；这里两边都兼容
+  return REACTION_EMOJI_BY_KEY[key] || key
+}
 
 // 当前待办是否是「评价买家」类型 → 切换为取引評価表单
 // 条件：kind === 'ReviewedSeller' 且 title === '評価をしてください'
@@ -604,6 +668,11 @@ const isReviewedSeller = computed(() => {
   const kind = (currentRow.value?.kind || '').trim()
   const title = (currentRow.value?.title || '').trim()
   return kind === 'ReviewedSeller' && title === '評価をしてください'
+})
+
+// 仅在「待回复」(IncomingMessage) 类型下，允许给买家消息加 emoji 反应
+const canReactToMessages = computed(() => {
+  return (currentRow.value?.kind || '').trim() === 'IncomingMessage'
 })
 
 // 选择尺寸 dialog（不再走 MITM 抓取，纯前端硬编码列表）
@@ -999,6 +1068,44 @@ async function onSubmitReview() {
   }
 }
 
+async function onSendReaction(message, reactionKey) {
+  if (!currentRow.value?.id) return
+  if (!message || !message.is_buyer) return
+  if (reactionLoading.value) return
+  // 在「买家消息序列」里查 reaction_index（后端按这个在 DOM 上定位第 N 个 + 反应按钮）
+  const buyerMessages = (detail.messages || []).filter((m) => m && m.is_buyer)
+  const reactionIndex = buyerMessages.findIndex((m) => {
+    if (message.id && m.id) return String(m.id) === String(message.id)
+    return m === message
+  })
+  if (reactionIndex < 0) {
+    ElMessage.error('未能定位目标消息')
+    return
+  }
+  reactionLoading.value = true
+  try {
+    await txOverlay.run({
+      title: '正在发送反应表情',
+      consoleTag: '[发送反应]',
+      pollFn: (jobId) => todosApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        todosApi.sendMessageReaction(currentRow.value.id, {
+          message_id: message.id || null,
+          reaction_index: reactionIndex,
+          reaction: reactionKey,
+          progress_job_id: jobId,
+        }),
+    })
+    // 本地立即把反应贴到对应消息上,避免再抓一次煤炉
+    message.reaction = reactionKey
+    ElMessage.success(`已发送反应 ${REACTION_EMOJI_BY_KEY[reactionKey] || reactionKey}`)
+  } catch (e) {
+    if (!e?.response) ElMessage.error(e?.message || '反应发送失败')
+  } finally {
+    reactionLoading.value = false
+  }
+}
+
 function onDetailDialogClose() {
   // 关 dialog 时同步关掉对应账号的 __auto 浏览器（fire-and-forget）
   const aid = currentRow.value?.account_id
@@ -1281,8 +1388,94 @@ onBeforeUnmount(() => {
 .detail-msg-at {
   font-size: 10px;
   color: var(--el-text-color-placeholder);
+}
+.detail-msg-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
   margin-top: 4px;
-  text-align: right;
+  min-height: 18px;
+}
+.detail-msg-reaction {
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  background: var(--el-fill-color-blank);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 999px;
+}
+.reaction-add-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.reaction-add-btn:hover:not(:disabled) {
+  background: var(--el-fill-color);
+  border-color: var(--el-border-color);
+  color: var(--el-color-primary);
+}
+.reaction-add-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.reaction-add-btn-icon-smile,
+.reaction-add-btn-icon-plus {
+  fill: currentColor;
+}
+/* 默认显示笑脸,hover 时切换为「+」（参考煤炉原生交互） */
+.reaction-add-btn-icon-plus {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  opacity: 0;
+}
+.reaction-add-btn:hover .reaction-add-btn-icon-smile {
+  opacity: 0;
+}
+.reaction-add-btn:hover .reaction-add-btn-icon-plus {
+  opacity: 1;
+}
+.reaction-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.reaction-grid-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s, border-color 0.15s;
+}
+.reaction-grid-item:hover:not(:disabled) {
+  background: var(--el-fill-color);
+  border-color: var(--el-color-primary);
+  transform: scale(1.06);
+}
+.reaction-grid-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.reaction-grid-emoji {
+  font-size: 22px;
+  line-height: 1;
 }
 .detail-shipping-status {
   display: flex;

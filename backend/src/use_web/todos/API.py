@@ -19,6 +19,7 @@ from .units.todos_sync import (
     close_detail_browser,
     confirm_shipping_selection_endpoint,
     fetch_todo_transaction_detail,
+    send_message_reaction_endpoint,
     send_transaction_message_endpoint,
     start_shipping_class_endpoint,
     submit_transaction_review_endpoint,
@@ -57,6 +58,7 @@ router.add_api_route("/sync", sync_todos, methods=["POST"])
 router.add_api_route("/sync-progress/{job_id}", todos_sync_progress, methods=["GET"])
 router.add_api_route("/{todo_id}/transaction-detail", fetch_todo_transaction_detail, methods=["POST"])
 router.add_api_route("/{todo_id}/send-message", send_transaction_message_endpoint, methods=["POST"])
+router.add_api_route("/{todo_id}/send-reaction", send_message_reaction_endpoint, methods=["POST"])
 router.add_api_route("/{todo_id}/submit-review", submit_transaction_review_endpoint, methods=["POST"])
 router.add_api_route("/{todo_id}/shipping/start", start_shipping_class_endpoint, methods=["POST"])
 router.add_api_route("/{todo_id}/shipping/confirm", confirm_shipping_selection_endpoint, methods=["POST"])
