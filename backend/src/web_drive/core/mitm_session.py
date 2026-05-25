@@ -23,7 +23,11 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Callable, Dict, Optional, Tuple
 
 from ...ssl_mitm_proxy.runner import default_mitm_proxy_url, start_mitm_proxy
-from .manager import EdgeWebDriveManager, get_web_drive_manager
+from .manager import (
+    EdgeWebDriveManager,
+    automation_headless_enabled,
+    get_web_drive_manager,
+)
 from .paths import meilu_account_key
 
 log = logging.getLogger(__name__)
@@ -56,11 +60,13 @@ async def _launch_with_mitm(
     main_key: str,
     target_url: str,
     minimized: bool = True,
+    headless: bool = False,
 ) -> None:
-    """启动账号主 profile 有头 Edge,直接进入目标页(经 MITM 代理)。
+    """启动账号主 profile Edge,直接进入目标页(经 MITM 代理)。
 
     若同 profile 已有进程(无 MITM 代理),强制关闭后重启。
-    ``minimized=True`` 时浏览器窗口最小化到任务栏(后台运行,不抢前台)。
+    ``headless=True`` 时启动无头浏览器(``minimized`` 自动失效);
+    ``headless=False`` 且 ``minimized=True`` 时浏览器窗口最小化到任务栏(后台运行,不抢前台)。
     """
     r = start_mitm_proxy()
     if r.get("error"):
@@ -81,10 +87,10 @@ async def _launch_with_mitm(
 
     await mgr.open_session(
         main_key,
-        headless=False,
+        headless=headless,
         start_url=target,
         proxy_server=proxy,
-        interactive=True,
+        interactive=not headless,
         restore_tabs=False,
         start_minimized=bool(minimized),
     )
@@ -123,6 +129,7 @@ async def mitm_automation_browser(
     mgr = get_web_drive_manager()
     target_url = (start_url or "").strip()
     use_minimized = _default_minimized() if minimized is None else bool(minimized)
+    use_headless = automation_headless_enabled()
 
     if await _is_context_alive(mgr, main_key):
         # 复用:仅刷新当前标签页到目标 URL
@@ -146,6 +153,7 @@ async def mitm_automation_browser(
                     main_key=main_key,
                     target_url=target_url,
                     minimized=use_minimized,
+                    headless=use_headless,
                 )
     else:
         await _launch_with_mitm(
@@ -154,6 +162,7 @@ async def mitm_automation_browser(
             main_key=main_key,
             target_url=target_url,
             minimized=use_minimized,
+            headless=use_headless,
         )
 
     yield mgr, main_key

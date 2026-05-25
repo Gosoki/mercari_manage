@@ -70,7 +70,7 @@ async def startup_interactive_browsers_for_all_active_accounts() -> None:
     try:
         from ...db_manage.database import DatabaseManager
         from .paths import meilu_account_key
-        from .manager import get_web_drive_manager
+        from .manager import automation_headless_enabled, get_web_drive_manager
 
         db = DatabaseManager()
         rows = db.execute_query(
@@ -89,9 +89,11 @@ async def startup_interactive_browsers_for_all_active_accounts() -> None:
         return
 
     mgr = get_web_drive_manager()
+    headless = automation_headless_enabled()
     log.info(
-        "startup_interactive_browsers: 开始为 %d 个活跃账号打开有头 Edge %s",
+        "startup_interactive_browsers: 开始为 %d 个活跃账号打开 Edge（%s）%s",
         len(account_ids),
+        "无头" if headless else "有头·后台最小化",
         account_ids,
     )
     for aid in account_ids:
@@ -99,10 +101,11 @@ async def startup_interactive_browsers_for_all_active_accounts() -> None:
         try:
             result = await mgr.open_session(
                 key,
-                headless=False,
+                headless=headless,
                 start_url=MERCARI_HOME,
-                interactive=True,
-                restore_tabs=True,
+                interactive=not headless,
+                restore_tabs=not headless,
+                start_minimized=True,
             )
             tr = result.get("tab_restore") or {}
             log.info(

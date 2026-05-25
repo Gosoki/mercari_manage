@@ -550,7 +550,7 @@
             <div class="manual-ob-filter-cell">
               <el-input
                 v-model="manualInvFilters.keyword"
-                placeholder="搜索商品名称"
+                placeholder="搜索商品名称或管理番号"
                 clearable
                 prefix-icon="Search"
                 @change="reloadManualInventoryList"
@@ -722,7 +722,7 @@
             <div class="manual-ob-filter-cell">
               <el-input
                 v-model="bindInvFilters.keyword"
-                placeholder="搜索商品名称"
+                placeholder="搜索商品名称或管理番号"
                 clearable
                 prefix-icon="Search"
                 @change="reloadBindInventoryList"

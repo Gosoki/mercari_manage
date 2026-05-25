@@ -24,6 +24,7 @@ from ....web_drive.core.account_serial_queue import (
     queue_key_for_meilu_account,
     run_meilu_serial_async,
 )
+from ....web_drive.core.manager import automation_headless_enabled
 from .meilu_accounts_helpers import (
     _item_api_dict,
     _norm_headers_dict,
@@ -178,12 +179,14 @@ async def fetch_seller_id_via_mitm(
 
         t0 = int(time.time() * 1000)
         mgr = get_web_drive_manager()
+        headless = bool(body.headless) or automation_headless_enabled()
         await mgr.open_session(
             account_key,
-            headless=body.headless,
+            headless=headless,
             start_url=MERCARI_LISTINGS_URL,
             proxy_server=default_mitm_proxy_url(),
-            interactive=not body.headless,
+            interactive=not headless,
+            start_minimized=True,
         )
 
         cap = await _wait_capture_with_progress(
@@ -266,12 +269,14 @@ async def fetch_auth_via_mitm(
                 # 登录态由 Edge 持久化 cookie 自动维护，无需 cookie seed。
                 auto_key = meilu_account_key(aid)
                 await mgr.close_session(auto_key, force=True)
+                headless = automation_headless_enabled()
                 await mgr.open_session(
                     auto_key,
-                    headless=False,
+                    headless=headless,
                     start_url=MERCARI_IN_PROGRESS_URL,
                     proxy_server=default_mitm_proxy_url(),
                     interactive=False,
+                    start_minimized=True,
                 )
 
             patch: Dict[str, Any] = {}

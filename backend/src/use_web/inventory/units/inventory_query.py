@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import HTTPException
 
 from ....db_manage.models.order_outbound_line import OrderOutboundLineModel
+from ....use_mercari.mgmt_id_cipher import decode_mgmt_id_cipher
 
 from .inventory_helpers import (
     _query_inventory_with_joins,
@@ -27,9 +28,25 @@ def list_inventory(
     params = []
     kw = (keyword or "").strip()
     if kw:
-        where_parts.append("AND (p.name LIKE ? OR CAST(p.id AS TEXT) LIKE ?)")
-        params.append(f"%{kw}%")
-        params.append(f"%{kw}%")
+        clauses = ["p.name LIKE ?"]
+        kw_params = [f"%{kw}%"]
+        # 纯数字 → 按管理番号（inventory.id）精确匹配
+        mgmt_id_exact: Optional[int] = None
+        if kw.isdigit():
+            try:
+                n = int(kw)
+            except ValueError:
+                n = 0
+            if n > 0:
+                mgmt_id_exact = n
+        else:
+            # 5 进制管理番号暗号（-=~<>）→ 解码为 inventory.id 精确匹配
+            mgmt_id_exact = decode_mgmt_id_cipher(kw)
+        if mgmt_id_exact is not None:
+            clauses.append("p.id = ?")
+            kw_params.append(mgmt_id_exact)
+        where_parts.append("AND (" + " OR ".join(clauses) + ")")
+        params.extend(kw_params)
     if category_id:
         where_parts.append("AND p.category_id = ?")
         params.append(category_id)
