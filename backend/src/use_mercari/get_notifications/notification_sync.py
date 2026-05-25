@@ -96,6 +96,12 @@ def _normalize_notification_row(
 
     activity = str(intent_obj.get("activity") or "").strip() or None
 
+    # item_id 优先取 args.item_id;部分 kind(如 DesiredPriceOfferCreated) args 中没有
+    # 这个字段,真实 id 放在 intent.extra.id 里(activity=ItemDetailActivity)
+    item_id_val = str(args_obj.get("item_id") or "").strip()
+    if not item_id_val and activity == "ItemDetailActivity":
+        item_id_val = str(extra_dict.get("id") or "").strip()
+
     # WebActivity / ExternalWebActivity 在 extra.url 里直接给跳转地址
     target_url = None
     raw_url = extra_dict.get("url")
@@ -103,9 +109,8 @@ def _normalize_notification_row(
         target_url = raw_url.strip()
     # 商品详情类 intent (ItemDetailActivity) 直接组装煤炉商品页 URL
     elif activity == "ItemDetailActivity":
-        iid = str(extra_dict.get("id") or args_obj.get("item_id") or "").strip()
-        if iid:
-            target_url = f"https://jp.mercari.com/item/{iid}"
+        if item_id_val:
+            target_url = f"https://jp.mercari.com/item/{item_id_val}"
 
     return {
         "account_id": int(account_id),
@@ -117,7 +122,7 @@ def _normalize_notification_row(
         "photo_type": (item.get("photoType") or None),
         "args_json": (args_raw if isinstance(args_raw, str) and args_raw.strip() else None),
         "intent_json": (intent_raw if isinstance(intent_raw, str) and intent_raw.strip() else None),
-        "item_id": (str(args_obj.get("item_id") or "").strip() or None),
+        "item_id": (item_id_val or None),
         "item_name": (str(args_obj.get("item_name") or "").strip() or None),
         "item_thumbnail": (str(args_obj.get("item_thumbnail") or "").strip() or None),
         "sender_id": (str(args_obj.get("sender_id") or "").strip() or None),

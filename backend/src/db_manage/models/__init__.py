@@ -16,6 +16,7 @@ from .config_entry import ConfigEntryModel
 from .todo_item import TodoItemModel
 from .notification import NotificationModel
 from .bundle_purchase_request import BundlePurchaseRequestModel
+from .desired_price_offer import DesiredPriceOfferModel
 
 __all__ = [
     'CategoryModel',
@@ -35,4 +36,5 @@ __all__ = [
     'TodoItemModel',
     'NotificationModel',
     'BundlePurchaseRequestModel',
+    'DesiredPriceOfferModel',
 ]

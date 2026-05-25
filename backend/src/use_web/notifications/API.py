@@ -15,6 +15,12 @@
     GET   /mercariV2/src/use_web/notifications/bundle-purchase/{bundle_id}
     POST  /mercariV2/src/use_web/notifications/bundle-purchase/{bundle_id}/decide
 
+降价请求（DesiredPriceOfferCreated）相关：
+    POST  /mercariV2/src/use_web/notifications/desired-price/sync
+    GET   /mercariV2/src/use_web/notifications/desired-price/{item_id}
+    POST  /mercariV2/src/use_web/notifications/desired-price/{item_id}/decide
+    POST  /mercariV2/src/use_web/notifications/desired-price/close
+
 留言（Comment）相关：
     POST  /mercariV2/src/use_web/notifications/item-comment/sync
     POST  /mercariV2/src/use_web/notifications/item-comment/post
@@ -28,6 +34,10 @@ from ...use_mercari.get_notifications.bundle_purchase_decide import (
     BundleAlreadyDecidedError,
     decide_bundle_purchase,
 )
+from ...use_mercari.get_notifications.desired_price_decide import (
+    DesiredPriceAlreadyDecidedError,
+    decide_desired_price,
+)
 from ...use_mercari.get_notifications.item_comment_close import close_account_browser
 from ...use_mercari.get_notifications.item_comment_post import post_item_comment
 from ...use_mercari.get_notifications.item_comment_sync import (
@@ -39,6 +49,13 @@ from .units.bundle_purchase_models import (
 )
 from .units.bundle_purchase_query import get_bundle_purchase
 from .units.bundle_purchase_sync import sync_bundle_purchase
+from .units.desired_price_models import (
+    DesiredPriceCloseRequest,
+    DesiredPriceDecideRequest,
+    DesiredPriceSyncRequest,
+)
+from .units.desired_price_query import get_desired_price_offer
+from .units.desired_price_sync import sync_desired_price
 from .units.item_comment_models import (
     ItemCommentCloseRequest,
     ItemCommentPostRequest,
@@ -147,6 +164,55 @@ async def _bundle_purchase_decide_endpoint(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+# ─────────── 降价请求（DesiredPriceOfferCreated） ───────────
+
+
+async def _desired_price_sync_endpoint(req: DesiredPriceSyncRequest) -> Dict[str, Any]:
+    return await sync_desired_price(req)
+
+
+def _desired_price_detail_endpoint(
+    item_id: str, account_id: Optional[int] = None
+) -> Dict[str, Any]:
+    row = get_desired_price_offer(item_id, account_id=account_id)
+    if row is None:
+        raise HTTPException(
+            status_code=404, detail="未找到降价请求，请先「同步」一次"
+        )
+    return row
+
+
+async def _desired_price_decide_endpoint(
+    item_id: str, req: DesiredPriceDecideRequest
+) -> Dict[str, Any]:
+    """同意 / 拒绝降价请求。不走队列：直接复用主 profile 浏览器, 点击后关闭。"""
+    act = (req.action or "").strip().lower()
+    if act not in ("accept", "reject"):
+        raise HTTPException(status_code=400, detail="action 必须是 accept / reject")
+    try:
+        return await decide_desired_price(
+            item_id=item_id,
+            account_id=req.account_id,
+            action=act,
+        )
+    except DesiredPriceAlreadyDecidedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+async def _desired_price_close_endpoint(req: DesiredPriceCloseRequest) -> Dict[str, Any]:
+    """前端关闭降价请求弹窗时调用, 强制关闭主 profile 浏览器。
+
+    复用 item_comment_close 的 close_account_browser 实现, 因二者都使用
+    同一个 meilu 账号主 profile, 关闭逻辑相同。
+    """
+    try:
+        return await close_account_browser(account_id=req.account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 # ─────────── 留言（Comment） ───────────
 
 
@@ -200,6 +266,21 @@ router.add_api_route(
 router.add_api_route(
     "/bundle-purchase/{bundle_id}/decide",
     _bundle_purchase_decide_endpoint,
+    methods=["POST"],
+)
+
+router.add_api_route(
+    "/desired-price/sync", _desired_price_sync_endpoint, methods=["POST"]
+)
+router.add_api_route(
+    "/desired-price/close", _desired_price_close_endpoint, methods=["POST"]
+)
+router.add_api_route(
+    "/desired-price/{item_id}", _desired_price_detail_endpoint, methods=["GET"]
+)
+router.add_api_route(
+    "/desired-price/{item_id}/decide",
+    _desired_price_decide_endpoint,
     methods=["POST"],
 )
 

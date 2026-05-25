@@ -18,6 +18,7 @@ from mitmproxy import ctx  # noqa: E402
 from mitmproxy import http  # noqa: E402
 
 from src.ssl_mitm_proxy.capture_config import (  # noqa: E402
+    atomic_write_aggregated_desired_prices_response,
     atomic_write_bundle_purchase_response,
     atomic_write_capture_file,
     atomic_write_item_get_response,
@@ -309,6 +310,30 @@ class MercariCapture:
                 )
                 _log_line(
                     f"[MITM] v1/bundlePurchases 响应已写入 bundle_id={bid} items={items_n}"
+                )
+                return
+
+            if ctype == "aggregated_desired_prices_get" and dpop == "dpop_desired_price":
+                iid = canonical_mercari_item_id(str(meta.get("item_id") or ""))
+                if not iid:
+                    return
+                atomic_write_aggregated_desired_prices_response(
+                    iid,
+                    {
+                        "ts": int(time.time() * 1000),
+                        "item_id": iid,
+                        "request_url": str(meta.get("full_url") or url),
+                        "http_status": code,
+                        "body": body_json,
+                    },
+                )
+                offers_n = (
+                    len(body_json.get("aggregatedDesiredPrices") or [])
+                    if isinstance(body_json, dict)
+                    else 0
+                )
+                _log_line(
+                    f"[MITM] v2/aggregatedDesiredPriceItems 响应已写入 item_id={iid} offers={offers_n}"
                 )
                 return
 

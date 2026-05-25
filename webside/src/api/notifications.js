@@ -30,6 +30,27 @@ export const notificationsApi = {
       data,
       { timeout: 0, ...axiosConfig },
     ),
+  // 降价请求 (DesiredPriceOfferCreated) — 値下げ依頼
+  desiredPriceSync: (data, axiosConfig = {}) =>
+    http.post('/use_web/notifications/desired-price/sync', data, {
+      timeout: 0,
+      ...axiosConfig,
+    }),
+  desiredPriceDetail: (itemId, params) =>
+    http.get(`/use_web/notifications/desired-price/${encodeURIComponent(itemId)}`, {
+      params,
+    }),
+  desiredPriceDecide: (itemId, data, axiosConfig = {}) =>
+    http.post(
+      `/use_web/notifications/desired-price/${encodeURIComponent(itemId)}/decide`,
+      data,
+      { timeout: 0, ...axiosConfig },
+    ),
+  desiredPriceClose: (data, axiosConfig = {}) =>
+    http.post('/use_web/notifications/desired-price/close', data, {
+      timeout: 0,
+      ...axiosConfig,
+    }),
   // 留言 (Comment) — 商品コメント
   itemCommentSync: (data, axiosConfig = {}) =>
     http.post('/use_web/notifications/item-comment/sync', data, {

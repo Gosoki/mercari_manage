@@ -201,6 +201,19 @@ def parse_capture_target(
                 "dpop_field": "dpop_bundle_purchase",
                 "full_url": u,
             }
+        # /v2/aggregatedDesiredPriceItems/{item_id}：降价请求(値下げ依頼)列表
+        # 形如 /v2/aggregatedDesiredPriceItems/m98058424889
+        if "/v2/aggregatedDesiredPriceItems/" in norm_path:
+            iid = norm_path.rsplit("/", 1)[-1].strip()
+            if not iid:
+                return None
+            return {
+                "capture_type": "aggregated_desired_prices_get",
+                "item_id": iid,
+                "http_method": m or "GET",
+                "dpop_field": "dpop_desired_price",
+                "full_url": u,
+            }
         return None
     except Exception:
         return None
@@ -692,6 +705,55 @@ def atomic_write_bundle_purchase_response(bundle_id: str, payload: Dict[str, Any
 
 def read_bundle_purchase_response(bundle_id: str) -> Optional[Dict[str, Any]]:
     path = bundle_purchase_response_path(bundle_id)
+    if not os.path.isfile(path):
+        return None
+    with _lock:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return None
+
+
+# ============ 降价请求(値下げ依頼)：/v2/aggregatedDesiredPriceItems/{item_id} ============
+# 按 item_id 分文件，避免多商品并发覆盖。
+
+
+def aggregated_desired_prices_response_path(item_id: str) -> str:
+    cid = canonical_mercari_item_id(item_id)
+    return os.path.join(
+        ssl_mitm_data_dir(), f"aggregated_desired_prices_response_{cid}.json"
+    )
+
+
+def clear_aggregated_desired_prices_response_file(item_id: str) -> None:
+    p = aggregated_desired_prices_response_path(item_id)
+    with _lock:
+        try:
+            if os.path.isfile(p):
+                os.remove(p)
+        except OSError:
+            pass
+
+
+def atomic_write_aggregated_desired_prices_response(
+    item_id: str, payload: Dict[str, Any]
+) -> None:
+    cid = canonical_mercari_item_id(item_id)
+    if not cid:
+        return
+    d = ssl_mitm_data_dir()
+    os.makedirs(d, exist_ok=True)
+    path = aggregated_desired_prices_response_path(cid)
+    tmp = path + ".tmp"
+    with _lock:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+
+
+def read_aggregated_desired_prices_response(item_id: str) -> Optional[Dict[str, Any]]:
+    path = aggregated_desired_prices_response_path(item_id)
     if not os.path.isfile(path):
         return None
     with _lock:

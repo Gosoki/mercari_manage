@@ -170,6 +170,16 @@
             >
               已读
             </el-button>
+            <el-button
+              v-else
+              type="info"
+              link
+              size="small"
+              :loading="markReadLoadingIds.has(row.id)"
+              @click="onMarkUnread(row)"
+            >
+              取消已读
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -200,6 +210,14 @@
       :item-name="commentDialogItemName"
       :account-id="commentDialogAccountId"
     />
+
+    <DesiredPriceDialog
+      v-model="desiredPriceDialogVisible"
+      :item-id="desiredPriceDialogItemId"
+      :item-name="desiredPriceDialogItemName"
+      :account-id="desiredPriceDialogAccountId"
+      :notification-id="desiredPriceDialogNotificationId"
+    />
   </div>
 </template>
 
@@ -211,6 +229,7 @@ import { notificationsApi, meiluAccountApi } from '@/api'
 import { useMercariAccountStore } from '@/stores/mercariAccount.js'
 import BundlePurchaseDialog from '@/components/BundlePurchaseDialog.vue'
 import ItemCommentDialog from '@/components/ItemCommentDialog.vue'
+import DesiredPriceDialog from '@/components/DesiredPriceDialog.vue'
 
 const mercariAccountStore = useMercariAccountStore()
 const globalAccountId = computed({
@@ -255,6 +274,7 @@ const KIND_ACTION = {
   'merpay-egp-ian-promotion-action-url': 'none',
   Comment: 'detail',
   BundleRequestCreated: 'detail',
+  DesiredPriceOfferCreated: 'detail',
 }
 
 function actionForKind(kind) {
@@ -399,6 +419,12 @@ const commentDialogItemId = ref('')
 const commentDialogItemName = ref('')
 const commentDialogAccountId = ref(null)
 
+const desiredPriceDialogVisible = ref(false)
+const desiredPriceDialogItemId = ref('')
+const desiredPriceDialogItemName = ref('')
+const desiredPriceDialogAccountId = ref(null)
+const desiredPriceDialogNotificationId = ref(null)
+
 function extractBundleId(row) {
   const raw = String(row?.intent_json || '').trim()
   if (!raw) return ''
@@ -409,6 +435,23 @@ function extractBundleId(row) {
   } catch {
     return ''
   }
+}
+
+// 部分通知 (如 DesiredPriceOfferCreated) item_id 不在 args 而在 intent.extra.id;
+// 后端旧版同步未覆盖此情况,前端这里兜底从 intent_json 解析。
+function resolveItemId(row) {
+  const direct = String(row?.item_id || '').trim()
+  if (direct) return direct
+  const raw = String(row?.intent_json || '').trim()
+  if (!raw) return ''
+  try {
+    const obj = JSON.parse(raw)
+    if (String(obj?.activity || '').trim() === 'ItemDetailActivity') {
+      const id = obj?.extra?.id
+      return typeof id === 'string' ? id.trim() : ''
+    }
+  } catch { /* ignore */ }
+  return ''
 }
 
 function autoMarkRead(row) {
@@ -434,7 +477,7 @@ function onViewDetail(row) {
     return
   }
   if (row?.kind === 'Comment') {
-    const iid = String(row.item_id || '').trim()
+    const iid = resolveItemId(row)
     if (!iid) {
       ElMessage.warning('该通知未携带 item_id，无法打开留言详情')
       return
@@ -443,6 +486,20 @@ function onViewDetail(row) {
     commentDialogItemName.value = row.item_name || ''
     commentDialogAccountId.value = row.account_id || null
     commentDialogVisible.value = true
+    autoMarkRead(row)
+    return
+  }
+  if (row?.kind === 'DesiredPriceOfferCreated') {
+    const iid = resolveItemId(row)
+    if (!iid) {
+      ElMessage.warning('该通知未携带 item_id，无法打开降价请求详情')
+      return
+    }
+    desiredPriceDialogItemId.value = iid
+    desiredPriceDialogItemName.value = row.item_name || ''
+    desiredPriceDialogAccountId.value = row.account_id || null
+    desiredPriceDialogNotificationId.value = row.id || null
+    desiredPriceDialogVisible.value = true
     autoMarkRead(row)
     return
   }
@@ -465,6 +522,24 @@ async function onMarkRead(row) {
     }
   } catch (e) {
     ElMessage.error(e?.message || '标记已读失败')
+  } finally {
+    const after = new Set(markReadLoadingIds.value)
+    after.delete(row.id)
+    markReadLoadingIds.value = after
+  }
+}
+
+async function onMarkUnread(row) {
+  if (!row?.id || !row.is_read) return
+  if (markReadLoadingIds.value.has(row.id)) return
+  const next = new Set(markReadLoadingIds.value)
+  next.add(row.id)
+  markReadLoadingIds.value = next
+  try {
+    await notificationsApi.markRead([row.id], false)
+    row.is_read = 0
+  } catch (e) {
+    ElMessage.error(e?.message || '取消已读失败')
   } finally {
     const after = new Set(markReadLoadingIds.value)
     after.delete(row.id)
