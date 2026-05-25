@@ -348,12 +348,16 @@ async def decide_bundle_purchase(
     shipping_method: Optional[str] = None,
     shipping_from: Optional[str] = None,
     shipping_days: Optional[str] = None,
+    progress_job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     打开 /bundle_offer/{bundle_id}（持久化主 profile + MITM），
     accept 填表 + 点「依頼を承諾する」；reject 直接点「依頼を断る」。
     完成后关闭浏览器。**不使用队列**。
     """
+    from ..sync_progress import make_sync_reporter
+    report = make_sync_reporter(progress_job_id)
+    report("resolve_account", "正在准备煤炉账号…")
     bid = str(bundle_id or "").strip()
     if not bid:
         raise ValueError("bundle_id 不能为空")
@@ -380,6 +384,7 @@ async def decide_bundle_purchase(
         "[bundle_decide] start account_id=%s bundle_id=%s action=%s", aid, bid, act
     )
 
+    report("open_browser", f"正在打开合并购买请求页（{bid}）…")
     async with mitm_automation_browser(int(aid), start_url=start_url) as (mgr, key):
         # mitm_automation_browser 复用现有会话或重新打开;此处直接拿 active page
         page = await mgr.active_tab_page(key)
@@ -427,6 +432,7 @@ async def decide_bundle_purchase(
                     skipped_reason, detected_state,
                 )
             elif act == "accept":
+                report("fill_form", "正在填写发货信息表单…")
                 await _fill_offer_form(
                     page,
                     shipping_payer=shipping_payer or "",
@@ -436,10 +442,12 @@ async def decide_bundle_purchase(
                 )
                 # 给 React 一点稳定时间再点击
                 await asyncio.sleep(0.4)
+                report("click_accept", "正在点击「依頼を承諾する」…")
                 await _click_button_by_text(page, ACCEPT_BUTTON_TEXT)
                 clicked.append(ACCEPT_BUTTON_TEXT)
                 # 二次确认：弹窗 / 新页内显示「承諾して出品する」,需再点一次
                 await asyncio.sleep(0.4)
+                report("confirm_accept", "正在点击二次确认按钮…")
                 await _click_button_by_text(
                     page,
                     ACCEPT_CONFIRM_BUTTON_TEXT,
@@ -447,6 +455,7 @@ async def decide_bundle_purchase(
                 )
                 clicked.append(ACCEPT_CONFIRM_BUTTON_TEXT)
             else:
+                report("click_reject", "正在点击「依頼を断る」…")
                 await _click_button_by_text(page, REJECT_BUTTON_TEXT)
                 clicked.append(REJECT_BUTTON_TEXT)
 
@@ -475,6 +484,7 @@ async def decide_bundle_purchase(
         "state_updated_rows=%d new_state=%s skipped=%s",
         aid, bid, act, clicked, updated_rows, new_state, skipped_reason,
     )
+    report("done", f"已完成（最终状态：{new_state}）")
     return {
         "account_id": int(aid),
         "bundle_id": bid,

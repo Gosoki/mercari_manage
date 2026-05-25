@@ -22,6 +22,9 @@ export const orderApi = {
   /** 单行 items/get 刷新：传 order_no + data_user（卖家ID），与煤炉账号 seller_id 对应 */
   refreshInfo: (data, axiosConfig = {}) =>
     http.post('/use_web/orders/refresh-info', data, { timeout: 60000, ...axiosConfig }),
+  /** 与 refreshInfo 的 progress_job_id 配合，轮询当前刷新步骤 */
+  getRefreshProgress: (jobId, axiosConfig = {}) =>
+    http.get(`/use_web/orders/refresh-progress/${encodeURIComponent(jobId)}`, axiosConfig),
   /** 待评价/已完成：确认本单不使用包材 */
   waivePackaging: (data) => http.post('/use_web/orders/packaging-waive', data)
 }

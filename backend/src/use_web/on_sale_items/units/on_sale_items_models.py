@@ -14,6 +14,7 @@ class FetchOnSaleDetailRequest(PydanticModel):
     """items/get 拉取详情并尝试同步库存；account_id 不传则按在售行的 seller_id 匹配 active 账号。"""
     item_id: str
     account_id: Optional[int] = None
+    progress_job_id: Optional[str] = None
 
 
 class FetchOnSaleDetailsBatchRequest(PydanticModel):

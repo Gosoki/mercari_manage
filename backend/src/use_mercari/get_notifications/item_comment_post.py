@@ -137,12 +137,16 @@ async def post_item_comment(
     item_id: str,
     message: str,
     account_id: Optional[int] = None,
+    progress_job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """打开 ``/item/{item_id}`` 输入并发送评论。**不使用队列**。
 
     发送完成后**不关闭**浏览器:用户可能在弹窗里继续发评论,浏览器需保持开启,
     直到前端弹窗关闭/页面卸载时显式调 ``/item-comment/close``。
     """
+    from ..sync_progress import make_sync_reporter
+    report = make_sync_reporter(progress_job_id)
+    report("resolve_account", "正在准备发送评论…")
     iid = str(item_id or "").strip()
     if not iid:
         raise ValueError("item_id 不能为空")
@@ -162,6 +166,7 @@ async def post_item_comment(
     )
 
     refreshed: Optional[Dict[str, Any]] = None
+    report("open_browser", f"正在打开商品页（{iid}）…")
     async with mitm_automation_browser(int(aid), start_url=start_url) as (mgr, key):
         page = await mgr.active_tab_page(key)
 
@@ -184,8 +189,10 @@ async def post_item_comment(
         await asyncio.sleep(PAGE_SETTLE_SEC)
 
         # 发送本身失败(填表/找不到按钮)直接向上抛
+        report("fill_comment", "正在填入评论内容…")
         await _fill_textarea(page, COMMENT_TEXTAREA_SELECTOR, msg)
         await asyncio.sleep(0.3)
+        report("click_submit", "正在点击「コメントする」…")
         await _click_submit_button(page)
 
         # 等评论 POST 完成
@@ -199,6 +206,7 @@ async def post_item_comment(
 
         # 同一会话内 reload 一次,触发 items/get 重新拉取(包含刚发的评论)
         # 这样前端无需再开第二轮浏览器即可拿到最新评论列表。
+        report("refresh_comments", "正在刷新评论列表…")
         try:
             clear_item_get_response_file(iid)
             since_ms_refresh = int(time.time() * 1000)
@@ -216,6 +224,7 @@ async def post_item_comment(
                 "[item_comment_post] 评论发送成功,但刷新评论列表失败 item_id=%s: %s",
                 iid, exc,
             )
+        report("done", "评论已发送")
         # 不关闭浏览器:用户可能继续在弹窗里多次发送评论。
         # 关闭由前端 /item-comment/close 触发。
 

@@ -28,6 +28,7 @@ from .get_order.mercari_item_get import (
     fetch_mercari_item_get,
     fetch_mercari_item_get_in_browser_session,
 )
+from .sync_progress import make_sync_reporter
 
 _MERCARI_ID_SEP_RE = re.compile(r"[\n,，、\s]+")
 
@@ -201,10 +202,16 @@ def _persist_listing_description_for_item(
 def detail_sync_inventory_from_item_get_response(
     item_id: str,
     resp: Dict[str, Any],
+    *,
+    persist_description: bool = True,
 ) -> Dict[str, Any]:
     """
     ``resp`` 为 MITM 截获的 ``items/get`` JSON（含 result / data）。
     将说明解析结果写入库存；返回结构与 ``fetch_detail_and_sync_inventory`` 一致。
+
+    ``persist_description=False`` 时跳过将 data.description 回写 on_sale_items.listing_description
+    （供 relink_inventory_from_persisted_listing 复用本函数处理本地构造的伪响应，避免对本地已有
+    listing_description 进行无意义覆盖）。
     """
     sync: Dict[str, Any] = {
         "updated": False,
@@ -232,7 +239,8 @@ def detail_sync_inventory_from_item_get_response(
     status = data.get("status")
     on_sale_qty = _on_sale_quantity_from_status(status if isinstance(status, str) else None)
 
-    _persist_listing_description_for_item(str(item_id or "").strip(), mid_api, desc_text)
+    if persist_description:
+        _persist_listing_description_for_item(str(item_id or "").strip(), mid_api, desc_text)
 
     hints = extract_mgmt_barcode_hints(desc_text)
     sync["parsed_hints"] = hints
@@ -395,14 +403,62 @@ def detail_sync_inventory_from_item_get_response(
 async def fetch_detail_and_sync_inventory(
     item_id: str,
     account_id: Optional[int] = None,
+    *,
+    progress_job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     通过浏览器打开商品页并由 MITM 截获 items/get，将 data.id 与在售数量写入匹配到的库存行。
 
     :return: { api: 原始响应, sync: { updated, inventory_id, mercari_item_id, on_sale_quantity, message } }
+
+    ``progress_job_id`` 配合通用 ``sync_progress``：每个阶段写入中文步骤供前端轮询。
     """
+    report = make_sync_reporter(progress_job_id)
+    iid_norm = str(item_id or "").strip()
+    report("open_browser", f"正在打开商品页并截获详情（{iid_norm or '-'}）…")
     resp = await fetch_mercari_item_get(item_id, account_id=account_id)
-    return detail_sync_inventory_from_item_get_response(item_id, resp)
+    report("apply_inventory", "正在解析说明并回写库存关联…")
+    out = detail_sync_inventory_from_item_get_response(item_id, resp)
+    sync = out.get("sync") if isinstance(out, dict) else None
+    msg = sync.get("message") if isinstance(sync, dict) else None
+    report("done", f"完成：{msg or '已处理'}")
+    return out
+
+
+def relink_inventory_from_persisted_listing(item_id: str) -> Dict[str, Any]:
+    """
+    根据本地 on_sale_items.listing_description / name / status 重新建立
+    inventory.mercari_item_id 与 on_sale_quantity 的关联（不调煤炉 API、不覆写说明）。
+
+    用于「从煤炉同步」对历史已抓详情的在售商品做自愈：之前由各种原因丢失的
+    inventory.mercari_item_id 绑定（如 _strip_mercari_item_ids_from_inventory 旧路径、
+    手工误操作等）会按本地说明里的「管理番号 / 管理ID / バーコード / 末行暗号」重新建立。
+
+    返回结构与 ``fetch_detail_and_sync_inventory`` 一致；若本地无对应 on_sale_items 或
+    listing_description 为空，则 ``sync.updated=False`` 并填 ``message``。
+    """
+    iid = str(item_id or "").strip()
+    if not iid:
+        return {"api": None, "sync": {"updated": False, "message": "缺少 item_id"}}
+    rows = OnSaleItemModel.find_all_by_item_id(iid)
+    if not rows:
+        return {"api": None, "sync": {"updated": False, "message": "本地无对应 on_sale_items"}}
+    row = rows[0]
+    desc = row.get("listing_description")
+    if not (str(desc or "").strip()):
+        return {"api": None, "sync": {"updated": False, "message": "本地无 listing_description"}}
+    fake_resp = {
+        "result": "OK",
+        "data": {
+            "id": iid,
+            "description": desc,
+            "name": row.get("name"),
+            "status": row.get("status"),
+        },
+    }
+    return detail_sync_inventory_from_item_get_response(
+        iid, fake_resp, persist_description=False
+    )
 
 
 def on_sale_sync_auto_detail_settings() -> Tuple[bool, int, int]:

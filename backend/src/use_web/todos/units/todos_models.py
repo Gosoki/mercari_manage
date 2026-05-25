@@ -12,13 +12,22 @@ class SyncTodosRequest(PydanticModel):
 
 class SendTransactionMessageRequest(PydanticModel):
     text: str = Field(..., min_length=1, max_length=2000)
+    progress_job_id: Optional[str] = None
 
 
 class ConfirmShippingSelectionRequest(PydanticModel):
     class_text: str = Field(..., min_length=1, max_length=200)
     # 仅对需要选择 facility 的 size 必填：'post_office' | 'lawson' | None
     facility: Optional[str] = None
+    progress_job_id: Optional[str] = None
 
 
 class SubmitTransactionReviewRequest(PydanticModel):
     text: str = Field(..., min_length=1, max_length=140)
+    progress_job_id: Optional[str] = None
+
+
+class TransactionActionRequest(PydanticModel):
+    """无 body 的浏览器操作（拉详情/启动尺寸选择/修改发送方式）仍需透传 job_id。"""
+
+    progress_job_id: Optional[str] = None

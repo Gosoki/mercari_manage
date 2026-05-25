@@ -240,12 +240,16 @@ class DeleteMercariItemBody(PydanticModel):
     item_id: str = Field(..., min_length=1, max_length=64)
     proxy_server: Optional[str] = None
     use_mitm_proxy: bool = True
+    progress_job_id: Optional[str] = None
 
 
 async def delete_on_sale_item(body: DeleteMercariItemBody):
     """
     账号主 profile ``meilu_{id}`` 经 MITM 打开编辑页删除商品，跳转出品一覧后同步本地列表；
     经 ``run_meilu_serial_async`` 串行，浏览器在队列空闲超时后由队列自动关闭。
+
+    ``progress_job_id`` 与 GET /use_web/on-sale-items/sync-progress/{job_id} 共用通用
+    sync_progress 内存存储，前端可复用同一个轮询接口展示步骤。
     """
     from ....web_drive.core.account_serial_queue import (
         queue_key_for_meilu_account,
@@ -254,10 +258,15 @@ async def delete_on_sale_item(body: DeleteMercariItemBody):
     from ....web_drive.core.paths import meilu_id_from_account_key
     from ....web_drive.delete.units.delete_order import delete_mercari_item as _do_delete
     from ....ssl_mitm_proxy.runner import default_mitm_proxy_url
+    from ....use_mercari.sync_progress import clear_sync_progress
 
     item_id = (body.item_id or "").strip()
     if not item_id:
         raise HTTPException(status_code=400, detail="item_id 不能为空")
+
+    jid = (body.progress_job_id or "").strip() or None
+    if jid and not _LISTING_JOB_ID_RE.fullmatch(jid):
+        raise HTTPException(status_code=400, detail="invalid progress_job_id")
 
     account_id = meilu_id_from_account_key(body.account_key)
     if account_id is None:
@@ -276,6 +285,7 @@ async def delete_on_sale_item(body: DeleteMercariItemBody):
                 body.account_key,
                 item_id=item_id,
                 proxy_server=proxy,
+                progress_job_id=jid,
             )
 
         data = await run_meilu_serial_async(
@@ -290,3 +300,6 @@ async def delete_on_sale_item(body: DeleteMercariItemBody):
     except Exception as exc:
         log.exception("delete_on_sale_item 异常")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        if jid:
+            clear_sync_progress(jid)

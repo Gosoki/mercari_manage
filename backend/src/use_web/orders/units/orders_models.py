@@ -30,6 +30,7 @@ class RefreshOrderInfoBody(PydanticModel):
 
     order_no: str
     data_user: str
+    progress_job_id: Optional[str] = None
 
 
 class OrderPackagingWaiveBody(PydanticModel):

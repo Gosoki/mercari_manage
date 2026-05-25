@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import time
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Callable, Dict, Optional, Tuple
@@ -33,6 +34,124 @@ from .paths import meilu_account_key
 log = logging.getLogger(__name__)
 
 _MITM_PAGE_RELOAD_INTERVAL_SEC = 20.0
+
+# 煤炉登录页 URL 模式：cookies 过期时所有目标页都会 302 到这里
+_MERCARI_LOGIN_URL_RE = re.compile(
+    r"^https?://login\.jp\.mercari\.com/",
+    re.IGNORECASE,
+)
+
+
+class MercariLoginRequiredError(RuntimeError):
+    """打开账号浏览器后跳到 ``login.jp.mercari.com`` 登录页：账号 cookie 已失效。
+
+    抛出前已将 ``meilu_accounts.status`` 置为 ``'disabled'``，并强制关闭该账号
+    的 MITM 浏览器。前端可在「煤炉账号」页打开浏览器手动重新登录后再启用账号。
+    """
+
+    def __init__(
+        self,
+        *,
+        account_id: int,
+        account_name: str = "",
+        login_url: str = "",
+    ) -> None:
+        self.account_id = int(account_id)
+        self.account_name = (account_name or "").strip()
+        self.login_url = (login_url or "").strip()
+        label = self.account_name or f"#{self.account_id}"
+        super().__init__(
+            f"煤炉账号「{label}」登录态已失效（浏览器被重定向到登录页），"
+            f"已将账号状态置为「停用」。请到「煤炉账号」页面打开浏览器手动登录后再启用。"
+        )
+
+
+def _is_mercari_login_url(url: Optional[str]) -> bool:
+    if not url:
+        return False
+    return bool(_MERCARI_LOGIN_URL_RE.match(str(url).strip()))
+
+
+async def _detect_login_redirect_and_disable(
+    mgr: EdgeWebDriveManager,
+    account_id: int,
+    main_key: str,
+    *,
+    max_wait_ms: int = 2000,
+) -> None:
+    """打开浏览器后检测是否被重定向到煤炉登录页。
+
+    - 在 ``max_wait_ms`` 内轮询当前活动标签 URL：
+        - 命中登录页 → 立刻关闭浏览器、将账号 ``status`` 置 ``'disabled'``、
+          抛 ``MercariLoginRequiredError``
+        - 命中非空且非登录的 URL → 视为正常加载,提前返回
+    - 全程命中空白 / about:blank → 视为加载未完成,达到超时后视作正常返回(不
+      误判)
+    """
+    deadline = time.monotonic() + max_wait_ms / 1000
+    detected_login_url = ""
+    while time.monotonic() < deadline:
+        cur_url = ""
+        try:
+            page = await mgr.active_tab_page(main_key)
+            cur_url = (page.url or "").strip()
+        except Exception:
+            cur_url = ""
+        if _is_mercari_login_url(cur_url):
+            detected_login_url = cur_url
+            break
+        if cur_url and "about:blank" not in cur_url.lower():
+            # 已有真实目标页 URL（非登录）→ 提前认为正常返回
+            return
+        await asyncio.sleep(0.15)
+
+    if not detected_login_url:
+        return
+
+    # ── 命中登录页：停账号 + 关浏览器 + 抛错 ───────────────────────── #
+    account_name = ""
+    try:
+        from ...db_manage.models.meilu_account import MeiluAccountModel
+
+        acc = MeiluAccountModel.find_by_id(id=int(account_id))
+        if acc is not None:
+            account_name = str(getattr(acc, "account_name", "") or "").strip()
+            if str(getattr(acc, "status", "") or "").strip() != "disabled":
+                acc.status = "disabled"
+                try:
+                    acc.save()
+                    log.warning(
+                        "[mitm] 浏览器被重定向到登录页，已停用账号 account_id=%d name=%s url=%s",
+                        account_id,
+                        account_name,
+                        detected_login_url,
+                    )
+                except Exception as exc:
+                    log.warning(
+                        "[mitm] 标记账号停用失败 account_id=%d: %s",
+                        account_id,
+                        exc,
+                    )
+    except Exception as exc:
+        log.warning(
+            "[mitm] 读取账号失败 account_id=%d: %s", account_id, exc
+        )
+
+    # 关闭被登录页占用的浏览器，避免后续操作再次进入相同失效会话
+    try:
+        await mgr.close_session(main_key, force=True)
+    except Exception as exc:
+        log.warning(
+            "[mitm] 登录态失效关浏览器失败 account_id=%d: %s",
+            account_id,
+            exc,
+        )
+
+    raise MercariLoginRequiredError(
+        account_id=int(account_id),
+        account_name=account_name,
+        login_url=detected_login_url,
+    )
 
 
 def _default_minimized() -> bool:
@@ -164,6 +283,11 @@ async def mitm_automation_browser(
             minimized=use_minimized,
             headless=use_headless,
         )
+
+    # ── 检测登录态失效（重定向到 login.jp.mercari.com）── #
+    # 命中则关浏览器 + 将 meilu_accounts.status 置为 'disabled' + 抛错；
+    # 失败/正常加载则提前返回，不影响后续 MITM 截获。
+    await _detect_login_redirect_and_disable(mgr, aid, main_key)
 
     yield mgr, main_key
 

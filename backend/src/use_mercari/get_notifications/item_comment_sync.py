@@ -48,6 +48,7 @@ async def sync_item_comments_from_mercari(
     *,
     item_id: str,
     account_id: Optional[int] = None,
+    progress_job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """打开 ``/item/{item_id}`` 抓取 items/get 响应,返回商品摘要 + 评论列表。
 
@@ -59,6 +60,9 @@ async def sync_item_comments_from_mercari(
             "comments": [{id, user_id, user_name, user_photo, message, created_ms}, ...],
         }
     """
+    from ..sync_progress import make_sync_reporter
+    report = make_sync_reporter(progress_job_id)
+    report("resolve_account", "正在准备煤炉账号…")
     iid = str(item_id or "").strip()
     if not iid:
         raise ValueError("item_id 不能为空")
@@ -70,7 +74,9 @@ async def sync_item_comments_from_mercari(
     since_ms = int(time.time() * 1000)
     start_url = build_item_page_url(iid)
 
+    report("open_browser", f"正在打开商品页（{iid}）…")
     async with mitm_automation_browser(int(aid), start_url=start_url) as (mgr, main_key):
+        report("wait_capture", "等待煤炉返回 items/get 响应…")
         data = await capture_item_get_via_mitm_session(
             mgr, main_key, item_id=iid, since_ms=since_ms
         )
@@ -78,11 +84,13 @@ async def sync_item_comments_from_mercari(
     if not isinstance(data, dict):
         raise RuntimeError(f"未截获 items/get 响应或响应体异常 item_id={iid}")
 
+    report("parse_comments", "正在解析评论列表…")
     parsed = extract_item_with_comments(data)
     log.info(
         "[item_comment] sync done account_id=%s item_id=%s comments=%d",
         aid, iid, len(parsed["comments"]),
     )
+    report("done", f"已获取 {len(parsed['comments'])} 条评论")
     return {
         "account_id": int(aid),
         "item_id": iid,

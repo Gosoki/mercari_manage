@@ -102,6 +102,7 @@
         </el-button>
       </div>
     </template>
+    <SyncOverlay :state="commentOverlay.state" />
   </el-dialog>
 </template>
 
@@ -109,6 +110,10 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { notificationsApi } from '@/api'
+import { useSyncOverlay } from '@/composables/useSyncOverlay'
+import SyncOverlay from '@/components/SyncOverlay.vue'
+
+const commentOverlay = useSyncOverlay()
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -205,9 +210,16 @@ async function runSync() {
   // sync 会启动浏览器并保持开启,直到弹窗关闭/页面离开
   browserOpened.value = true
   try {
-    const res = await notificationsApi.itemCommentSync({
-      item_id: props.itemId,
-      account_id: props.accountId || null,
+    const res = await commentOverlay.run({
+      title: '正在抓取评论',
+      consoleTag: '[评论同步]',
+      pollFn: (jobId) => notificationsApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        notificationsApi.itemCommentSync({
+          item_id: props.itemId,
+          account_id: props.accountId || null,
+          progress_job_id: jobId,
+        }),
     })
     applyResponse(res)
   } catch (e) {
@@ -223,10 +235,17 @@ async function onSubmit() {
   if (!msg) return
   posting.value = true
   try {
-    const res = await notificationsApi.itemCommentPost({
-      item_id: props.itemId,
-      account_id: props.accountId || null,
-      message: msg,
+    const res = await commentOverlay.run({
+      title: '正在发送评论',
+      consoleTag: '[发送评论]',
+      pollFn: (jobId) => notificationsApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        notificationsApi.itemCommentPost({
+          item_id: props.itemId,
+          account_id: props.accountId || null,
+          message: msg,
+          progress_job_id: jobId,
+        }),
     })
     ElMessage.success('已发送评论')
     emit('posted', { item_id: props.itemId, message: msg })
@@ -271,6 +290,7 @@ function onVisibleChange(v) {
 // 弹窗一起卸载,这里兜底关一次浏览器。
 onBeforeUnmount(() => {
   closeBrowserSilently()
+  commentOverlay.dispose()
 })
 
 watch(

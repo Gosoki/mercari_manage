@@ -26,6 +26,7 @@
     POST  /mercariV2/src/use_web/notifications/item-comment/post
 """
 
+import re
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -43,6 +44,7 @@ from ...use_mercari.get_notifications.item_comment_post import post_item_comment
 from ...use_mercari.get_notifications.item_comment_sync import (
     sync_item_comments_from_mercari,
 )
+from ...use_mercari.sync_progress import clear_sync_progress, get_sync_progress
 from .units.bundle_purchase_models import (
     BundlePurchaseDecideRequest,
     BundlePurchaseSyncRequest,
@@ -71,6 +73,15 @@ from .units.notifications_query import (
 from .units.notifications_sync import notifications_sync_progress, sync_notifications
 
 router = APIRouter()
+
+_JOB_ID_RE = re.compile(r"^[a-zA-Z0-9_.-]{1,128}$")
+
+
+def _validate_jid(raw: Optional[str]) -> Optional[str]:
+    jid = (raw or "").strip() or None
+    if jid and not _JOB_ID_RE.fullmatch(jid):
+        raise HTTPException(status_code=400, detail="invalid progress_job_id")
+    return jid
 
 
 def _list_notifications_endpoint(
@@ -148,6 +159,7 @@ async def _bundle_purchase_decide_endpoint(
                 status_code=400,
                 detail=f"承诺前必须填写以下字段: {', '.join(missing)}",
             )
+    jid = _validate_jid(req.progress_job_id)
     try:
         return await decide_bundle_purchase(
             bundle_id=bundle_id,
@@ -157,11 +169,15 @@ async def _bundle_purchase_decide_endpoint(
             shipping_method=req.shipping_method,
             shipping_from=req.shipping_from,
             shipping_days=req.shipping_days,
+            progress_job_id=jid,
         )
     except BundleAlreadyDecidedError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        if jid:
+            clear_sync_progress(jid)
 
 
 # ─────────── 降价请求（DesiredPriceOfferCreated） ───────────
@@ -189,16 +205,21 @@ async def _desired_price_decide_endpoint(
     act = (req.action or "").strip().lower()
     if act not in ("accept", "reject"):
         raise HTTPException(status_code=400, detail="action 必须是 accept / reject")
+    jid = _validate_jid(req.progress_job_id)
     try:
         return await decide_desired_price(
             item_id=item_id,
             account_id=req.account_id,
             action=act,
+            progress_job_id=jid,
         )
     except DesiredPriceAlreadyDecidedError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        if jid:
+            clear_sync_progress(jid)
 
 
 async def _desired_price_close_endpoint(req: DesiredPriceCloseRequest) -> Dict[str, Any]:
@@ -220,12 +241,16 @@ async def _item_comment_sync_endpoint(req: ItemCommentSyncRequest) -> Dict[str, 
     iid = (req.item_id or "").strip()
     if not iid:
         raise HTTPException(status_code=400, detail="item_id 不能为空")
+    jid = _validate_jid(req.progress_job_id)
     try:
         return await sync_item_comments_from_mercari(
-            item_id=iid, account_id=req.account_id
+            item_id=iid, account_id=req.account_id, progress_job_id=jid,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        if jid:
+            clear_sync_progress(jid)
 
 
 async def _item_comment_post_endpoint(req: ItemCommentPostRequest) -> Dict[str, Any]:
@@ -235,12 +260,16 @@ async def _item_comment_post_endpoint(req: ItemCommentPostRequest) -> Dict[str, 
         raise HTTPException(status_code=400, detail="item_id 不能为空")
     if not msg:
         raise HTTPException(status_code=400, detail="评论内容不能为空")
+    jid = _validate_jid(req.progress_job_id)
     try:
         return await post_item_comment(
-            item_id=iid, message=msg, account_id=req.account_id
+            item_id=iid, message=msg, account_id=req.account_id, progress_job_id=jid,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        if jid:
+            clear_sync_progress(jid)
 
 
 async def _item_comment_close_endpoint(req: ItemCommentCloseRequest) -> Dict[str, Any]:

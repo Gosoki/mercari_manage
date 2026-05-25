@@ -17,6 +17,7 @@ from ....use_mercari.on_sale_sync_progress import (
     clear_on_sale_sync_progress,
     get_on_sale_sync_progress,
 )
+from ....use_mercari.sync_progress import clear_sync_progress
 from ....use_mercari.sync_data import resolve_account_id_by_seller_id
 
 from .on_sale_items_models import (
@@ -83,10 +84,17 @@ async def fetch_on_sale_item_detail(data: FetchOnSaleDetailRequest):
     截获 api.mercari.jp/items/get 响应；解析 data.description 中的末行暗号（-=~<>）、
     「管理ID / 管理番号 / バーコード」，
     匹配库存后写入 mercari_item_id、on_sale_quantity。须已启动 mitmdump。
+
+    ``progress_job_id`` 与 GET /use_web/on-sale-items/sync-progress/{job_id} 配合，
+    供前端轮询当前步骤展示全屏等待框。
     """
     item_id = (data.item_id or "").strip()
     if not item_id:
         raise HTTPException(status_code=400, detail="item_id 不能为空")
+
+    jid = (data.progress_job_id or "").strip() or None
+    if jid and not _SYNC_JOB_ID_RE.fullmatch(jid):
+        raise HTTPException(status_code=400, detail="invalid progress_job_id")
 
     account_id = data.account_id
     if account_id is None:
@@ -110,7 +118,11 @@ async def fetch_on_sale_item_detail(data: FetchOnSaleDetailRequest):
         qk = queue_key_for_meilu_account(int(account_id))
         payload = await run_meilu_serial_async(
             qk,
-            lambda: fetch_detail_and_sync_inventory(item_id, account_id=account_id),
+            lambda: fetch_detail_and_sync_inventory(
+                item_id,
+                account_id=account_id,
+                progress_job_id=jid,
+            ),
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -118,6 +130,9 @@ async def fetch_on_sale_item_detail(data: FetchOnSaleDetailRequest):
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"获取详情失败: {exc}") from exc
+    finally:
+        if jid:
+            clear_sync_progress(jid)
 
     return {"success": True, "data": payload}
 

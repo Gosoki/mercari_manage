@@ -30,6 +30,7 @@ from ....ssl_mitm_proxy.capture_config import (
 )
 from ....web_drive.core.mitm_session import mitm_automation_browser
 from ....use_web.system.cost_expenses.units.cost_expenses_helpers import deduct_packaging_total_from_order_net_income
+from ...sync_progress import make_sync_reporter
 
 _TRANSACTION_EVIDENCE_GET_PATH = "https://api.mercari.jp/transaction_evidences/get"
 
@@ -286,15 +287,21 @@ async def apply_item_info_to_order(
     item_id: str,
     account_id: Optional[int] = None,
     expected_seller_id: Optional[str] = None,
+    *,
+    progress_job_id: Optional[str] = None,
 ) -> Optional[str]:
     """
     拉取 transaction_evidences/get 并写入已存在订单（order_no == item_id）。
     expected_seller_id：校验 data.seller_id 与该卖家 ID 一致。
+
+    ``progress_job_id`` 配合通用 ``sync_progress``：每个阶段写入中文步骤供前端轮询。
     """
+    report = make_sync_reporter(progress_job_id)
     item_id = str(item_id or "").strip()
     if not item_id:
         return "empty_item_id"
 
+    report("open_browser", f"正在打开取引页并截获详情（{item_id}）…")
     try:
         resp = await fetch_item_info(item_id, account_id=account_id)
     except Exception as exc:
@@ -312,6 +319,7 @@ async def apply_item_info_to_order(
                 if sid is None or str(sid).strip() != exp:
                     return "seller_mismatch"
 
+    report("apply_fields", "正在解析订单详情并写入本地…")
     fields = extract_order_info_fields(resp)
     rows = OrderModel.find_all(where="[order_no] = ?", params=(item_id,), limit=1)
     if not rows:
@@ -365,4 +373,5 @@ async def apply_item_info_to_order(
     from ..description_mgmt_ids import sync_outbound_lines_for_order
 
     sync_outbound_lines_for_order(item_id, o.description, skip_if_has_lines=True)
+    report("done", f"刷新完成（订单号 {item_id}）")
     return None

@@ -2290,14 +2290,67 @@ async function refreshOrder(row) {
     ElMessage.warning('该订单缺少卖家ID（data_user），无法选择煤炉账号，请先同步或编辑补全')
     return
   }
+
+  const progressJobId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `job_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+
+  let lastConsoleStep = ''
+  async function pollSyncProgress() {
+    try {
+      const pr = await orderApi.getRefreshProgress(progressJobId)
+      const d = pr?.data
+      const zh = d?.label_zh
+      if (zh) {
+        syncProgressLabel.value = zh
+        if (zh !== lastConsoleStep) {
+          lastConsoleStep = zh
+          console.log('[订单刷新]', zh)
+        }
+      }
+    } catch {
+      /* 轮询失败忽略 */
+    }
+  }
+
+  syncOverlayTitle.value = '正在刷新订单'
+  syncOverlayFailed.value = false
+  syncProgressLabel.value = '正在连接服务器…'
+  syncOverlayVisible.value = true
   refreshingId.value = row.id
+  await pollSyncProgress()
+  syncProgressTimer = setInterval(pollSyncProgress, 400)
+
+  let hadError = false
   try {
-    await orderApi.refreshInfo({ order_no: orderNo, data_user: dataUser })
+    await orderApi.refreshInfo({
+      order_no: orderNo,
+      data_user: dataUser,
+      progress_job_id: progressJobId,
+    })
     ElMessage.success('已从煤炉刷新该订单')
     clearOutboundExpandCache(orderNo)
     load()
     loadStats()
+  } catch (e) {
+    hadError = true
+    syncOverlayTitle.value = '刷新失败'
+    syncOverlayFailed.value = true
+    const msg = e?.response?.data?.detail || e?.message || '刷新失败'
+    syncProgressLabel.value = String(msg)
   } finally {
+    if (syncProgressTimer != null) {
+      clearInterval(syncProgressTimer)
+      syncProgressTimer = null
+    }
+    if (hadError) {
+      await new Promise((r) => setTimeout(r, 1200))
+    }
+    syncOverlayVisible.value = false
+    syncOverlayTitle.value = '正在同步'
+    syncOverlayFailed.value = false
+    syncProgressLabel.value = ''
     refreshingId.value = null
   }
 }

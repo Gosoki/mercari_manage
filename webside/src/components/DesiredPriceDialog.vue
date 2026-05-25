@@ -158,6 +158,7 @@
         </el-button>
       </div>
     </template>
+    <SyncOverlay :state="desiredOverlay.state" />
   </el-dialog>
 </template>
 
@@ -166,6 +167,10 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Star } from '@element-plus/icons-vue'
 import { notificationsApi } from '@/api'
+import { useSyncOverlay } from '@/composables/useSyncOverlay'
+import SyncOverlay from '@/components/SyncOverlay.vue'
+
+const desiredOverlay = useSyncOverlay()
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -313,10 +318,17 @@ async function runSync() {
   loading.value = true
   browserOpened.value = true
   try {
-    await notificationsApi.desiredPriceSync({
-      item_id: props.itemId,
-      account_id: props.accountId || null,
-      notification_id: props.notificationId || null,
+    await desiredOverlay.run({
+      title: '正在抓取降价请求详情',
+      consoleTag: '[降价请求同步]',
+      pollFn: (jobId) => notificationsApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        notificationsApi.desiredPriceSync({
+          item_id: props.itemId,
+          account_id: props.accountId || null,
+          notification_id: props.notificationId || null,
+          progress_job_id: jobId,
+        }),
     })
     await loadDetail()
   } catch (e) {
@@ -333,9 +345,16 @@ async function onAccept() {
   // accept 会启动浏览器执行点击, 标记一下
   browserOpened.value = true
   try {
-    const res = await notificationsApi.desiredPriceDecide(props.itemId, {
-      action: 'accept',
-      account_id: props.accountId || null,
+    const res = await desiredOverlay.run({
+      title: '正在同意降价请求',
+      consoleTag: '[降价请求同意]',
+      pollFn: (jobId) => notificationsApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        notificationsApi.desiredPriceDecide(props.itemId, {
+          action: 'accept',
+          account_id: props.accountId || null,
+          progress_job_id: jobId,
+        }),
     })
     if (res?.skipped) {
       ElMessage.warning(
@@ -367,9 +386,16 @@ async function onReject() {
   rejecting.value = true
   browserOpened.value = true
   try {
-    const res = await notificationsApi.desiredPriceDecide(props.itemId, {
-      action: 'reject',
-      account_id: props.accountId || null,
+    const res = await desiredOverlay.run({
+      title: '正在拒绝降价请求',
+      consoleTag: '[降价请求拒绝]',
+      pollFn: (jobId) => notificationsApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        notificationsApi.desiredPriceDecide(props.itemId, {
+          action: 'reject',
+          account_id: props.accountId || null,
+          progress_job_id: jobId,
+        }),
     })
     if (res?.skipped) {
       ElMessage.warning(
@@ -419,6 +445,7 @@ function onVisibleChange(v) {
 // 用户离开 /notifications 页面 → 弹窗一起卸载, 这里兜底关一次浏览器
 onBeforeUnmount(() => {
   closeBrowserSilently()
+  desiredOverlay.dispose()
 })
 
 watch(

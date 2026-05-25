@@ -2,7 +2,7 @@
 """待办事项同步入口（HTTP 层）。"""
 
 import re
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
 
@@ -34,6 +34,7 @@ from .todos_models import (
     SendTransactionMessageRequest,
     SubmitTransactionReviewRequest,
     SyncTodosRequest,
+    TransactionActionRequest,
 )
 
 
@@ -81,7 +82,17 @@ def todos_sync_progress(job_id: str):
     return {"success": True, "data": row}
 
 
-async def fetch_todo_transaction_detail(todo_id: int) -> Dict[str, Any]:
+def _validate_job_id(raw: Optional[str]) -> Optional[str]:
+    jid = (raw or "").strip() or None
+    if jid and not _SYNC_JOB_ID_RE.fullmatch(jid):
+        raise HTTPException(status_code=400, detail="invalid progress_job_id")
+    return jid
+
+
+async def fetch_todo_transaction_detail(
+    todo_id: int,
+    req: Optional[TransactionActionRequest] = None,
+) -> Dict[str, Any]:
     """处理按钮：打开 transaction 页 → MITM 抓 API → 解析返回；浏览器保持打开。"""
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
@@ -90,18 +101,23 @@ async def fetch_todo_transaction_detail(todo_id: int) -> Dict[str, Any]:
     if not aid:
         raise HTTPException(status_code=400, detail="待办事项缺少 account_id")
 
+    jid = _validate_job_id(req.progress_job_id if req else None)
+
     # 交易详情打开后浏览器需保持打开,等用户在前端继续操作（发送/选择/评价等）;
     # 队列空闲自动关闭由 close_detail_browser 路由或终态 op 显式关闭代替
     try:
         data = await run_meilu_serial_async(
             queue_key_for_meilu_account(aid),
-            lambda: fetch_transaction_detail(int(todo_id)),
+            lambda: fetch_transaction_detail(int(todo_id), progress_job_id=jid),
             suppress_idle_close=True,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+    finally:
+        if jid:
+            clear_sync_progress(jid)
     return data
 
 
@@ -115,19 +131,26 @@ async def send_transaction_message_endpoint(
     aid = int(getattr(todo, "account_id", 0) or 0)
     if not aid:
         raise HTTPException(status_code=400, detail="待办事项缺少 account_id")
+    jid = _validate_job_id(req.progress_job_id)
     try:
         return await run_meilu_serial_async(
             queue_key_for_meilu_account(aid),
-            lambda: send_transaction_message(int(todo_id), req.text),
+            lambda: send_transaction_message(int(todo_id), req.text, progress_job_id=jid),
             suppress_idle_close=True,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        if jid:
+            clear_sync_progress(jid)
 
 
-async def start_shipping_class_endpoint(todo_id: int) -> Dict[str, Any]:
+async def start_shipping_class_endpoint(
+    todo_id: int,
+    req: Optional[TransactionActionRequest] = None,
+) -> Dict[str, Any]:
     """点 transaction 页的「商品サイズと発送場所を選択する」按钮，等抓 shipping_classes。"""
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
@@ -135,16 +158,20 @@ async def start_shipping_class_endpoint(todo_id: int) -> Dict[str, Any]:
     aid = int(getattr(todo, "account_id", 0) or 0)
     if not aid:
         raise HTTPException(status_code=400, detail="待办事项缺少 account_id")
+    jid = _validate_job_id(req.progress_job_id if req else None)
     try:
         return await run_meilu_serial_async(
             queue_key_for_meilu_account(aid),
-            lambda: start_select_shipping_class(int(todo_id)),
+            lambda: start_select_shipping_class(int(todo_id), progress_job_id=jid),
             suppress_idle_close=True,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        if jid:
+            clear_sync_progress(jid)
 
 
 async def confirm_shipping_selection_endpoint(
@@ -157,16 +184,22 @@ async def confirm_shipping_selection_endpoint(
     aid = int(getattr(todo, "account_id", 0) or 0)
     if not aid:
         raise HTTPException(status_code=400, detail="待办事项缺少 account_id")
+    jid = _validate_job_id(req.progress_job_id)
     try:
         return await run_meilu_serial_async(
             queue_key_for_meilu_account(aid),
-            lambda: confirm_shipping_selection(int(todo_id), req.class_text, req.facility),
+            lambda: confirm_shipping_selection(
+                int(todo_id), req.class_text, req.facility, progress_job_id=jid,
+            ),
             suppress_idle_close=True,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        if jid:
+            clear_sync_progress(jid)
 
 
 async def submit_transaction_review_endpoint(
@@ -179,19 +212,26 @@ async def submit_transaction_review_endpoint(
     aid = int(getattr(todo, "account_id", 0) or 0)
     if not aid:
         raise HTTPException(status_code=400, detail="待办事项缺少 account_id")
+    jid = _validate_job_id(req.progress_job_id)
     try:
         return await run_meilu_serial_async(
             queue_key_for_meilu_account(aid),
-            lambda: submit_transaction_review(int(todo_id), req.text),
+            lambda: submit_transaction_review(int(todo_id), req.text, progress_job_id=jid),
             suppress_idle_close=True,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        if jid:
+            clear_sync_progress(jid)
 
 
-async def change_shipping_method_endpoint(todo_id: int) -> Dict[str, Any]:
+async def change_shipping_method_endpoint(
+    todo_id: int,
+    req: Optional[TransactionActionRequest] = None,
+) -> Dict[str, Any]:
     """点 transaction 页的「発送方法を変更する」按钮，导航到修改发送方式页（后续由用户在浏览器内完成）。"""
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
@@ -199,16 +239,20 @@ async def change_shipping_method_endpoint(todo_id: int) -> Dict[str, Any]:
     aid = int(getattr(todo, "account_id", 0) or 0)
     if not aid:
         raise HTTPException(status_code=400, detail="待办事项缺少 account_id")
+    jid = _validate_job_id(req.progress_job_id if req else None)
     try:
         return await run_meilu_serial_async(
             queue_key_for_meilu_account(aid),
-            lambda: click_change_shipping_method(int(todo_id)),
+            lambda: click_change_shipping_method(int(todo_id), progress_job_id=jid),
             suppress_idle_close=True,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        if jid:
+            clear_sync_progress(jid)
 
 
 async def close_detail_browser(account_id: int) -> Dict[str, Any]:

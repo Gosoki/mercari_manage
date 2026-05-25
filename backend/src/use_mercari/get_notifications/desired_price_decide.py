@@ -187,11 +187,15 @@ async def decide_desired_price(
     item_id: str,
     account_id: Optional[int] = None,
     action: str,
+    progress_job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     打开 /item/{item_id}/desired_price (持久化主 profile + MITM),
     accept 点「売る」 / reject 点「売らない」。完成后关闭浏览器。
     """
+    from ..sync_progress import make_sync_reporter
+    report = make_sync_reporter(progress_job_id)
+    report("resolve_account", "正在准备煤炉账号…")
     iid = str(item_id or "").strip()
     if not iid:
         raise ValueError("item_id 不能为空")
@@ -218,6 +222,7 @@ async def decide_desired_price(
         aid, iid, act,
     )
 
+    report("open_browser", f"正在打开降价请求页（{iid}）…")
     async with mitm_automation_browser(int(aid), start_url=start_url) as (mgr, key):
         page = await mgr.active_tab_page(key)
 
@@ -270,9 +275,11 @@ async def decide_desired_price(
                     skipped_reason, detected_state,
                 )
             elif act == "accept":
+                report("click_accept", "正在点击「売る」（接受降价）…")
                 await _click_selector(page, ACCEPT_BUTTON_SELECTOR)
                 clicked.append("accept_button")
                 # 短等二次确认弹窗(可能不出现)
+                report("confirm_accept", "等待二次确认弹窗…")
                 confirm_hit = await _try_click_confirm_dialog(
                     page,
                     ACCEPT_CONFIRM_BUTTON_TEXTS,
@@ -281,6 +288,7 @@ async def decide_desired_price(
                 if confirm_hit:
                     clicked.append(f"confirm:{confirm_hit}")
             else:
+                report("click_reject", "正在点击「売らない」（拒绝降价）…")
                 await _click_selector(page, REJECT_BUTTON_SELECTOR)
                 clicked.append("reject_button")
 
@@ -305,6 +313,7 @@ async def decide_desired_price(
         "state_updated=%d new_state=%s skipped=%s",
         aid, iid, act, clicked, updated_rows, new_state, skipped_reason,
     )
+    report("done", f"已完成（最终状态：{new_state}）")
     return {
         "account_id": int(aid),
         "item_id": iid,

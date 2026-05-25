@@ -399,6 +399,8 @@
         </div>
       </div>
     </teleport>
+
+    <SyncOverlay :state="txOverlay.state" />
   </div>
 </template>
 
@@ -408,6 +410,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Loading } from '@element-plus/icons-vue'
 import { todosApi, meiluAccountApi } from '@/api'
 import { useMercariAccountStore } from '@/stores/mercariAccount.js'
+import { useSyncOverlay } from '@/composables/useSyncOverlay'
+import SyncOverlay from '@/components/SyncOverlay.vue'
+
+// 交易详情类「浏览器自动化」操作的等待覆盖（与 syncOverlay*（从煤炉同步）独立）
+const txOverlay = useSyncOverlay()
 import { mercariImageUrl } from '@/utils/mercariImage.js'
 
 const mercariAccountStore = useMercariAccountStore()
@@ -806,7 +813,13 @@ async function onDetailRefresh() {
   }
   detailLoading.value = true
   try {
-    const d = await todosApi.fetchTransactionDetail(currentRow.value.id)
+    const d = await txOverlay.run({
+      title: '正在拉取交易详情',
+      consoleTag: '[交易详情]',
+      pollFn: (jobId) => todosApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        todosApi.fetchTransactionDetail(currentRow.value.id, { progress_job_id: jobId }),
+    })
     if (!d || typeof d !== 'object') {
       ElMessage.warning('未拿到交易页数据')
       return
@@ -838,7 +851,13 @@ async function onClickShippingSizeLocation() {
   if (!currentRow.value?.id) return
   // 先点开页面上的「商品サイズと発送場所を選択する」让浏览器跳到尺寸选择页
   try {
-    await todosApi.startShippingClass(currentRow.value.id)
+    await txOverlay.run({
+      title: '正在打开「商品サイズと発送場所」选择',
+      consoleTag: '[尺寸选择]',
+      pollFn: (jobId) => todosApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        todosApi.startShippingClass(currentRow.value.id, { progress_job_id: jobId }),
+    })
   } catch (e) {
     if (!e?.response) ElMessage.error(e?.message || '打开尺寸选择页失败')
     return
@@ -862,9 +881,16 @@ async function onConfirmShippingSelection() {
   }
   shippingConfirmLoading.value = true
   try {
-    await todosApi.confirmShippingSelection(currentRow.value.id, {
-      class_text: classText,
-      facility: needsFacility ? shippingFacility.value : null,
+    await txOverlay.run({
+      title: '正在确认发货尺寸与发货地',
+      consoleTag: '[发货确认]',
+      pollFn: (jobId) => todosApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        todosApi.confirmShippingSelection(currentRow.value.id, {
+          class_text: classText,
+          facility: needsFacility ? shippingFacility.value : null,
+          progress_job_id: jobId,
+        }),
     })
     ElMessage.success(`「${classText}」 已完成发货设定`)
     shippingDialogVisible.value = false
@@ -879,7 +905,13 @@ async function onConfirmShippingSelection() {
 async function onClickShippingChangeMethod() {
   if (!currentRow.value?.id) return
   try {
-    await todosApi.changeShippingMethod(currentRow.value.id)
+    await txOverlay.run({
+      title: '正在点击「発送方法を変更する」',
+      consoleTag: '[修改发送方式]',
+      pollFn: (jobId) => todosApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        todosApi.changeShippingMethod(currentRow.value.id, { progress_job_id: jobId }),
+    })
     ElMessage.success('已在浏览器内点击「発送方法を変更する」，请在浏览器页面继续操作')
   } catch (e) {
     if (!e?.response) ElMessage.error(e?.message || '点击失败')
@@ -905,7 +937,13 @@ async function onSendReply() {
   }
   replyLoading.value = true
   try {
-    const result = await todosApi.sendTransactionMessage(currentRow.value.id, text)
+    const result = await txOverlay.run({
+      title: '正在发送取引消息',
+      consoleTag: '[发送回复]',
+      pollFn: (jobId) => todosApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        todosApi.sendTransactionMessage(currentRow.value.id, text, { progress_job_id: jobId }),
+    })
     if (result?.completed) {
       // 待回复（IncomingMessage）：后端已软删 + 关浏览器，前端关 dialog + 刷列表
       ElMessage.success('已回复，浏览器已关闭，待办已完成')
@@ -936,7 +974,13 @@ async function onSubmitReview() {
   }
   reviewLoading.value = true
   try {
-    const result = await todosApi.submitTransactionReview(currentRow.value.id, text)
+    const result = await txOverlay.run({
+      title: '正在提交取引评价',
+      consoleTag: '[提交评价]',
+      pollFn: (jobId) => todosApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        todosApi.submitTransactionReview(currentRow.value.id, text, { progress_job_id: jobId }),
+    })
     if (result?.completed) {
       const note = result.order_refresh_error
         ? `（订单信息刷新失败：${result.order_refresh_error}）`
@@ -984,6 +1028,7 @@ onBeforeUnmount(() => {
     clearInterval(syncProgressTimer)
     syncProgressTimer = null
   }
+  txOverlay.dispose()
 })
 </script>
 

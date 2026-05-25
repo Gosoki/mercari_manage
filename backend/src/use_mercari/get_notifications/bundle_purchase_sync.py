@@ -187,12 +187,16 @@ async def sync_bundle_purchase_from_mercari(
     bundle_id: str,
     account_id: Optional[int] = None,
     notification_id: Optional[int] = None,
+    progress_job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """从煤炉拉取单个合并购买请求详情并同步本地 ``bundle_purchase_requests`` 表。
 
     打开 ``https://jp.mercari.com/bundle_offer/{bundle_id}``（经 MITM 代理），
     等待 ``/v1/bundlePurchases/{bundle_id}`` 响应落盘后入库。
     """
+    from ..sync_progress import make_sync_reporter
+    report = make_sync_reporter(progress_job_id)
+    report("resolve_account", "正在准备煤炉账号…")
     bid = str(bundle_id or "").strip()
     if not bid:
         raise ValueError("bundle_id 不能为空")
@@ -204,7 +208,9 @@ async def sync_bundle_purchase_from_mercari(
     since_ms = int(time.time() * 1000)
     start_url = build_bundle_offer_url(bid)
 
+    report("open_browser", f"正在打开合并购买请求页（{bid}）…")
     async with mitm_automation_browser(int(aid), start_url=start_url) as (mgr, main_key):
+        report("wait_capture", "等待煤炉返回合并购买请求详情…")
         body = await capture_bundle_purchase_via_mitm_session(
             mgr, main_key, bundle_id=bid, since_ms=since_ms
         )
@@ -214,6 +220,7 @@ async def sync_bundle_purchase_from_mercari(
             f"未截获 /v1/bundlePurchases/{bid} 响应或响应体异常"
         )
 
+    report("apply_sync", "正在解析并写入本地数据库…")
     stats = apply_bundle_purchase_sync(
         int(aid), bid, body, notification_id=notification_id
     )
@@ -223,4 +230,5 @@ async def sync_bundle_purchase_from_mercari(
         bid,
         stats.get("action"),
     )
+    report("done", f"已同步合并购买请求（{stats.get('action')}）")
     return stats

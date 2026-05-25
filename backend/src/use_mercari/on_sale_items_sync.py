@@ -17,7 +17,10 @@ from .get_order.get_on_sale.on_sale_list import (
     LISTINGS_PAGE_URL,
     capture_on_sale_list_via_mitm_session,
 )
-from .on_sale_item_detail_sync import auto_fetch_details_for_inserted_items
+from .on_sale_item_detail_sync import (
+    auto_fetch_details_for_inserted_items,
+    relink_inventory_from_persisted_listing,
+)
 from .on_sale_sync_progress import make_on_sale_sync_reporter
 from .sync_data import _resolve_account_and_seller
 from ..db_manage.models.on_sale_item import OnSaleItemModel
@@ -599,11 +602,44 @@ async def sync_on_sale_items_from_mercari(
             inserted_ids,
             progress_report=report,
         )
+
+    # ── 自愈：对本次 API 返回中的「已有商品」按本地 listing_description 重建 inventory 关联 ─── #
+    # （新增商品的关联已由 auto_fetch_details_for_inserted_items 通过 items/get 建立；此处仅处理
+    # updated 路径，纯本地解析+写库、不调煤炉 API，避免历史绑定丢失导致整行误标红。）
+    inserted_set = {str(x or "").strip() for x in inserted_ids if str(x or "").strip()}
+    existing_iids: List[str] = []
+    for it in items:
+        iid = str(it.get("id") or "").strip()
+        if iid and iid not in inserted_set:
+            existing_iids.append(iid)
+    total_existing = len(existing_iids)
+    relinked = 0
+    if total_existing:
+        report(
+            "relink_existing",
+            f"正在按本地说明重建 {total_existing} 件已有商品的库存关联…",
+        )
+        for idx, iid in enumerate(existing_iids, start=1):
+            try:
+                out = relink_inventory_from_persisted_listing(iid)
+                sync = out.get("sync") if isinstance(out, dict) else None
+                if sync and sync.get("updated"):
+                    relinked += 1
+            except Exception:
+                pass
+            if (idx % 20) == 0 or idx == total_existing:
+                report(
+                    "relink_existing",
+                    f"正在按本地说明重建库存关联 {idx}/{total_existing}…",
+                )
+    stats["relinked_existing"] = relinked
+
     report(
         "done",
         (
             f"同步完成：新增 {stats.get('inserted', 0)}，"
-            f"更新 {stats.get('updated', 0)}，标记删除 {stats.get('marked_deleted', 0)}"
+            f"更新 {stats.get('updated', 0)}，标记删除 {stats.get('marked_deleted', 0)}，"
+            f"自愈关联 {relinked}"
         ),
     )
     return stats

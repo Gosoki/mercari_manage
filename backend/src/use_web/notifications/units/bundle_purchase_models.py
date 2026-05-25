@@ -9,6 +9,7 @@ class BundlePurchaseSyncRequest(PydanticModel):
     bundle_id: str
     account_id: Optional[int] = None
     notification_id: Optional[int] = None
+    progress_job_id: Optional[str] = None
 
 
 class BundlePurchaseDecideRequest(PydanticModel):
@@ -31,3 +32,4 @@ class BundlePurchaseDecideRequest(PydanticModel):
     shipping_method: Optional[str] = None
     shipping_from: Optional[str] = None
     shipping_days: Optional[str] = None
+    progress_job_id: Optional[str] = None

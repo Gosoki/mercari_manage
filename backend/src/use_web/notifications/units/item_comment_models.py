@@ -8,12 +8,14 @@ from pydantic import BaseModel as PydanticModel
 class ItemCommentSyncRequest(PydanticModel):
     item_id: str
     account_id: Optional[int] = None
+    progress_job_id: Optional[str] = None
 
 
 class ItemCommentPostRequest(PydanticModel):
     item_id: str
     message: str
     account_id: Optional[int] = None
+    progress_job_id: Optional[str] = None
 
 
 class ItemCommentCloseRequest(PydanticModel):

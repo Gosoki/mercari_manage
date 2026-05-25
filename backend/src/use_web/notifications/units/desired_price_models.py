@@ -9,6 +9,7 @@ class DesiredPriceSyncRequest(PydanticModel):
     item_id: str
     account_id: Optional[int] = None
     notification_id: Optional[int] = None
+    progress_job_id: Optional[str] = None
 
 
 class DesiredPriceDecideRequest(PydanticModel):
@@ -20,6 +21,7 @@ class DesiredPriceDecideRequest(PydanticModel):
 
     action: str
     account_id: Optional[int] = None
+    progress_job_id: Optional[str] = None
 
 
 class DesiredPriceCloseRequest(PydanticModel):

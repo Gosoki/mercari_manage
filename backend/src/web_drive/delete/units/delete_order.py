@@ -19,6 +19,7 @@ from ...listing.units.post_to_macket import (
     DEFAULT_PAGE_LOAD_TIMEOUT_MS,
     _click_by_texts,
 )
+from ....use_mercari.sync_progress import make_sync_reporter
 
 log = logging.getLogger(__name__)
 
@@ -108,10 +109,13 @@ async def delete_mercari_item(
     proxy_server: Optional[str] = None,  # noqa: ARG001 — MITM 由 mitm_automation_browser 统一配置
     page_load_timeout_ms: int = DEFAULT_PAGE_LOAD_TIMEOUT_MS,
     element_timeout_ms: int = DEFAULT_ELEMENT_TIMEOUT_MS,
+    progress_job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     使用账号主 profile ``meilu_{id}`` 经 MITM 删除商品并同步在售列表；
     上下文退出后浏览器由 ``account_serial_queue`` 在队列空闲超时后自动关闭。
+
+    ``progress_job_id`` 配合通用 ``sync_progress``：每个阶段写入中文步骤供前端轮询。
     """
     from ...core.manager import EdgeWebDriveManager
     from ...core.mitm_session import mitm_automation_browser
@@ -122,6 +126,8 @@ async def delete_mercari_item(
     )
     from ....use_mercari.sync_data import _resolve_account_and_seller
     from ....ssl_mitm_proxy.capture_config import clear_on_sale_list_response_file
+
+    report = make_sync_reporter(progress_job_id)
 
     if not isinstance(manager, EdgeWebDriveManager):
         raise TypeError("manager 须为 EdgeWebDriveManager 实例")
@@ -134,6 +140,7 @@ async def delete_mercari_item(
     if account_id is None:
         raise ValueError(f"无效的 account_key: {account_key}")
 
+    report("resolve_account", "正在准备煤炉账号…")
     _aid, seller_id = _resolve_account_and_seller(account_id)
     seller_key = str(int(seller_id))
     auto_key = meilu_account_key(account_id)
@@ -163,6 +170,7 @@ async def delete_mercari_item(
         "browser_closed": False,
     }
 
+    report("open_edit_page", f"正在打开编辑页（{seg}）…")
     async with mitm_automation_browser(
         account_id,
         start_url=edit_url,
@@ -181,6 +189,7 @@ async def delete_mercari_item(
 
         result["url_before_delete"] = page.url
 
+        report("click_delete_entry", "正在点击「この商品を削除する」…")
         await _click_by_texts(
             page,
             (DELETE_ENTRY_TEXT,),
@@ -190,6 +199,7 @@ async def delete_mercari_item(
         result["delete_entry_clicked"] = True
 
         capture_since_ms = int(time.time() * 1000)
+        report("confirm_delete", "正在确认弹窗内的「削除する」…")
         await _click_delete_confirm_in_dialog(
             page,
             element_timeout_ms=element_timeout_ms,
@@ -218,6 +228,7 @@ async def delete_mercari_item(
             seg,
         )
 
+        report("sync_listings", "删除已确认，等待跳转出品一覧并同步列表…")
         sync_stats = await sync_on_sale_from_listings_browser_page(
             mgr,
             browser_key,
@@ -230,6 +241,13 @@ async def delete_mercari_item(
         result["url_after_delete"] = page.url
 
     result["browser_closed"] = True
+    report(
+        "done",
+        (
+            f"删除完成：煤炉 {(sync_stats or {}).get('api_item_count', 0)} 条，"
+            f"标记删除 {(sync_stats or {}).get('marked_deleted', 0)}"
+        ),
+    )
     log.info(
         "[delete_mercari_item] 完成并已关闭浏览器 account=%s item=%s marked_deleted=%s",
         account_key,

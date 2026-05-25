@@ -169,13 +169,19 @@
         </el-button>
       </div>
     </template>
+    <SyncOverlay :state="bundleOverlay.state" />
   </el-dialog>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { notificationsApi } from '@/api'
+import { useSyncOverlay } from '@/composables/useSyncOverlay'
+import SyncOverlay from '@/components/SyncOverlay.vue'
+
+const bundleOverlay = useSyncOverlay()
+onBeforeUnmount(() => bundleOverlay.dispose())
 import {
   MERCARI_AREAS,
   JP_REGION_OPTIONS,
@@ -388,10 +394,17 @@ async function runSync() {
   if (!props.bundleId) return
   loading.value = true
   try {
-    await notificationsApi.bundlePurchaseSync({
-      bundle_id: props.bundleId,
-      account_id: props.accountId || null,
-      notification_id: props.notificationId || null,
+    await bundleOverlay.run({
+      title: '正在抓取合并购买请求详情',
+      consoleTag: '[合并购买同步]',
+      pollFn: (jobId) => notificationsApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        notificationsApi.bundlePurchaseSync({
+          bundle_id: props.bundleId,
+          account_id: props.accountId || null,
+          notification_id: props.notificationId || null,
+          progress_job_id: jobId,
+        }),
     })
     await loadDetail()
   } catch (e) {
@@ -410,13 +423,20 @@ async function onAccept() {
   }
   accepting.value = true
   try {
-    const res = await notificationsApi.bundlePurchaseDecide(props.bundleId, {
-      action: 'accept',
-      account_id: props.accountId || null,
-      shipping_payer: form.value.shipping_payer || null,
-      shipping_method: form.value.shipping_method || null,
-      shipping_from: form.value.shipping_from || null,
-      shipping_days: form.value.shipping_days || null,
+    const res = await bundleOverlay.run({
+      title: '正在承诺合并购买请求',
+      consoleTag: '[合并购买承诺]',
+      pollFn: (jobId) => notificationsApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        notificationsApi.bundlePurchaseDecide(props.bundleId, {
+          action: 'accept',
+          account_id: props.accountId || null,
+          shipping_payer: form.value.shipping_payer || null,
+          shipping_method: form.value.shipping_method || null,
+          shipping_from: form.value.shipping_from || null,
+          shipping_days: form.value.shipping_days || null,
+          progress_job_id: jobId,
+        }),
     })
     if (res?.skipped) {
       ElMessage.warning(
@@ -444,9 +464,16 @@ async function onAccept() {
 async function onReject() {
   rejecting.value = true
   try {
-    const res = await notificationsApi.bundlePurchaseDecide(props.bundleId, {
-      action: 'reject',
-      account_id: props.accountId || null,
+    const res = await bundleOverlay.run({
+      title: '正在拒绝合并购买请求',
+      consoleTag: '[合并购买拒绝]',
+      pollFn: (jobId) => notificationsApi.getSyncProgress(jobId),
+      actionFn: (jobId) =>
+        notificationsApi.bundlePurchaseDecide(props.bundleId, {
+          action: 'reject',
+          account_id: props.accountId || null,
+          progress_job_id: jobId,
+        }),
     })
     if (res?.skipped) {
       ElMessage.warning(

@@ -689,12 +689,45 @@ async function deleteMercariItemFromDetail() {
     return
   }
   if (deleteItemLoading.value) return
+
+  const progressJobId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `job_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+
+  let pollTimer = null
+  let lastConsoleStep = ''
+  async function poll() {
+    try {
+      const pr = await onSaleItemApi.getSyncProgress(progressJobId)
+      const zh = pr?.data?.label_zh
+      if (zh) {
+        syncProgressLabel.value = zh
+        if (zh !== lastConsoleStep) {
+          lastConsoleStep = zh
+          console.log('[删除物品]', zh)
+        }
+      }
+    } catch {
+      /* 轮询失败忽略 */
+    }
+  }
+
+  syncOverlayTitle.value = '正在删除煤炉商品'
+  syncOverlayFailed.value = false
+  syncProgressLabel.value = '正在连接服务器…'
+  syncOverlayVisible.value = true
   deleteItemLoading.value = true
+  await poll()
+  pollTimer = setInterval(poll, 400)
+
+  let hadError = false
   try {
     const res = await webDriveApi.deleteMercariItem({
       account_key: resolved.accountKey,
       item_id: iid,
-      use_mitm_proxy: true
+      use_mitm_proxy: true,
+      progress_job_id: progressJobId,
     })
     const d = res?.data || {}
     const sync = d.sync || {}
@@ -709,9 +742,23 @@ async function deleteMercariItemFromDetail() {
     }
     detailViewVisible.value = false
     await load()
-  } catch {
-    /* 错误由 axios 拦截器提示 */
+  } catch (e) {
+    hadError = true
+    syncOverlayTitle.value = '删除失败'
+    syncOverlayFailed.value = true
+    const msg = e?.response?.data?.detail || e?.message || '删除失败'
+    syncProgressLabel.value = String(msg)
   } finally {
+    if (pollTimer != null) {
+      clearInterval(pollTimer)
+    }
+    if (hadError) {
+      await new Promise((r) => setTimeout(r, 1200))
+    }
+    syncOverlayVisible.value = false
+    syncOverlayTitle.value = '正在从煤炉同步'
+    syncOverlayFailed.value = false
+    syncProgressLabel.value = ''
     deleteItemLoading.value = false
   }
 }
@@ -747,9 +794,46 @@ async function fetchItemDetailForItemId(itemId, options = {}) {
   const next = new Set(detailLoadingIds.value)
   next.add(iid)
   detailLoadingIds.value = next
+
+  const showOverlay = !silent
+  const progressJobId = showOverlay
+    ? (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `job_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`)
+    : null
+
+  let pollTimer = null
+  let lastConsoleStep = ''
+  if (showOverlay) {
+    syncOverlayTitle.value = '正在从煤炉获取详情'
+    syncOverlayFailed.value = false
+    syncProgressLabel.value = '正在连接服务器…'
+    syncOverlayVisible.value = true
+    const poll = async () => {
+      try {
+        const pr = await onSaleItemApi.getSyncProgress(progressJobId)
+        const zh = pr?.data?.label_zh
+        if (zh) {
+          syncProgressLabel.value = zh
+          if (zh !== lastConsoleStep) {
+            lastConsoleStep = zh
+            console.log('[获取详情]', zh)
+          }
+        }
+      } catch {
+        /* 轮询失败忽略 */
+      }
+    }
+    await poll()
+    pollTimer = setInterval(poll, 400)
+  }
+
+  let hadError = false
+  let result = { ok: false }
   try {
     const payload = { item_id: iid }
     if (accountId != null && accountId !== '') payload.account_id = accountId
+    if (progressJobId) payload.progress_job_id = progressJobId
     const res = await onSaleItemApi.fetchDetail(payload)
     const sync = res?.data?.sync || {}
     const ok = Boolean(sync.updated)
@@ -764,12 +848,34 @@ async function fetchItemDetailForItemId(itemId, options = {}) {
       }
     }
     if (reloadAfter) await load()
-    return { ok, sync }
+    result = { ok, sync }
+  } catch (e) {
+    hadError = true
+    if (showOverlay) {
+      syncOverlayTitle.value = '获取详情失败'
+      syncOverlayFailed.value = true
+      const msg = e?.response?.data?.detail || e?.message || '获取失败'
+      syncProgressLabel.value = String(msg)
+    }
+    result = { ok: false, error: e }
   } finally {
+    if (pollTimer != null) {
+      clearInterval(pollTimer)
+    }
+    if (showOverlay && hadError) {
+      await new Promise((r) => setTimeout(r, 1200))
+    }
+    if (showOverlay) {
+      syncOverlayVisible.value = false
+      syncOverlayTitle.value = '正在从煤炉同步'
+      syncOverlayFailed.value = false
+      syncProgressLabel.value = ''
+    }
     const done = new Set(detailLoadingIds.value)
     done.delete(iid)
     detailLoadingIds.value = done
   }
+  return result
 }
 
 async function fetchItemDetail(row) {

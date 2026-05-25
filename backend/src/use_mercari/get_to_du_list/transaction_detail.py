@@ -32,6 +32,7 @@ from ...web_drive.core.manager import EdgeWebDriveManager, get_web_drive_manager
 from ...web_drive.core.mitm_session import mitm_automation_browser
 from ...web_drive.core.paths import meilu_account_key
 from ..get_order.get_in_progress_order.get_order_info import apply_item_info_to_order
+from ..sync_progress import make_sync_reporter
 
 log = logging.getLogger(__name__)
 
@@ -216,8 +217,14 @@ def _format_ts(unix_seconds: Any) -> Optional[str]:
         return None
 
 
-async def fetch_transaction_detail(todo_id: int) -> Dict[str, Any]:
+async def fetch_transaction_detail(
+    todo_id: int,
+    *,
+    progress_job_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """打开有头浏览器到 transaction 页 → MITM 等两个 API → 解析返回。"""
+    report = make_sync_reporter(progress_job_id)
+    report("resolve_todo", "正在准备煤炉账号…")
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
         raise ValueError(f"待办事项 id={todo_id} 不存在")
@@ -239,7 +246,9 @@ async def fetch_transaction_detail(todo_id: int) -> Dict[str, Any]:
     # ── Step 2: 用账号主 profile 经 MITM 打开交易页（与 /orders 更新列表同模式，
     #            cookie 由 Edge 持久化自动维护；浏览器留给后续 followup op 复用，
     #            队列空闲自动关闭由路由层 suppress_idle_close=True 关闭）──
+    report("open_browser", f"正在打开交易页（{item_id}）…")
     async with mitm_automation_browser(aid, start_url=url) as (mgr, main_key):
+        report("wait_captures", "等待 shipping_info 与 transaction_messages 截获…")
         shipping, messages = await _wait_for_both_captures(
             mgr=mgr,
             auto_key=main_key,
@@ -254,8 +263,10 @@ async def fetch_transaction_detail(todo_id: int) -> Dict[str, Any]:
     elif messages is None:
         log.warning("[txdetail] transaction_messages/get_messages 未截获 todo_id=%s", todo_id)
 
+    report("parse_response", "正在解析截获的取引详情…")
     shipping_part = _parse_shipping_info(shipping, local_sender_id)
     messages_part = _parse_messages(messages, local_sender_id)
+    report("done", "交易详情已就绪")
 
     return {
         "todo_id": int(todo_id),
@@ -287,11 +298,18 @@ _REVIEW_CONFIRM_BUTTON_TEXT = "取引を完了する"
 _REVIEW_COMPLETED_TEXT = "取引が完了しました"
 
 
-async def send_transaction_message(todo_id: int, text: str) -> Dict[str, Any]:
+async def send_transaction_message(
+    todo_id: int,
+    text: str,
+    *,
+    progress_job_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """在已开的主 profile 浏览器内填回复并点击「取引メッセージを送る」。
 
     要求 ``fetch_transaction_detail`` 已先打开过对应账号的交易页（否则会话不存在/不在目标 URL）。
     """
+    report = make_sync_reporter(progress_job_id)
+    report("resolve_todo", "正在准备发送消息…")
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
         raise ValueError(f"待办事项 id={todo_id} 不存在")
@@ -306,11 +324,13 @@ async def send_transaction_message(todo_id: int, text: str) -> Dict[str, Any]:
     mgr = get_web_drive_manager()
     auto_key = meilu_account_key(aid)
 
+    report("attach_browser", "正在连接已打开的浏览器交易页…")
     try:
         page = await mgr.active_tab_page(auto_key)
     except Exception as exc:
         raise RuntimeError("浏览器未打开或已关闭，请先点「处理」打开交易页") from exc
 
+    report("locate_textarea", "正在定位回复输入框…")
     # 找到回复 textarea：按多种 placeholder 取 OR 选择器，谁先可见就用谁
     selector = ", ".join(
         f'textarea[placeholder="{p}"]' for p in _REPLY_TEXTAREA_PLACEHOLDERS
@@ -323,8 +343,10 @@ async def send_transaction_message(todo_id: int, text: str) -> Dict[str, Any]:
             f"未找到回复输入框（placeholder 不匹配任何已知模板；当前 URL: {page.url}）"
         ) from exc
 
+    report("fill_text", "正在填入回复内容…")
     await textarea.first.fill(body)
 
+    report("click_send", "正在点击「取引メッセージを送る」…")
     # 找到「取引メッセージを送る」按钮（按文本）
     btn = page.get_by_role("button", name=_REPLY_SEND_BUTTON_TEXT)
     try:
@@ -352,6 +374,7 @@ async def send_transaction_message(todo_id: int, text: str) -> Dict[str, Any]:
     kind = (todo.kind or "").strip()
     completed = False
     if kind == "IncomingMessage":
+        report("finalize", "已发送，正在收尾并关闭浏览器…")
         await asyncio.sleep(1.5)
         try:
             todo.is_delete = 1
@@ -367,6 +390,7 @@ async def send_transaction_message(todo_id: int, text: str) -> Dict[str, Any]:
             log.warning("[reply] 关浏览器失败: %s", exc)
         completed = True
 
+    report("done", "回复已发送")
     return {
         "todo_id": int(todo_id),
         "account_id": aid,
@@ -387,11 +411,17 @@ _SELECT_NEXT_BUTTON_TEXT = "選択して次へ"
 _SELECT_FINISH_BUTTON_TEXT = "選択して完了する"
 
 
-async def start_select_shipping_class(todo_id: int) -> Dict[str, Any]:
+async def start_select_shipping_class(
+    todo_id: int,
+    *,
+    progress_job_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """点 transaction 页的「商品サイズと発送場所を選択する」按钮 → 等浏览器跳到 /shipping_class。
 
     尺寸列表由前端硬编码（按 shipping_method_name 区分），不再依赖 MITM 抓取。
     """
+    report = make_sync_reporter(progress_job_id)
+    report("resolve_todo", "正在准备…")
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
         raise ValueError(f"待办事项 id={todo_id} 不存在")
@@ -399,11 +429,13 @@ async def start_select_shipping_class(todo_id: int) -> Dict[str, Any]:
 
     mgr = get_web_drive_manager()
     auto_key = meilu_account_key(aid)
+    report("attach_browser", "正在连接已打开的浏览器…")
     try:
         page = await mgr.active_tab_page(auto_key)
     except Exception as exc:
         raise RuntimeError("浏览器未打开或已关闭，请先点「处理」打开交易页") from exc
 
+    report("locate_button", "正在定位「商品サイズと発送場所を選択する」按钮…")
     btn = page.get_by_role("button", name=_SIZE_SELECT_BUTTON_TEXT)
     try:
         await btn.first.wait_for(state="visible", timeout=4000)
@@ -415,6 +447,7 @@ async def start_select_shipping_class(todo_id: int) -> Dict[str, Any]:
             raise RuntimeError(
                 f"未找到「{_SIZE_SELECT_BUTTON_TEXT}」按钮（当前 URL: {page.url}）"
             ) from exc
+    report("click_button", "正在点击按钮，等待跳转到 /shipping_class…")
     await btn.first.click()
     log.info("[shipping] 已点击「%s」 account_id=%s", _SIZE_SELECT_BUTTON_TEXT, aid)
 
@@ -424,6 +457,7 @@ async def start_select_shipping_class(todo_id: int) -> Dict[str, Any]:
     except Exception:
         log.warning("[shipping] 未观察到 /shipping_class 导航（可能已经在该页）")
 
+    report("done", "已进入「商品サイズと発送場所」选择页")
     return {
         "todo_id": int(todo_id),
         "account_id": aid,
@@ -441,6 +475,8 @@ async def confirm_shipping_selection(
     todo_id: int,
     class_text: str,
     facility: Optional[str] = None,
+    *,
+    progress_job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """在 /shipping_class 页选 size → 次へ → 在 /shipping_facilities 页按需点 facility → 完了する。
 
@@ -448,6 +484,8 @@ async def confirm_shipping_selection(
       - ``None``：不点 facility（用于 POST_BOX 唯一选项的 size，页面会自动选好）
       - ``"post_office"`` / ``"lawson"``：按对应 XPath 点击卡片
     """
+    report = make_sync_reporter(progress_job_id)
+    report("resolve_todo", "正在准备…")
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
         raise ValueError(f"待办事项 id={todo_id} 不存在")
@@ -461,12 +499,14 @@ async def confirm_shipping_selection(
 
     mgr = get_web_drive_manager()
     auto_key = meilu_account_key(aid)
+    report("attach_browser", "正在连接已打开的浏览器…")
     try:
         page = await mgr.active_tab_page(auto_key)
     except Exception as exc:
         raise RuntimeError("浏览器未打开或已关闭") from exc
 
     # ── Step 1: 按精确文本匹配点击 size ──
+    report("select_size", f"正在选择尺寸「{class_text}」…")
     size_loc = page.get_by_text(class_text, exact=True).first
     try:
         await size_loc.wait_for(state="visible", timeout=8000)
@@ -479,6 +519,7 @@ async def confirm_shipping_selection(
     await asyncio.sleep(0.2)
 
     # ── Step 2: 点「選択して次へ」──
+    report("click_next", "正在点击「選択して次へ」…")
     next_btn = page.get_by_role("button", name=_SELECT_NEXT_BUTTON_TEXT)
     try:
         await next_btn.first.wait_for(state="visible", timeout=4000)
@@ -489,6 +530,7 @@ async def confirm_shipping_selection(
     log.info("[shipping] 已点击「%s」 account_id=%s", _SELECT_NEXT_BUTTON_TEXT, aid)
 
     # ── Step 3: 等浏览器跳到 /shipping_facilities ──
+    report("wait_facilities", "等待跳转到 /shipping_facilities…")
     try:
         await page.wait_for_url("**/shipping_facilities*", timeout=10000)
     except Exception:
@@ -496,6 +538,7 @@ async def confirm_shipping_selection(
 
     # ── Step 4: 按需点 facility 卡片 ──
     if facility is not None:
+        report("select_facility", f"正在选择发货地（{facility}）…")
         xpath_expr = _FACILITY_XPATHS[facility]
         fac_loc = page.locator(f"xpath={xpath_expr}")
         try:
@@ -511,6 +554,7 @@ async def confirm_shipping_selection(
         log.info("[shipping] 无需选择 facility（auto_finish），直接点完了")
 
     # ── Step 5: 点「選択して完了する」──
+    report("click_finish", "正在点击「選択して完了する」…")
     finish_btn = page.get_by_role("button", name=_SELECT_FINISH_BUTTON_TEXT)
     try:
         await finish_btn.first.wait_for(state="visible", timeout=6000)
@@ -525,6 +569,7 @@ async def confirm_shipping_selection(
     await finish_btn.first.click()
     log.info("[shipping] 已点击「%s」 account_id=%s", _SELECT_FINISH_BUTTON_TEXT, aid)
 
+    report("done", "已完成发货尺寸与发货地选择")
     return {
         "todo_id": int(todo_id),
         "account_id": aid,
@@ -534,11 +579,18 @@ async def confirm_shipping_selection(
     }
 
 
-async def submit_transaction_review(todo_id: int, text: str) -> Dict[str, Any]:
+async def submit_transaction_review(
+    todo_id: int,
+    text: str,
+    *,
+    progress_job_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """在已打开的浏览器（取引評価页）填评价文本 + 点「購入者を評価して取引完了する」。
 
     页面上 ``良かった`` 通常默认选中，不需要再点。
     """
+    report = make_sync_reporter(progress_job_id)
+    report("resolve_todo", "正在准备评价提交…")
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
         raise ValueError(f"待办事项 id={todo_id} 不存在")
@@ -550,12 +602,14 @@ async def submit_transaction_review(todo_id: int, text: str) -> Dict[str, Any]:
     item_id = (todo.item_id or "").strip()
     mgr = get_web_drive_manager()
     auto_key = meilu_account_key(aid)
+    report("attach_browser", "正在连接已打开的浏览器…")
     try:
         page = await mgr.active_tab_page(auto_key)
     except Exception as exc:
         raise RuntimeError("浏览器未打开或已关闭，请先点「处理」打开交易页") from exc
 
     # 找到评价 textarea（按 placeholder）
+    report("fill_review", "正在填入评价文本…")
     textarea = page.locator(
         f'textarea[placeholder="{_REVIEW_TEXTAREA_PLACEHOLDER}"]'
     )
@@ -569,6 +623,7 @@ async def submit_transaction_review(todo_id: int, text: str) -> Dict[str, Any]:
     log.info("[review] 已填入评价文本 text_len=%s", len(body))
 
     # 找到「購入者を評価して取引完了する」按钮
+    report("click_submit", "正在点击「購入者を評価して取引完了する」…")
     btn = page.get_by_role("button", name=_REVIEW_SUBMIT_BUTTON_TEXT)
     try:
         await btn.first.wait_for(state="visible", timeout=4000)
@@ -588,6 +643,7 @@ async def submit_transaction_review(todo_id: int, text: str) -> Dict[str, Any]:
     )
 
     # 二次确认弹窗：「購入者を評価して取引を完了しますか？」→ 点「取引を完了する」
+    report("confirm_dialog", "正在点击二次确认「取引を完了する」…")
     await asyncio.sleep(0.3)
     confirm_btn = page.get_by_role("button", name=_REVIEW_CONFIRM_BUTTON_TEXT)
     try:
@@ -608,6 +664,7 @@ async def submit_transaction_review(todo_id: int, text: str) -> Dict[str, Any]:
     )
 
     # 等页面刷新 + 检测「取引が完了しました」文案
+    report("wait_completed", "等待煤炉返回「取引が完了しました」…")
     completed = False
     try:
         completed_loc = page.get_by_text(_REVIEW_COMPLETED_TEXT, exact=False).first
@@ -623,6 +680,7 @@ async def submit_transaction_review(todo_id: int, text: str) -> Dict[str, Any]:
 
     order_refresh_error: Optional[str] = None
     if completed:
+        report("finalize", "评价完成，正在收尾并刷新订单…")
         # 软删除本地 todo（页面已结案，对应煤炉端 todolist 也会下次同步剔除）
         try:
             todo.is_delete = 1
@@ -653,6 +711,7 @@ async def submit_transaction_review(todo_id: int, text: str) -> Dict[str, Any]:
         else:
             log.warning("[review] todo 无 item_id，跳过订单刷新")
 
+    report("done", "评价已提交")
     return {
         "todo_id": int(todo_id),
         "account_id": aid,
@@ -665,8 +724,14 @@ async def submit_transaction_review(todo_id: int, text: str) -> Dict[str, Any]:
     }
 
 
-async def click_change_shipping_method(todo_id: int) -> Dict[str, Any]:
+async def click_change_shipping_method(
+    todo_id: int,
+    *,
+    progress_job_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """点 transaction 页的「発送方法を変更する」（导航到修改发送方式页；后续由用户在浏览器内手动）。"""
+    report = make_sync_reporter(progress_job_id)
+    report("resolve_todo", "正在准备…")
     todo = TodoItemModel.find_by_id(id=int(todo_id))
     if not todo:
         raise ValueError(f"待办事项 id={todo_id} 不存在")
@@ -674,11 +739,13 @@ async def click_change_shipping_method(todo_id: int) -> Dict[str, Any]:
 
     mgr = get_web_drive_manager()
     auto_key = meilu_account_key(aid)
+    report("attach_browser", "正在连接已打开的浏览器…")
     try:
         page = await mgr.active_tab_page(auto_key)
     except Exception as exc:
         raise RuntimeError("浏览器未打开或已关闭，请先点「处理」打开交易页") from exc
 
+    report("locate_button", "正在定位「発送方法を変更する」按钮…")
     btn = page.get_by_role("button", name=_CHANGE_METHOD_BUTTON_TEXT)
     try:
         await btn.first.wait_for(state="visible", timeout=4000)
@@ -690,8 +757,10 @@ async def click_change_shipping_method(todo_id: int) -> Dict[str, Any]:
             raise RuntimeError(
                 f"未找到「{_CHANGE_METHOD_BUTTON_TEXT}」按钮（当前 URL: {page.url}）"
             ) from exc
+    report("click_button", "正在点击「発送方法を変更する」…")
     await btn.first.click()
     log.info("[shipping] 已点击「%s」 account_id=%s", _CHANGE_METHOD_BUTTON_TEXT, aid)
+    report("done", "已跳转修改发送方式页")
     return {
         "todo_id": int(todo_id),
         "account_id": aid,

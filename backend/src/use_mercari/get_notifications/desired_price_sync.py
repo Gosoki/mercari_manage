@@ -198,6 +198,7 @@ async def sync_desired_price_from_mercari(
     item_id: str,
     account_id: Optional[int] = None,
     notification_id: Optional[int] = None,
+    progress_job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """打开 desired_price 页抓取两个响应并入库。
 
@@ -209,6 +210,9 @@ async def sync_desired_price_from_mercari(
             "offers": [...],  # 多条降价请求列表(便于前端展示)
         }
     """
+    from ..sync_progress import make_sync_reporter
+    report = make_sync_reporter(progress_job_id)
+    report("resolve_account", "正在准备煤炉账号…")
     iid = str(item_id or "").strip()
     if not iid:
         raise ValueError("item_id 不能为空")
@@ -221,7 +225,9 @@ async def sync_desired_price_from_mercari(
     since_ms = int(time.time() * 1000)
     start_url = build_desired_price_page_url(iid)
 
+    report("open_browser", f"正在打开降价请求页（{iid}）…")
     async with mitm_automation_browser(int(aid), start_url=start_url) as (mgr, main_key):
+        report("wait_capture", "等待煤炉返回降价请求详情…")
         captured = await capture_desired_price_via_mitm_session(
             mgr, main_key, item_id=iid, since_ms=since_ms
         )
@@ -233,6 +239,7 @@ async def sync_desired_price_from_mercari(
             f"未截获 /v2/aggregatedDesiredPriceItems/{iid} 响应或响应体异常"
         )
 
+    report("apply_sync", "正在解析并写入本地数据库…")
     stats = apply_desired_price_sync(
         int(aid),
         iid,
@@ -248,4 +255,5 @@ async def sync_desired_price_from_mercari(
         stats.get("action"),
         len(stats["offers"]),
     )
+    report("done", f"已同步降价请求（{len(stats['offers'])} 条 offer）")
     return stats
