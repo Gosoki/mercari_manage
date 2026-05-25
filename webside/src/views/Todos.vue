@@ -293,8 +293,8 @@
                   <!-- 仅在 IncomingMessage（待回复）类型 + 买家消息时显示反应按钮 -->
                   <el-popover
                     v-if="canReactToMessages && m.is_buyer && !m.reaction"
-                    :width="232"
-                    placement="bottom-end"
+                    :width="280"
+                    placement="bottom-start"
                     trigger="click"
                     popper-class="reaction-popover"
                   >
@@ -643,16 +643,14 @@ const replyLoading = ref(false)
 const reviewLoading = ref(false)
 const reactionLoading = ref(false)
 
-// 反应表情列表（与后端 SUPPORTED_REACTIONS 一一对应）
+// 反应表情列表（与后端 SUPPORTED_REACTIONS / Mercari picker 顺序一一对应）
+// Mercari 的 picker 实际只有 5 个 emoji，按 button[1]..button[5] 顺序排列
 const REACTION_OPTIONS = [
-  { key: 'thumbsup', emoji: '👍', label: 'いいね' },
   { key: 'heart', emoji: '❤️', label: '好き' },
   { key: 'smile', emoji: '😊', label: '笑顔' },
+  { key: 'laugh', emoji: '😆', label: '笑い' },
   { key: 'pray', emoji: '🙏', label: 'ありがとう' },
-  { key: 'cry', emoji: '😢', label: '悲しい' },
-  { key: 'clap', emoji: '👏', label: '拍手' },
-  { key: 'sparkles', emoji: '✨', label: 'キラキラ' },
-  { key: 'ok', emoji: '🙆', label: 'OK' },
+  { key: 'party', emoji: '🎉', label: 'お祝い' },
 ]
 const REACTION_EMOJI_BY_KEY = Object.fromEntries(REACTION_OPTIONS.map((o) => [o.key, o.emoji]))
 const reactionOptions = REACTION_OPTIONS
@@ -1448,7 +1446,7 @@ onBeforeUnmount(() => {
 }
 .reaction-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px;
 }
 .reaction-grid-item {

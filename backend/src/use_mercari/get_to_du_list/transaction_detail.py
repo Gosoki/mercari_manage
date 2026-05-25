@@ -747,17 +747,16 @@ async def submit_transaction_review(
 # ====================================================================
 
 # Mercari 取引メッセージの定型リアクション一覧
-# 値 → 煤炉実际渲染するアイコン（unicode emoji 与 reaction code 都允许）
-# Playwright 检测时优先按 `[aria-label*="..."]` / 文本匹配
-SUPPORTED_REACTIONS: Dict[str, Dict[str, str]] = {
-    "thumbsup": {"emoji": "👍", "aria": "thumbs up"},
-    "heart": {"emoji": "❤️", "aria": "heart"},
-    "smile": {"emoji": "😊", "aria": "smile"},
-    "pray": {"emoji": "🙏", "aria": "pray"},
-    "cry": {"emoji": "😢", "aria": "cry"},
-    "clap": {"emoji": "👏", "aria": "clap"},
-    "sparkles": {"emoji": "✨", "aria": "sparkles"},
-    "ok": {"emoji": "🙆", "aria": "ok"},
+# Mercari picker 内 5 个 emoji 是按位置渲染的 ``<button><img/></button>``，没有 aria-label
+# 也没有稳定的文本，只能按 ``button:nth-of-type(N)`` 定位。
+# ``index`` 与煤炉 picker 的 1-based XPath（button[1]..button[5]）对应：
+#   button[1] = 心  / button[2] = 微笑 / button[3] = 笑 / button[4] = 合掌 / button[5] = 祝
+SUPPORTED_REACTIONS: Dict[str, Dict[str, Any]] = {
+    "heart": {"emoji": "❤️", "index": 0, "label": "好き"},
+    "smile": {"emoji": "😊", "index": 1, "label": "笑顔"},
+    "laugh": {"emoji": "😆", "index": 2, "label": "笑い"},
+    "pray": {"emoji": "🙏", "index": 3, "label": "ありがとう"},
+    "party": {"emoji": "🎉", "index": 4, "label": "お祝い"},
 }
 
 
@@ -785,7 +784,7 @@ async def send_message_reaction_by_index(
         raise ValueError(f"reaction 取值非法：{reaction}（仅支持 {list(SUPPORTED_REACTIONS)}）")
     rinfo = SUPPORTED_REACTIONS[reaction_key]
     emoji_char = rinfo["emoji"]
-    aria_hint = rinfo["aria"]
+    emoji_idx = int(rinfo["index"])
 
     aid = int(todo.account_id)
     mgr = get_web_drive_manager()
@@ -798,6 +797,8 @@ async def send_message_reaction_by_index(
         raise RuntimeError("浏览器未打开或已关闭，请先点「处理」打开交易页") from exc
 
     # ── Step 1: 找到第 reaction_index 个「add-reaction-button」并点击 ──
+    # 注：``[data-testid="add-reaction-button"]`` 只在买家消息卡片下渲染，所以这个 N
+    # 直接对应「买家消息中第 N 条」，无论页面上买家/卖家消息交错怎样排列都成立。
     report("click_add_reaction", "正在点击「+」反应按钮…")
     add_btns = page.locator('[data-testid="add-reaction-button"]')
     try:
@@ -824,41 +825,41 @@ async def send_message_reaction_by_index(
         todo_id,
     )
 
-    # ── Step 2: 等弹出层出现 + 点对应 emoji ──
+    # ── Step 2: 在同一条消息卡片内定位 picker 的第 emoji_idx 个 emoji 按钮 ──
+    # 煤炉的 picker 是 5 个 ``<button><img/></button>``，没有稳定 aria-label
+    # 也没有可读文本，只能按位置取。这些 button 都嵌在 ``[data-testid="ds4-comment"]``
+    # 卡片内部（XPath: .../div[3]/div/button[N]/img），因此用「卡片祖先 + 直接子级 img」过滤。
     report("pick_emoji", f"正在选择 emoji（{emoji_char}）…")
-    await asyncio.sleep(0.25)
-    # 候选策略：
-    #   1) [aria-label*="..."] （煤炉常用 aria-label 描述 emoji）
-    #   2) :has-text(emoji_char) （直接 unicode 文本匹配）
-    candidates = [
-        f'button[aria-label*="{aria_hint}" i]',
-        f'[role="button"][aria-label*="{aria_hint}" i]',
-        f'button:has-text("{emoji_char}")',
-        f'[role="button"]:has-text("{emoji_char}")',
-        f'span:has-text("{emoji_char}")',
-    ]
-    emoji_loc = None
-    last_err: Optional[Exception] = None
-    for sel in candidates:
-        try:
-            loc = page.locator(sel)
-            await loc.first.wait_for(state="visible", timeout=2500)
-            emoji_loc = loc.first
-            log.info("[reaction] emoji 选择器命中: %s", sel)
-            break
-        except Exception as exc:
-            last_err = exc
-            continue
-    if emoji_loc is None:
+    await asyncio.sleep(0.3)
+    parent_comment = target_btn.locator('xpath=ancestor::*[@data-testid="ds4-comment"][1]')
+    # ``button:has(> img)`` 排除掉 add-reaction-button（其子节点是 svg 不是 img）
+    # 也排除掉头像（头像是 <a> + <picture><img>，不是 <button>）
+    emoji_btns = parent_comment.locator('button:has(> img)')
+    try:
+        await emoji_btns.first.wait_for(state="visible", timeout=4000)
+    except Exception as exc:
         raise RuntimeError(
-            f"未找到 emoji「{emoji_char}」按钮（候选选择器均未匹配；"
-            f"当前 URL: {page.url}；最后一次错误：{last_err}）"
+            f"未找到 emoji picker 按钮（点击「+」后弹出层未出现；当前 URL: {page.url}）"
+        ) from exc
+
+    total_emojis = await emoji_btns.count()
+    if total_emojis < len(SUPPORTED_REACTIONS):
+        log.warning(
+            "[reaction] picker emoji 数量不匹配（页面 %s 个 / 预期 %s 个）",
+            total_emojis,
+            len(SUPPORTED_REACTIONS),
         )
-    await emoji_loc.click()
+    if emoji_idx >= total_emojis:
+        raise RuntimeError(
+            f"emoji 索引 {emoji_idx} 越界（picker 共 {total_emojis} 个 emoji）"
+        )
+
+    await emoji_btns.nth(emoji_idx).click()
     log.info(
-        "[reaction] 已点击 emoji=%s reaction_key=%s account_id=%s",
+        "[reaction] 已点击 emoji=%s key=%s index=%s account_id=%s",
         emoji_char,
         reaction_key,
+        emoji_idx,
         aid,
     )
     await asyncio.sleep(0.5)
@@ -870,6 +871,7 @@ async def send_message_reaction_by_index(
         "reaction_index": reaction_index,
         "reaction": reaction_key,
         "emoji": emoji_char,
+        "emoji_index": emoji_idx,
         "message_id": message_id,
         "sent": True,
     }
