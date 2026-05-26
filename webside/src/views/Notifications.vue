@@ -241,7 +241,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Loading } from '@element-plus/icons-vue'
-import { notificationsApi, meiluAccountApi } from '@/api'
+import { notificationsApi, mercariAccountApi } from '@/api'
 import { useMercariAccountStore } from '@/stores/mercariAccount.js'
 import BundlePurchaseDialog from '@/components/BundlePurchaseDialog.vue'
 import ItemCommentDialog from '@/components/ItemCommentDialog.vue'
@@ -354,7 +354,7 @@ async function load() {
 
 async function loadAccountOptions() {
   try {
-    const res = await meiluAccountApi.list({ page: 1, page_size: 200 })
+    const res = await mercariAccountApi.list({ page: 1, page_size: 200 })
     accountOptions.value = (res.items || []).map((a) => ({
       id: a.id,
       label: `${a.account_name}${a.seller_id ? ` (${a.seller_id})` : ''}`,

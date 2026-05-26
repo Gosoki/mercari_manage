@@ -2,7 +2,7 @@
 """
 合并购买请求承诺 / 拒绝（依頼を承諾する / 依頼を断る）。
 
-- 使用账号主 profile 持久化浏览器（``meilu_{id}``，经 MITM 代理），不走串行队列；
+- 使用账号主 profile 持久化浏览器（``mercari_{id}``，经 MITM 代理），不走串行队列；
 - 进入 ``/bundle_offer/{bundle_id}`` 后：
     accept → 按 XPath 填写 4 个 select → 按文本点「依頼を承諾する」
     reject → 直接按文本点「依頼を断る」
@@ -17,10 +17,10 @@ import time
 from typing import Any, Dict, List, Optional, Sequence
 
 from ...db_manage.database import DatabaseManager
-from ...db_manage.models.meilu_account import MeiluAccountModel
+from ...db_manage.models.mercari_account import MercariAccountModel
 from ...web_drive.core.manager import EdgeWebDriveManager
 from ...web_drive.core.mitm_session import mitm_automation_browser
-from ...web_drive.core.paths import meilu_account_key
+from ...web_drive.core.paths import mercari_account_key
 from .bundle_purchase_capture import build_bundle_offer_url
 
 log = logging.getLogger(__name__)
@@ -282,11 +282,11 @@ async def _click_button_by_text(
 
 def _resolve_account_id(account_id: Optional[int]) -> int:
     if account_id is not None:
-        acc = MeiluAccountModel.find_by_id(id=int(account_id))
+        acc = MercariAccountModel.find_by_id(id=int(account_id))
         if acc is None:
             raise ValueError(f"煤炉账号 id={account_id} 不存在")
         return int(account_id)
-    rows = MeiluAccountModel.find_all(
+    rows = MercariAccountModel.find_all(
         where="[status] = ? AND [is_open] = 1",
         params=("active",),
         order_by="[id] ASC",
@@ -366,7 +366,7 @@ async def decide_bundle_purchase(
         raise ValueError(f"非法 action: {action!r}")
 
     aid = _resolve_account_id(account_id)
-    main_key = meilu_account_key(int(aid))
+    main_key = mercari_account_key(int(aid))
     start_url = build_bundle_offer_url(bid)
 
     # 已决定的请求不允许重复操作

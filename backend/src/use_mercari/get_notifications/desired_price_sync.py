@@ -17,7 +17,7 @@ import time
 from typing import Any, Dict, Optional
 
 from ...db_manage.database import DatabaseManager
-from ...db_manage.models.meilu_account import MeiluAccountModel
+from ...db_manage.models.mercari_account import MercariAccountModel
 from ...ssl_mitm_proxy.capture_config import (
     clear_aggregated_desired_prices_response_file,
     clear_item_get_response_file,
@@ -178,11 +178,11 @@ def apply_desired_price_sync(
 
 def _resolve_account_id(account_id: Optional[int]) -> int:
     if account_id is not None:
-        acc = MeiluAccountModel.find_by_id(id=int(account_id))
+        acc = MercariAccountModel.find_by_id(id=int(account_id))
         if acc is None:
             raise ValueError(f"煤炉账号 id={account_id} 不存在")
         return int(account_id)
-    rows = MeiluAccountModel.find_all(
+    rows = MercariAccountModel.find_all(
         where="[status] = ? AND [is_open] = 1",
         params=("active",),
         order_by="[id] ASC",

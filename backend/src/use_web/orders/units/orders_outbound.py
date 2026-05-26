@@ -17,7 +17,7 @@ from ....use_mercari.sync_progress import (
     clear_sync_progress,
     get_sync_progress,
 )
-from ....web_drive.core.account_serial_queue import queue_key_for_meilu_account, run_meilu_serial_async
+from ....web_drive.core.account_serial_queue import queue_key_for_mercari_account, run_mercari_serial_async
 from .orders_helpers import _outbound_line_has_inventory_id, db
 from .orders_models import (
     ManualOutboundLineCreateBody,
@@ -313,7 +313,7 @@ async def refresh_order_info(data: RefreshOrderInfoBody):
         return rows[0].to_dict()
 
     try:
-        return await run_meilu_serial_async(queue_key_for_meilu_account(int(aid)), _do_refresh)
+        return await run_mercari_serial_async(queue_key_for_mercari_account(int(aid)), _do_refresh)
     except TimeoutError as exc:
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     finally:

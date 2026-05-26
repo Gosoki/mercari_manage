@@ -15,14 +15,14 @@
 
 from .core.account_serial_queue import (
     GLOBAL_QUEUE_KEY,
-    queue_key_for_meilu_account,
-    resolve_meilu_account_id,
-    run_meilu_serial_async,
+    queue_key_for_mercari_account,
+    resolve_mercari_account_id,
+    run_mercari_serial_async,
     shutdown_serial_executors,
 )
 from .core.manager import EdgeWebDriveManager, get_web_drive_manager
 from .core.paths import (
-    meilu_account_key,
+    mercari_account_key,
     profile_dir_for,
     profiles_root,
     validate_account_key,
@@ -32,12 +32,12 @@ __all__ = [
     "EdgeWebDriveManager",
     "GLOBAL_QUEUE_KEY",
     "get_web_drive_manager",
-    "meilu_account_key",
+    "mercari_account_key",
     "profile_dir_for",
     "profiles_root",
-    "queue_key_for_meilu_account",
-    "resolve_meilu_account_id",
-    "run_meilu_serial_async",
+    "queue_key_for_mercari_account",
+    "resolve_mercari_account_id",
+    "run_mercari_serial_async",
     "shutdown_serial_executors",
     "validate_account_key",
 ]

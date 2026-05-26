@@ -16,7 +16,7 @@ from .models import (
     CostExpenseModel,
     OrderModel,
     OrderOutboundLineModel,
-    MeiluAccountModel,
+    MercariAccountModel,
     OnSaleItemModel,
     ProductTypeCategoryMappingModel,
     ConfigEntryModel,
@@ -374,10 +374,10 @@ class DBManager:
             CostExpenseModel,  # 成本支出
             OrderModel,       # 订单管理
             OrderOutboundLineModel,  # 订单解析出的待出库明细（依赖 orders / inventory 逻辑）
-            MeiluAccountModel,  # 煤炉账号
+            MercariAccountModel,  # 煤炉账号
             OnSaleItemModel,  # 在售商品缓存
-            TodoItemModel,  # 待办事项缓存（依赖 meilu_accounts，仅顺序习惯）
-            NotificationModel,  # お知らせ通知缓存（依赖 meilu_accounts，仅顺序习惯）
+            TodoItemModel,  # 待办事项缓存（依赖 mercari_accounts，仅顺序习惯）
+            NotificationModel,  # お知らせ通知缓存（依赖 mercari_accounts，仅顺序习惯）
             BundlePurchaseRequestModel,  # 合并购买请求缓存（依赖 notifications，仅顺序习惯）
             DesiredPriceOfferModel,  # 降价请求(値下げ依頼)缓存（依赖 notifications，仅顺序习惯）
             ProductTypeCategoryMappingModel,  # 商品类型与类别字段映射

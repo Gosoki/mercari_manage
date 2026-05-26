@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-待办事项查询：分页 + 多条件过滤；联表 meilu_accounts 取 account_name 用于前端显示。
+待办事项查询：分页 + 多条件过滤；联表 mercari_accounts 取 account_name 用于前端显示。
 """
 
 from typing import Any, Dict, List, Optional
@@ -80,7 +80,7 @@ def list_todos(
         f"""
         SELECT {sel_cols}
         FROM [todo_items] t
-        LEFT JOIN [meilu_accounts] a ON a.[id] = t.[account_id]
+        LEFT JOIN [mercari_accounts] a ON a.[id] = t.[account_id]
         WHERE {where_sql}
         ORDER BY COALESCE(t.[is_delete], 0) ASC,
                  COALESCE(t.[mercari_updated], t.[mercari_created], 0) DESC,

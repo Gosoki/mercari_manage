@@ -11,20 +11,20 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from ...db_manage.models.meilu_account import MeiluAccountModel
+from ...db_manage.models.mercari_account import MercariAccountModel
 from ...web_drive.core.manager import get_web_drive_manager
-from ...web_drive.core.paths import meilu_account_key
+from ...web_drive.core.paths import mercari_account_key
 
 log = logging.getLogger(__name__)
 
 
 def _resolve_account_id(account_id: Optional[int]) -> int:
     if account_id is not None:
-        acc = MeiluAccountModel.find_by_id(id=int(account_id))
+        acc = MercariAccountModel.find_by_id(id=int(account_id))
         if acc is None:
             raise ValueError(f"煤炉账号 id={account_id} 不存在")
         return int(account_id)
-    rows = MeiluAccountModel.find_all(
+    rows = MercariAccountModel.find_all(
         where="[status] = ? AND [is_open] = 1",
         params=("active",),
         order_by="[id] ASC",
@@ -38,7 +38,7 @@ def _resolve_account_id(account_id: Optional[int]) -> int:
 async def close_account_browser(account_id: Optional[int] = None) -> Dict[str, Any]:
     """强制关闭指定账号的主 profile 浏览器。未运行时不报错。"""
     aid = _resolve_account_id(account_id)
-    main_key = meilu_account_key(int(aid))
+    main_key = mercari_account_key(int(aid))
     mgr = get_web_drive_manager()
     closed = False
     try:

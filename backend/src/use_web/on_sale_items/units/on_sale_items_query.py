@@ -33,7 +33,7 @@ def _split_mercari_item_ids(raw) -> list[str]:
 
 
 def _seller_name_by_seller_id(seller_ids: Set[str]) -> Dict[str, str]:
-    """按 seller_id 从 meilu_accounts 取展示名（account_name），键为 TRIM 后的 seller_id。"""
+    """按 seller_id 从 mercari_accounts 取展示名（account_name），键为 TRIM 后的 seller_id。"""
     ids = {str(s).strip() for s in seller_ids if s is not None and str(s).strip()}
     if not ids:
         return {}
@@ -42,7 +42,7 @@ def _seller_name_by_seller_id(seller_ids: Set[str]) -> Dict[str, str]:
     ph = ",".join(["?"] * len(lst))
     sql = f"""
         SELECT TRIM(COALESCE([seller_id], '')), [account_name], [status], [id]
-        FROM [meilu_accounts]
+        FROM [mercari_accounts]
         WHERE TRIM(COALESCE([seller_id], '')) IN ({ph})
         ORDER BY CASE WHEN [status] = 'active' THEN 0 ELSE 1 END, [id] ASC
     """

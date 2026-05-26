@@ -15,8 +15,8 @@ from ....use_mercari.sync_progress import (
     get_sync_progress,
 )
 from ....web_drive.core.account_serial_queue import (
-    queue_key_for_meilu_account,
-    run_meilu_serial_async,
+    queue_key_for_mercari_account,
+    run_mercari_serial_async,
 )
 from .notifications_models import SyncNotificationsRequest
 
@@ -41,8 +41,8 @@ async def sync_notifications(req: SyncNotificationsRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc))
 
     try:
-        stats = await run_meilu_serial_async(
-            queue_key_for_meilu_account(aid),
+        stats = await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
             lambda: sync_notifications_from_mercari(
                 account_id=aid,
                 progress_job_id=jid,

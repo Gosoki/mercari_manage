@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from ...db_manage.database import DatabaseManager
-from ...db_manage.models.meilu_account import MeiluAccountModel
+from ...db_manage.models.mercari_account import MercariAccountModel
 from ...ssl_mitm_proxy.capture_config import clear_notification_response_file
 from ...web_drive.core.mitm_session import mitm_automation_browser
 from ..sync_progress import make_sync_reporter
@@ -218,11 +218,11 @@ def apply_notifications_sync(account_id: int, items: List[Dict[str, Any]]) -> Di
 def _resolve_account_id(account_id: Optional[int]) -> int:
     """显式 account_id 优先；否则取第一个 is_open=1 且 status=active 的账号。"""
     if account_id is not None:
-        acc = MeiluAccountModel.find_by_id(id=int(account_id))
+        acc = MercariAccountModel.find_by_id(id=int(account_id))
         if acc is None:
             raise ValueError(f"煤炉账号 id={account_id} 不存在")
         return int(account_id)
-    rows = MeiluAccountModel.find_all(
+    rows = MercariAccountModel.find_all(
         where="[status] = ? AND [is_open] = 1",
         params=("active",),
         order_by="[id] ASC",
@@ -239,7 +239,7 @@ async def sync_notifications_from_mercari(
 ) -> Dict[str, Any]:
     """从煤炉拉取通知并同步本地 ``notifications`` 表。
 
-    通过 ``mitm_automation_browser`` 租借账号主 profile ``meilu_{id}`` 的有头浏览器
+    通过 ``mitm_automation_browser`` 租借账号主 profile ``mercari_{id}`` 的有头浏览器
     （登录态由 Edge 持久化 cookie 自动维护，无需 cookie seed / 首页 prewarm）。
     抓取完毕后浏览器保持打开，由用户决定何时关闭。
 

@@ -12,8 +12,8 @@ from ....use_mercari.get_notifications.bundle_purchase_sync import (
 )
 from ....use_mercari.sync_progress import clear_sync_progress
 from ....web_drive.core.account_serial_queue import (
-    queue_key_for_meilu_account,
-    run_meilu_serial_async,
+    queue_key_for_mercari_account,
+    run_mercari_serial_async,
 )
 from .bundle_purchase_models import BundlePurchaseSyncRequest
 
@@ -36,8 +36,8 @@ async def sync_bundle_purchase(req: BundlePurchaseSyncRequest) -> Dict[str, Any]
         raise HTTPException(status_code=400, detail="invalid progress_job_id")
 
     try:
-        stats = await run_meilu_serial_async(
-            queue_key_for_meilu_account(aid),
+        stats = await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
             lambda: sync_bundle_purchase_from_mercari(
                 bundle_id=bid,
                 account_id=aid,

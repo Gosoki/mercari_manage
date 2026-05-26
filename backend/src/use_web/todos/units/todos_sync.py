@@ -26,11 +26,11 @@ from ....use_mercari.sync_progress import (
     get_sync_progress,
 )
 from ....web_drive.core.account_serial_queue import (
-    queue_key_for_meilu_account,
-    run_meilu_serial_async,
+    queue_key_for_mercari_account,
+    run_mercari_serial_async,
 )
 from ....web_drive.core.manager import get_web_drive_manager
-from ....web_drive.core.paths import meilu_account_key
+from ....web_drive.core.paths import mercari_account_key
 from .todos_models import (
     ConfirmShippingSelectionRequest,
     SendMessageReactionRequest,
@@ -61,8 +61,8 @@ async def sync_todos(req: SyncTodosRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc))
 
     try:
-        stats = await run_meilu_serial_async(
-            queue_key_for_meilu_account(aid),
+        stats = await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
             lambda: sync_todos_from_mercari(
                 account_id=aid,
                 progress_job_id=jid,
@@ -109,8 +109,8 @@ async def fetch_todo_transaction_detail(
     # 交易详情打开后浏览器需保持打开,等用户在前端继续操作（发送/选择/评价等）;
     # 队列空闲自动关闭由 close_detail_browser 路由或终态 op 显式关闭代替
     try:
-        data = await run_meilu_serial_async(
-            queue_key_for_meilu_account(aid),
+        data = await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
             lambda: fetch_transaction_detail(int(todo_id), progress_job_id=jid),
             suppress_idle_close=True,
         )
@@ -136,8 +136,8 @@ async def send_transaction_message_endpoint(
         raise HTTPException(status_code=400, detail="待办事项缺少 account_id")
     jid = _validate_job_id(req.progress_job_id)
     try:
-        return await run_meilu_serial_async(
-            queue_key_for_meilu_account(aid),
+        return await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
             lambda: send_transaction_message(int(todo_id), req.text, progress_job_id=jid),
             suppress_idle_close=True,
         )
@@ -163,8 +163,8 @@ async def start_shipping_class_endpoint(
         raise HTTPException(status_code=400, detail="待办事项缺少 account_id")
     jid = _validate_job_id(req.progress_job_id if req else None)
     try:
-        return await run_meilu_serial_async(
-            queue_key_for_meilu_account(aid),
+        return await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
             lambda: start_select_shipping_class(int(todo_id), progress_job_id=jid),
             suppress_idle_close=True,
         )
@@ -189,8 +189,8 @@ async def confirm_shipping_selection_endpoint(
         raise HTTPException(status_code=400, detail="待办事项缺少 account_id")
     jid = _validate_job_id(req.progress_job_id)
     try:
-        return await run_meilu_serial_async(
-            queue_key_for_meilu_account(aid),
+        return await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
             lambda: confirm_shipping_selection(
                 int(todo_id), req.class_text, req.facility, progress_job_id=jid,
             ),
@@ -217,8 +217,8 @@ async def submit_transaction_review_endpoint(
         raise HTTPException(status_code=400, detail="待办事项缺少 account_id")
     jid = _validate_job_id(req.progress_job_id)
     try:
-        return await run_meilu_serial_async(
-            queue_key_for_meilu_account(aid),
+        return await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
             lambda: submit_transaction_review(int(todo_id), req.text, progress_job_id=jid),
             suppress_idle_close=True,
         )
@@ -244,8 +244,8 @@ async def change_shipping_method_endpoint(
         raise HTTPException(status_code=400, detail="待办事项缺少 account_id")
     jid = _validate_job_id(req.progress_job_id if req else None)
     try:
-        return await run_meilu_serial_async(
-            queue_key_for_meilu_account(aid),
+        return await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
             lambda: click_change_shipping_method(int(todo_id), progress_job_id=jid),
             suppress_idle_close=True,
         )
@@ -275,8 +275,8 @@ async def send_message_reaction_endpoint(
         )
     jid = _validate_job_id(req.progress_job_id)
     try:
-        return await run_meilu_serial_async(
-            queue_key_for_meilu_account(aid),
+        return await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
             lambda: send_message_reaction_by_index(
                 int(todo_id),
                 req.reaction_index,
@@ -301,6 +301,6 @@ async def close_detail_browser(account_id: int) -> Dict[str, Any]:
     if aid <= 0:
         raise HTTPException(status_code=400, detail="account_id 无效")
     mgr = get_web_drive_manager()
-    main_key = meilu_account_key(aid)
+    main_key = mercari_account_key(aid)
     result = await mgr.close_session(main_key, force=True)
     return {"account_id": aid, **(result if isinstance(result, dict) else {})}

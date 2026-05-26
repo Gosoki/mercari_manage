@@ -158,17 +158,17 @@ def listing_post_progress(job_id: str):
 
 async def post_to_market(body: PostToMarketBody):
     """
-    在账号主 profile（``meilu_{id}``）经 SSL 中间人代理打开 https://jp.mercari.com/sell/create，
+    在账号主 profile（``mercari_{id}``）经 SSL 中间人代理打开 https://jp.mercari.com/sell/create，
     并自动完成全部表单步骤（与订单页「更新列表」同模式，cookie 由 Edge 持久化自动维护）：
       · Switch 检查 → 图片上传 → 商品名/说明填写
       · 商品类型选择 → 販売タイプ+价格 → 发货天数 → 发货地址
-    经 ``run_meilu_serial_async`` 串行执行；浏览器在队列空闲后由队列自动关闭。
+    经 ``run_mercari_serial_async`` 串行执行；浏览器在队列空闲后由队列自动关闭。
     """
     from ....web_drive.core.account_serial_queue import (
-        queue_key_for_meilu_account,
-        run_meilu_serial_async,
+        queue_key_for_mercari_account,
+        run_mercari_serial_async,
     )
-    from ....web_drive.core.paths import meilu_id_from_account_key
+    from ....web_drive.core.paths import mercari_id_from_account_key
     from ....web_drive.listing.units.listing_progress import clear_listing_progress
     from ....web_drive.listing.units.post_to_macket import post_to_market as _do_post
     from ....ssl_mitm_proxy.runner import default_mitm_proxy_url
@@ -177,7 +177,7 @@ async def post_to_market(body: PostToMarketBody):
     if jid and not _LISTING_JOB_ID_RE.fullmatch(jid):
         raise HTTPException(status_code=400, detail="invalid progress_job_id")
 
-    account_id = meilu_id_from_account_key(body.account_key)
+    account_id = mercari_id_from_account_key(body.account_key)
     if account_id is None:
         raise HTTPException(status_code=400, detail="无效的 account_key")
 
@@ -214,8 +214,8 @@ async def post_to_market(body: PostToMarketBody):
                 progress_job_id=jid,
             )
 
-        data = await run_meilu_serial_async(
-            queue_key_for_meilu_account(account_id),
+        data = await run_mercari_serial_async(
+            queue_key_for_mercari_account(account_id),
             _run,
         )
         return {"success": True, "data": data}
@@ -245,17 +245,17 @@ class DeleteMercariItemBody(PydanticModel):
 
 async def delete_on_sale_item(body: DeleteMercariItemBody):
     """
-    账号主 profile ``meilu_{id}`` 经 MITM 打开编辑页删除商品，跳转出品一覧后同步本地列表；
-    经 ``run_meilu_serial_async`` 串行，浏览器在队列空闲超时后由队列自动关闭。
+    账号主 profile ``mercari_{id}`` 经 MITM 打开编辑页删除商品，跳转出品一覧后同步本地列表；
+    经 ``run_mercari_serial_async`` 串行，浏览器在队列空闲超时后由队列自动关闭。
 
     ``progress_job_id`` 与 GET /use_web/on-sale-items/sync-progress/{job_id} 共用通用
     sync_progress 内存存储，前端可复用同一个轮询接口展示步骤。
     """
     from ....web_drive.core.account_serial_queue import (
-        queue_key_for_meilu_account,
-        run_meilu_serial_async,
+        queue_key_for_mercari_account,
+        run_mercari_serial_async,
     )
-    from ....web_drive.core.paths import meilu_id_from_account_key
+    from ....web_drive.core.paths import mercari_id_from_account_key
     from ....web_drive.delete.units.delete_order import delete_mercari_item as _do_delete
     from ....ssl_mitm_proxy.runner import default_mitm_proxy_url
     from ....use_mercari.sync_progress import clear_sync_progress
@@ -268,7 +268,7 @@ async def delete_on_sale_item(body: DeleteMercariItemBody):
     if jid and not _LISTING_JOB_ID_RE.fullmatch(jid):
         raise HTTPException(status_code=400, detail="invalid progress_job_id")
 
-    account_id = meilu_id_from_account_key(body.account_key)
+    account_id = mercari_id_from_account_key(body.account_key)
     if account_id is None:
         raise HTTPException(status_code=400, detail="无效的 account_key")
 
@@ -288,8 +288,8 @@ async def delete_on_sale_item(body: DeleteMercariItemBody):
                 progress_job_id=jid,
             )
 
-        data = await run_meilu_serial_async(
-            queue_key_for_meilu_account(account_id),
+        data = await run_mercari_serial_async(
+            queue_key_for_mercari_account(account_id),
             _run,
         )
         return {"success": True, "data": data}

@@ -4,7 +4,7 @@
 Cookie 与站点数据随目录持久化；不同账号对应不同子浏览器配置目录。
 
 Playwright 异步驱动绑定到「当前线程 + 当前 event loop」：
-- 煤炉浏览器任务在 uvicorn 主事件循环上 ``await`` 执行（见 ``run_meilu_serial_async``），同一账号串行、不同账号可并行。
+- 煤炉浏览器任务在 uvicorn 主事件循环上 ``await`` 执行（见 ``run_mercari_serial_async``），同一账号串行、不同账号可并行。
 - 若在线程间共享同一个 Playwright 实例，或复用已随 loop 关闭而失效的实例，会触发
   ``'NoneType' object has no attribute 'send'``。
 因此每个 **操作系统线程** 使用独立的 Playwright / contexts（``threading.local()``）。
@@ -39,11 +39,11 @@ def get_web_drive_manager() -> "EdgeWebDriveManager":
 
 
 def automation_headless_enabled() -> bool:
-    """所有自动化任务（除 /meilu-accounts 用户手动外）是否切真·无头浏览器。
+    """所有自动化任务（除 /mercari-accounts 用户手动外）是否切真·无头浏览器。
 
     通过 ``WEB_DRIVE_AUTOMATION_HEADLESS`` 环境变量控制，默认 0（保留有头并最小化）。
     生效范围：系统启动预热、MITM 自动化（出品/删除/改价）、煤炉账号 MITM 抓取；
-    不生效范围：``/use_web/web-drive/sessions/open``（前端 /meilu-accounts 手动按钮）。
+    不生效范围：``/use_web/web-drive/sessions/open``（前端 /mercari-accounts 手动按钮）。
     """
     v = (os.environ.get("WEB_DRIVE_AUTOMATION_HEADLESS") or "0").strip().lower()
     return v in ("1", "true", "yes", "on")
@@ -347,7 +347,7 @@ class EdgeWebDriveManager:
             )
 
     def is_interactive_session_running(self, account_key: str) -> bool:
-        """主 profile（``meilu_{id}``）上是否有用户手动打开的有头会话。"""
+        """主 profile（``mercari_{id}``）上是否有用户手动打开的有头会话。"""
         key = validate_account_key(account_key)
         s = self._ts()
         self._prune_dead_sessions(s)

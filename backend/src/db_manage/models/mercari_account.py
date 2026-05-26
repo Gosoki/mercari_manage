@@ -9,12 +9,12 @@ from typing import Dict, Any, List, Optional
 from ..base_model import BaseModel
 
 
-class MeiluAccountModel(BaseModel):
+class MercariAccountModel(BaseModel):
     """煤炉账号"""
 
     @classmethod
     def get_table_name(cls) -> str:
-        return "meilu_accounts"
+        return "mercari_accounts"
 
     @classmethod
     def get_fields(cls) -> Dict[str, Dict[str, Any]]:
@@ -66,7 +66,7 @@ class MeiluAccountModel(BaseModel):
                 'not_null': True,
                 'default': 0,
             },
-            # 抓取间隔：15 / 30 / 60(1h) / 3h / 6h 等（见 meilu_accounts.ALLOWED_FETCH_INTERVALS）
+            # 抓取间隔：15 / 30 / 60(1h) / 3h / 6h 等（见 mercari_accounts.ALLOWED_FETCH_INTERVALS）
             'fetch_interval': {
                 'type': 'TEXT',
                 'not_null': False,
@@ -117,6 +117,7 @@ class MeiluAccountModel(BaseModel):
 
     @classmethod
     def ensure_table_exists(cls) -> bool:
+        cls._migrate_legacy_meilu_table_name()
         ok = super().ensure_table_exists()
         if ok:
             cls._migrate_login_password_json_to_value()
@@ -124,6 +125,35 @@ class MeiluAccountModel(BaseModel):
             if hasattr(cls, '_cached_table_columns'):
                 delattr(cls, '_cached_table_columns')
         return ok
+
+    @classmethod
+    def _migrate_legacy_meilu_table_name(cls) -> None:
+        """重命名旧表 meilu_accounts → mercari_accounts（仅在新表不存在且旧表存在时执行）。"""
+        db = cls().db
+        new_name = cls.get_table_name()
+        legacy_name = 'meilu_accounts'
+        if new_name == legacy_name:
+            return
+        try:
+            if db.table_exists(new_name):
+                return
+            if not db.table_exists(legacy_name):
+                return
+            db.execute_update(f"ALTER TABLE [{legacy_name}] RENAME TO [{new_name}]", ())
+            print(f"[mercari_accounts] 已将旧表 {legacy_name} 重命名为 {new_name}")
+            for idx in cls.get_indexes():
+                idx_name = idx.get('name')
+                if not idx_name:
+                    continue
+                legacy_idx = idx_name.replace('mercari_accounts', 'meilu_accounts')
+                if legacy_idx == idx_name:
+                    continue
+                try:
+                    db.execute_update(f"DROP INDEX IF EXISTS [{legacy_idx}]", ())
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"[mercari_accounts] 旧表 meilu_accounts 迁移失败: {e}")
 
     @classmethod
     def _migrate_auto_fetch_task_defaults(cls) -> None:
@@ -151,7 +181,7 @@ class MeiluAccountModel(BaseModel):
                 (),
             )
         except Exception as e:
-            print(f"[meilu_accounts] auto_fetch 子任务默认迁移跳过: {e}")
+            print(f"[mercari_accounts] auto_fetch 子任务默认迁移跳过: {e}")
 
     @classmethod
     def _migrate_login_password_json_to_value(cls) -> None:
@@ -175,15 +205,15 @@ class MeiluAccountModel(BaseModel):
                 (),
             )
         except Exception as e:
-            print(f"[meilu_accounts] login_password -> value 迁移跳过: {e}")
+            print(f"[mercari_accounts] login_password -> value 迁移跳过: {e}")
 
     @classmethod
     def get_indexes(cls) -> List[Dict[str, Any]]:
         return [
-            {'name': 'idx_meilu_accounts_name', 'columns': ['account_name']},
-            {'name': 'idx_meilu_accounts_login', 'columns': ['login_id']},
-            {'name': 'idx_meilu_accounts_seller_id', 'columns': ['seller_id']},
-            {'name': 'idx_meilu_accounts_status', 'columns': ['status']},
+            {'name': 'idx_mercari_accounts_name', 'columns': ['account_name']},
+            {'name': 'idx_mercari_accounts_login', 'columns': ['login_id']},
+            {'name': 'idx_mercari_accounts_seller_id', 'columns': ['seller_id']},
+            {'name': 'idx_mercari_accounts_status', 'columns': ['status']},
         ]
 
     @classmethod
@@ -195,7 +225,7 @@ class MeiluAccountModel(BaseModel):
         page_size: int = 20,
     ) -> Dict[str, Any]:
         db = cls().db
-        base_sql = "FROM [meilu_accounts] m WHERE 1=1"
+        base_sql = "FROM [mercari_accounts] m WHERE 1=1"
         params = []
         if keyword:
             base_sql += " AND (m.account_name LIKE ? OR m.login_id LIKE ?)"

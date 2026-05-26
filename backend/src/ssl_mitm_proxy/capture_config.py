@@ -17,7 +17,7 @@ from .paths import ssl_mitm_data_dir
 
 _lock = threading.Lock()
 
-# 与 meilu 账号 value 中字段名一致（DPoP 字段按接口类型动态映射）
+# 与 mercari 账号 value 中字段名一致（DPoP 字段按接口类型动态映射）
 HEADER_MAP_TO_VALUE = (
     ("authorization", "authorization"),
     ("user-agent", "user_agent"),
@@ -503,7 +503,7 @@ def read_transaction_evidence_response(item_id: str) -> Optional[Dict[str, Any]]
 
 
 # ============ 待办事项 services/todolist/v1/list ============
-# 请求路径不含 seller_id，多账号通过 run_meilu_serial_async 串行隔离；
+# 请求路径不含 seller_id，多账号通过 run_mercari_serial_async 串行隔离；
 # 单一 latest 文件即可，同步函数进入时 clear、抓取后 read。
 
 def todolist_response_path() -> str:
@@ -545,7 +545,7 @@ def read_todolist_response() -> Optional[Dict[str, Any]]:
 
 # ============ お知らせ：services/notification/v1/list ============
 # 与 todolist 相同的设计：单一 latest 文件，同步函数进入时 clear、抓取后 read；
-# 多账号通过 run_meilu_serial_async 串行隔离。
+# 多账号通过 run_mercari_serial_async 串行隔离。
 
 def notification_response_path() -> str:
     return os.path.join(ssl_mitm_data_dir(), "notification_latest_response.json")
@@ -585,7 +585,7 @@ def read_notification_response() -> Optional[Dict[str, Any]]:
 
 
 # ============ 交易详情：shipping/get_info（按 transaction_evidence_id 但用 latest 即可） ============
-# 同 todolist：浏览器在 run_meilu_serial_async 内串行，单一 latest 文件就够。
+# 同 todolist：浏览器在 run_mercari_serial_async 内串行，单一 latest 文件就够。
 
 def shipping_info_response_path() -> str:
     return os.path.join(ssl_mitm_data_dir(), "shipping_info_latest_response.json")

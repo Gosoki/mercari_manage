@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-お知らせ通知查询：分页 + 多条件过滤；联表 meilu_accounts 取 account_name。
+お知らせ通知查询：分页 + 多条件过滤；联表 mercari_accounts 取 account_name。
 """
 
 from typing import Any, Dict, List, Optional
@@ -119,7 +119,7 @@ def list_notifications(
         f"""
         SELECT {sel_cols}
         FROM [notifications] n
-        LEFT JOIN [meilu_accounts] a ON a.[id] = n.[account_id]
+        LEFT JOIN [mercari_accounts] a ON a.[id] = n.[account_id]
         WHERE {where_sql}
         ORDER BY {pin_case} ASC,
                  COALESCE(n.[mercari_created], 0) DESC,

@@ -326,7 +326,7 @@
 import { ref, computed, onBeforeUnmount, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Loading } from '@element-plus/icons-vue'
-import { onSaleItemApi, meiluAccountApi, webDriveApi } from '@/api/index.js'
+import { onSaleItemApi, mercariAccountApi, webDriveApi } from '@/api/index.js'
 import { parseMgmtIdsFromDescription } from '@/utils/mgmtIdCipher.js'
 import { mercariImageUrlList } from '@/utils/mercariImage.js'
 import { useMercariAccountStore } from '@/stores/mercariAccount.js'
@@ -664,7 +664,7 @@ function resolveAccountKeyForRow(row) {
   if (!sid) return null
   const matched = sellerFromAccounts.value.find((a) => String(a.seller_id || '').trim() === sid)
   if (!matched?.id) return null
-  return { accountKey: `meilu_${matched.id}`, sellerId: sid }
+  return { accountKey: `mercari_${matched.id}`, sellerId: sid }
 }
 
 async function deleteMercariItemFromDetail() {
@@ -983,7 +983,7 @@ async function runSync() {
 
 async function loadSellerAccounts() {
   try {
-    const res = await meiluAccountApi.list({ page: 1, page_size: 200 })
+    const res = await mercariAccountApi.list({ page: 1, page_size: 200 })
     sellerFromAccounts.value = (res.items || [])
       .filter((a) => a.status === 'active' && (a.seller_id || '').toString().trim())
       .map((a) => ({

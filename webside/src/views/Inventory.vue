@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div :class="{ 'listing-pick-mode-active': listingPickMode }">
     <!-- 库存统计卡片（全库汇总）；手机端不展示 -->
     <el-card v-if="!isMobile" class="section-card inventory-stats-wrap" shadow="never">
@@ -1313,7 +1313,7 @@ const listingDefaultsFromServer = ref({
   shipping_method: null,
   shipping_payer: null,
   shipping_days: null,
-  meilu_account_id: null
+  mercari_account_id: null
 })
 /** 组合商品创建弹窗 */
 const combinedProductDialogVisible = ref(false)
@@ -3400,7 +3400,7 @@ async function onListingFormSaved(data) {
   }
 
   // ── 2. 派发出品自动化（开启浏览器，填写 Mercari 出品页） ─────────────── //
-  const accountId = data.meilu_account_id
+  const accountId = data.mercari_account_id
   if (!accountId) {
     ElMessage.success('出品标题、商品说明与单价已保存到库存（未选出品账号，跳过自动化）')
     await load({ resetPage: false })
@@ -3408,8 +3408,8 @@ async function onListingFormSaved(data) {
     return
   }
 
-  // account_key：meilu_{id}；后端会映射到独立有头 profile meilu_{id}__listing，不占用系统预启动主浏览器
-  const accountKey = `meilu_${accountId}`
+  // account_key：mercari_{id}；后端会映射到独立有头 profile mercari_{id}__listing，不占用系统预启动主浏览器
+  const accountKey = `mercari_${accountId}`
 
   // 收集图片 URL：单条出品用 listing_image_urls（与库存全部图一致）；否则正面/背面；组合出品用 combined_images
   const imageUrls = []
@@ -4270,7 +4270,7 @@ async function refreshListingDefaults() {
       shipping_method: d?.shipping_method ?? null,
       shipping_payer: d?.shipping_payer ?? null,
       shipping_days: d?.shipping_days ?? null,
-      meilu_account_id: d?.meilu_account_id ?? null
+      mercari_account_id: d?.mercari_account_id ?? null
     }
   } catch {
     /* 拦截器已提示；保持当前占位 */

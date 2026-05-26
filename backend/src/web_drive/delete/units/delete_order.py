@@ -3,7 +3,7 @@
 Mercari 在售商品删除：用账号主 profile 经 MITM 打开编辑页并删除，完成后同步列表（浏览器由队列空闲超时关闭）。
 
 流程（与 /orders 更新列表同模式，cookie 由 Edge 持久化自动维护）：
-  1. ``mitm_automation_browser(account_id, start_url=edit_url)`` 进入账号主 profile ``meilu_{id}``
+  1. ``mitm_automation_browser(account_id, start_url=edit_url)`` 进入账号主 profile ``mercari_{id}``
   2. 点击「この商品を削除する」→ 弹窗内点击「削除する」
   3. 等待跳转出品一覧，MITM 截获 items/get_items 并同步本地
   4. 上下文退出后，浏览器由 ``account_serial_queue`` 在队列空闲超时（默认 10s）后自动关闭
@@ -112,14 +112,14 @@ async def delete_mercari_item(
     progress_job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    使用账号主 profile ``meilu_{id}`` 经 MITM 删除商品并同步在售列表；
+    使用账号主 profile ``mercari_{id}`` 经 MITM 删除商品并同步在售列表；
     上下文退出后浏览器由 ``account_serial_queue`` 在队列空闲超时后自动关闭。
 
     ``progress_job_id`` 配合通用 ``sync_progress``：每个阶段写入中文步骤供前端轮询。
     """
     from ...core.manager import EdgeWebDriveManager
     from ...core.mitm_session import mitm_automation_browser
-    from ...core.paths import meilu_account_key, meilu_id_from_account_key
+    from ...core.paths import mercari_account_key, mercari_id_from_account_key
     from ....use_mercari.get_order.get_on_sale.on_sale_list import (
         LISTINGS_PAGE_URL,
         sync_on_sale_from_listings_browser_page,
@@ -136,14 +136,14 @@ async def delete_mercari_item(
     if not seg:
         raise ValueError("item_id 不能为空")
 
-    account_id = meilu_id_from_account_key(account_key)
+    account_id = mercari_id_from_account_key(account_key)
     if account_id is None:
         raise ValueError(f"无效的 account_key: {account_key}")
 
     report("resolve_account", "正在准备煤炉账号…")
     _aid, seller_id = _resolve_account_and_seller(account_id)
     seller_key = str(int(seller_id))
-    auto_key = meilu_account_key(account_id)
+    auto_key = mercari_account_key(account_id)
     edit_url = build_sell_edit_url(item_id)
 
     clear_on_sale_list_response_file(seller_key)

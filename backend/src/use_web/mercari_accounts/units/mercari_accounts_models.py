@@ -42,7 +42,7 @@ _HEADER_FIELD_LABELS = [
 ]
 
 
-class MeiluAccountCreate(PydanticModel):
+class MercariAccountCreate(PydanticModel):
     account_name: str
     """省略或全空时存 {}，后续可通过 MITM 等写入完整请求头。"""
     value: Optional[Dict[str, Any]] = None
@@ -60,7 +60,7 @@ class MeiluAccountCreate(PydanticModel):
     pause_end_time: Optional[str] = None
 
 
-class MeiluAccountUpdate(PydanticModel):
+class MercariAccountUpdate(PydanticModel):
     account_name: Optional[str] = None
     login_id: Optional[str] = None
     seller_id: Optional[str] = None
@@ -90,7 +90,7 @@ class FetchSellerIdViaMitmBody(PydanticModel):
     """打开出品一覧页，经 MITM 截获 items/get_items（on_sale,stop）并从 URL 解析 seller_id。"""
 
     account_key: str = Field(
-        default="meilu_prepare",
+        default="mercari_prepare",
         min_length=1,
         max_length=64,
         pattern=r"^[a-zA-Z0-9_-]+$",

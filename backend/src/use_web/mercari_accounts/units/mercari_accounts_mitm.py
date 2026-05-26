@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import Body, HTTPException
 
-from ....db_manage.models.meilu_account import MeiluAccountModel
+from ....db_manage.models.mercari_account import MercariAccountModel
 from ....ssl_mitm_proxy.capture_config import (
     clear_session_marker,
     read_capture_file,
@@ -21,16 +21,16 @@ from ....ssl_mitm_proxy.runner import (
 )
 from ....web_drive import get_web_drive_manager
 from ....web_drive.core.account_serial_queue import (
-    queue_key_for_meilu_account,
-    run_meilu_serial_async,
+    queue_key_for_mercari_account,
+    run_mercari_serial_async,
 )
 from ....web_drive.core.manager import automation_headless_enabled
-from .meilu_accounts_helpers import (
+from .mercari_accounts_helpers import (
     _item_api_dict,
     _norm_headers_dict,
     _norm_seller_id,
 )
-from .meilu_accounts_models import (
+from .mercari_accounts_models import (
     FetchAuthViaMitmBody,
     FetchSellerIdViaMitmBody,
     IN_PROGRESS_CLICK_XPATH_CANDIDATES,
@@ -56,9 +56,9 @@ def _mitm_patch_console_lines(patch: Dict[str, Any]) -> List[str]:
     return lines
 
 
-def _apply_mitm_patch_to_account(item: MeiluAccountModel, patch: Dict[str, Any]) -> None:
+def _apply_mitm_patch_to_account(item: MercariAccountModel, patch: Dict[str, Any]) -> None:
     """将 MITM 写入的 value_patch 合并进现有 value，再经 _norm_headers_dict 校验。"""
-    cur = MeiluAccountModel._parse_value_json(item.value)
+    cur = MercariAccountModel._parse_value_json(item.value)
     for k, v in (patch or {}).items():
         if v is not None and str(v).strip():
             cur[str(k)] = str(v).strip()
@@ -163,14 +163,14 @@ async def fetch_seller_id_via_mitm(
     body: FetchSellerIdViaMitmBody = Body(default_factory=FetchSellerIdViaMitmBody),
 ):
     """
-    启动 MITM，用指定 WebDrive 会话（如 meilu_prepare / meilu_{id}）经代理打开
+    启动 MITM，用指定 WebDrive 会话（如 mercari_prepare / mercari_{id}）经代理打开
     jp.mercari.com/mypage/listings，截获
     GET api.mercari.jp/items/get_items?status=on_sale,stop&... 并从查询参数读取 seller_id。
 
-    全流程通过 ``run_meilu_serial_async`` 进入账号队列；队列空闲后由队列层
+    全流程通过 ``run_mercari_serial_async`` 进入账号队列；队列空闲后由队列层
     自动关闭浏览器（``WEB_DRIVE_QUEUE_IDLE_CLOSE_SEC`` 秒延迟）。
     """
-    account_key = (body.account_key or "meilu_prepare").strip()
+    account_key = (body.account_key or "mercari_prepare").strip()
 
     async def _do_fetch():
         r = start_mitm_proxy()
@@ -226,7 +226,7 @@ async def fetch_seller_id_via_mitm(
             "mitm": mitm_status(),
         }
 
-    return await run_meilu_serial_async(account_key, _do_fetch)
+    return await run_mercari_serial_async(account_key, _do_fetch)
 
 
 async def fetch_auth_via_mitm(
@@ -240,12 +240,12 @@ async def fetch_auth_via_mitm(
     3) DPoP_OnSale-List: GET /items/get_items?status=on_sale|stop
     4) DPoP_ItemGet-Info: GET /items/get
 
-    全流程通过 ``run_meilu_serial_async`` 进入账号队列；队列空闲后由队列层
+    全流程通过 ``run_mercari_serial_async`` 进入账号队列；队列空闲后由队列层
     自动关闭浏览器（``WEB_DRIVE_QUEUE_IDLE_CLOSE_SEC`` 秒延迟）。
     """
     cfg = body or FetchAuthViaMitmBody()
 
-    item = MeiluAccountModel.find_by_id(id=aid)
+    item = MercariAccountModel.find_by_id(id=aid)
     if not item:
         raise HTTPException(status_code=404, detail="账号不存在")
     sid_cfg = _norm_seller_id(item.seller_id)
@@ -263,11 +263,11 @@ async def fetch_auth_via_mitm(
             mgr = None
             if cfg.open_browser:
                 mgr = get_web_drive_manager()
-                from ....web_drive.core.paths import meilu_account_key
+                from ....web_drive.core.paths import mercari_account_key
 
-                # 直接使用账号主 profile（与 /meilu-accounts 「打开浏览器」一致），
+                # 直接使用账号主 profile（与 /mercari-accounts 「打开浏览器」一致），
                 # 登录态由 Edge 持久化 cookie 自动维护，无需 cookie seed。
-                auto_key = meilu_account_key(aid)
+                auto_key = mercari_account_key(aid)
                 await mgr.close_session(auto_key, force=True)
                 headless = automation_headless_enabled()
                 await mgr.open_session(
@@ -446,4 +446,4 @@ async def fetch_auth_via_mitm(
         finally:
             clear_session_marker(aid)
 
-    return await run_meilu_serial_async(queue_key_for_meilu_account(aid), _do_fetch)
+    return await run_mercari_serial_async(queue_key_for_mercari_account(aid), _do_fetch)

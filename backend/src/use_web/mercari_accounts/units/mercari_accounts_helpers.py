@@ -4,8 +4,8 @@ from typing import Any, Optional
 
 from fastapi import HTTPException
 
-from ....db_manage.models.meilu_account import MeiluAccountModel
-from .meilu_accounts_models import (
+from ....db_manage.models.mercari_account import MercariAccountModel
+from .mercari_accounts_models import (
     ALLOWED_FETCH_INTERVALS,
     ALLOWED_STATUS,
     _HEADER_FIELD_LABELS,
@@ -127,11 +127,11 @@ def _norm_headers_dict(d: Optional[dict]) -> dict:
     return out
 
 
-def _item_api_dict(item: MeiluAccountModel) -> dict:
+def _item_api_dict(item: MercariAccountModel) -> dict:
     d = item.to_dict()
     d.pop('login_password', None)
     raw = d.pop('value', None)
-    d['value'] = MeiluAccountModel._parse_value_json(raw if isinstance(raw, str) else None)
+    d['value'] = MercariAccountModel._parse_value_json(raw if isinstance(raw, str) else None)
     d['is_open'] = 1 if d.get('is_open') else 0
     d['auto_fetch_order_list'] = 1 if d.get('auto_fetch_order_list') else 0
     d['auto_fetch_on_sale'] = 1 if d.get('auto_fetch_on_sale') else 0

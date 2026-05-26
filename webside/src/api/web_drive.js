@@ -14,7 +14,7 @@ export const webDriveApi = {
 
 /**
  * 出品自动化：打开 Edge（SSL 中间人）→ 填写 Mercari 出品页 → /mercariV2/src/use_web/web-drive/listing/*
- *   account_key  webdrive 账号标识（通常 meilu_{id}）
+ *   account_key  webdrive 账号标识（通常 mercari_{id}）
  *   name         商品名称
  *   description  商品说明（含管理番号）
  *   image_urls   图片路径数组，如 ['/imges/xxx.jpg']

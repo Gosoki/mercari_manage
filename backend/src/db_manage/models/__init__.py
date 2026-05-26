@@ -8,7 +8,7 @@ from .user import UserModel
 from .cost_record import CostRecordModel
 from .cost_expense import CostExpenseModel
 from .order import OrderModel
-from .meilu_account import MeiluAccountModel
+from .mercari_account import MercariAccountModel
 from .on_sale_item import OnSaleItemModel
 from .order_outbound_line import OrderOutboundLineModel
 from .product_type_category_mapping import ProductTypeCategoryMappingModel
@@ -28,7 +28,7 @@ __all__ = [
     'CostRecordModel',
     'CostExpenseModel',
     'OrderModel',
-    'MeiluAccountModel',
+    'MercariAccountModel',
     'OnSaleItemModel',
     'OrderOutboundLineModel',
     'ProductTypeCategoryMappingModel',

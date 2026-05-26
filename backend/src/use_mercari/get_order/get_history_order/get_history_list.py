@@ -78,7 +78,7 @@ async def fetch_history_order_items(
     timeout: int = 90,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
-    使用 ``meilu_{account_id}`` 打开「取引完了」一覧页，从 MITM 截获的 items/get_items（sold_out）解析列表。
+    使用 ``mercari_{account_id}`` 打开「取引完了」一覧页，从 MITM 截获的 items/get_items（sold_out）解析列表。
     """
     if account_id is None:
         raise RuntimeError(
@@ -99,7 +99,7 @@ async def fetch_and_sync_history_orders(
     从 Mercari 取引完了一覧（网页 + MITM）获取已售完订单列表，并同步到本地订单管理表（与交易中订单同表）。
 
     :param seller_id:  Mercari 卖家 ID（从账号配置读取后传入）。
-    :param account_id: 指定煤炉账号 ID（WebDriver profile ``meilu_{id}``）。
+    :param account_id: 指定煤炉账号 ID（WebDriver profile ``mercari_{id}``）。
     :return: 同步结果统计字典。
     """
     items, meta = await fetch_history_order_items(seller_id=seller_id, account_id=account_id)

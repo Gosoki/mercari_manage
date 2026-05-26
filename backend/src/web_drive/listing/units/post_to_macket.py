@@ -690,7 +690,7 @@ async def post_to_market(
     """
     自动填写 Mercari 出品表单的全部步骤。
 
-    与订单页「更新列表」同模式：使用账号主 profile ``meilu_{id}`` 经 MITM 代理打开出品页，
+    与订单页「更新列表」同模式：使用账号主 profile ``mercari_{id}`` 经 MITM 代理打开出品页，
     登录态由 Edge 持久化 cookie 自动维护（每次进入复用主 profile，cookie 始终保持最新）。
     浏览器在队列空闲后由 ``account_serial_queue`` 自动关闭，不在此处显式关闭。
     """
@@ -712,12 +712,12 @@ async def post_to_market(
         else:
             log.warning("无法解析图片路径，跳过: %s", u)
 
-    from ...core.paths import meilu_account_key, meilu_id_from_account_key
+    from ...core.paths import mercari_account_key, mercari_id_from_account_key
 
-    account_id = meilu_id_from_account_key(account_key)
+    account_id = mercari_id_from_account_key(account_key)
     if account_id is None:
         raise ValueError(f"无效的 account_key: {account_key}")
-    main_key = meilu_account_key(account_id)
+    main_key = mercari_account_key(account_id)
 
     report("open_session", "正在打开主 profile 浏览器并进入出品页…")
 

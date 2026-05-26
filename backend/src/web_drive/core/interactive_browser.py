@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-煤炉账号页「打开浏览器」：为每个活跃账号启动有头 Edge（profile ``meilu_{id}``）。
+煤炉账号页「打开浏览器」：为每个活跃账号启动有头 Edge（profile ``mercari_{id}``）。
 
 - 窗口：``no_viewport`` + ``--start-maximized``，占满屏幕并可由用户拖拽调整大小
 - 标签：URL 写入 profile 下 ``interactive_tabs.snapshot.json``，关闭浏览器或系统重启后恢复
@@ -69,12 +69,12 @@ async def startup_interactive_browsers_for_all_active_accounts() -> None:
     """
     try:
         from ...db_manage.database import DatabaseManager
-        from .paths import meilu_account_key
+        from .paths import mercari_account_key
         from .manager import automation_headless_enabled, get_web_drive_manager
 
         db = DatabaseManager()
         rows = db.execute_query(
-            "SELECT [id] FROM [meilu_accounts] WHERE LOWER(TRIM([status])) = 'active' ORDER BY [id]"
+            "SELECT [id] FROM [mercari_accounts] WHERE LOWER(TRIM([status])) = 'active' ORDER BY [id]"
         )
         account_ids = [int(r[0]) for r in rows]
     except Exception as exc:
@@ -97,7 +97,7 @@ async def startup_interactive_browsers_for_all_active_accounts() -> None:
         account_ids,
     )
     for aid in account_ids:
-        key = meilu_account_key(aid)
+        key = mercari_account_key(aid)
         try:
             result = await mgr.open_session(
                 key,

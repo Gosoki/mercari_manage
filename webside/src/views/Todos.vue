@@ -452,7 +452,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Loading } from '@element-plus/icons-vue'
-import { todosApi, meiluAccountApi } from '@/api'
+import { todosApi, mercariAccountApi } from '@/api'
 import { useMercariAccountStore } from '@/stores/mercariAccount.js'
 import { useSyncOverlay } from '@/composables/useSyncOverlay'
 import SyncOverlay from '@/components/SyncOverlay.vue'
@@ -715,7 +715,7 @@ async function load() {
 
 async function loadAccountOptions() {
   try {
-    const res = await meiluAccountApi.list({ page: 1, page_size: 200 })
+    const res = await mercariAccountApi.list({ page: 1, page_size: 200 })
     accountOptions.value = (res.items || []).map((a) => ({
       id: a.id,
       label: `${a.account_name}${a.seller_id ? ` (${a.seller_id})` : ''}`,

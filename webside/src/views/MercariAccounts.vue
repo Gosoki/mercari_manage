@@ -70,13 +70,13 @@
       width="620px"
       top="6vh"
       destroy-on-close
-      class="meilu-dialog"
+      class="mercari-dialog"
     >
       <p v-if="!form.id" class="form-intro-tip">
-        打开本弹窗时会自动请求启动「新增前登录」浏览器（会话键 meilu_prepare），请在 Edge 中登录
+        打开本弹窗时会自动请求启动「新增前登录」浏览器（会话键 mercari_prepare），请在 Edge 中登录
         jp.mercari.com。账号状态默认为「停用」，填写账号名称等信息后保存即可入库。登录完成后可使用「获取用户信息」完善资料（实现待定）。
       </p>
-      <el-form :model="form" :rules="formRules" ref="formRef" label-width="120px" class="meilu-form">
+      <el-form :model="form" :rules="formRules" ref="formRef" label-width="120px" class="mercari-form">
         <el-divider content-position="left">基础信息</el-divider>
         <el-form-item label="账号名称" prop="account_name">
           <el-input v-model="form.account_name" maxlength="60" clearable />
@@ -182,17 +182,17 @@
         </template>
       </el-form>
       <template #footer>
-        <div class="meilu-dialog-footer">
+        <div class="mercari-dialog-footer">
           <el-popconfirm v-if="form.id" title="确认删除该账号？" @confirm="removeFromDialog">
             <template #reference>
               <el-button type="danger" plain>删除</el-button>
             </template>
           </el-popconfirm>
-          <div class="meilu-dialog-footer__actions">
+          <div class="mercari-dialog-footer__actions">
             <el-button
               v-if="!form.id"
               plain
-              :loading="browserLoadingKeys.has(MEILU_PREPARE_KEY)"
+              :loading="browserLoadingKeys.has(MERCARI_PREPARE_KEY)"
               @click="openPrepareLoginBrowser"
             >打开登录浏览器</el-button>
             <el-button v-if="!form.id" plain @click="onFetchUserInfoPlaceholder">获取用户信息</el-button>
@@ -209,15 +209,15 @@
 import { ref, onMounted, nextTick } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { meiluAccountApi, mercariApi, webDriveApi } from '@/api/index.js'
+import { mercariAccountApi, mercariApi, webDriveApi } from '@/api/index.js'
 
 const MERCARI_HOME = 'https://jp.mercari.com/'
 
 /** 新增账号前共用的 WebDrive 会话键，与后端抓包/出品等约定一致 */
-const MEILU_PREPARE_KEY = 'meilu_prepare'
+const MERCARI_PREPARE_KEY = 'mercari_prepare'
 
 function browserKeyFor(accountId) {
-  return `meilu_${accountId}`
+  return `mercari_${accountId}`
 }
 
 const loading = ref(false)
@@ -379,7 +379,7 @@ const formRules = {
 async function load() {
   loading.value = true
   const params = { page: page.value, page_size: pageSize.value }
-  const res = await meiluAccountApi.list(params).finally(() => {
+  const res = await mercariAccountApi.list(params).finally(() => {
     loading.value = false
   })
   list.value = res.items || []
@@ -387,7 +387,7 @@ async function load() {
 }
 
 function openPrepareLoginBrowser() {
-  openBrowserByKey(MEILU_PREPARE_KEY, '新增煤炉账号 · 登录浏览器')
+  openBrowserByKey(MERCARI_PREPARE_KEY, '新增煤炉账号 · 登录浏览器')
 }
 
 function openCreate() {
@@ -403,7 +403,7 @@ function onFetchUserInfoPlaceholder() {
 }
 
 function sellerIdCaptureAccountKey() {
-  return form.value.id ? browserKeyFor(form.value.id) : MEILU_PREPARE_KEY
+  return form.value.id ? browserKeyFor(form.value.id) : MERCARI_PREPARE_KEY
 }
 
 async function fetchSellerIdViaMitm() {
@@ -415,7 +415,7 @@ async function fetchSellerIdViaMitm() {
   fetchSellerIdLoading.value = true
   try {
     ElMessage.info(`正在打开 Edge（${label}）并监听在售列表 API，请稍候…`)
-    const res = await meiluAccountApi.fetchSellerIdViaMitm({
+    const res = await mercariAccountApi.fetchSellerIdViaMitm({
       account_key: accountKey,
       headless: false,
       close_browser_after: false,
@@ -487,12 +487,12 @@ async function submit() {
   const payload = buildPayload()
   try {
     if (form.value.id) {
-      await meiluAccountApi.update(form.value.id, payload)
+      await mercariAccountApi.update(form.value.id, payload)
       ElMessage.success('更新成功')
       dialogVisible.value = false
       load()
     } else {
-      await meiluAccountApi.create(payload)
+      await mercariAccountApi.create(payload)
       ElMessage.success('新增成功，可在卡片上打开该账号专用浏览器或继续完善资料')
       dialogVisible.value = false
       await load()
@@ -503,7 +503,7 @@ async function submit() {
 }
 
 async function remove(id) {
-  await meiluAccountApi.remove(id)
+  await mercariAccountApi.remove(id)
   ElMessage.success('删除成功')
   if (list.value.length === 1 && page.value > 1) page.value -= 1
   load()
@@ -689,7 +689,7 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
 }
-.meilu-dialog-footer {
+.mercari-dialog-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -697,7 +697,7 @@ onMounted(() => {
   gap: 8px;
   width: 100%;
 }
-.meilu-dialog-footer__actions {
+.mercari-dialog-footer__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -759,7 +759,7 @@ onMounted(() => {
   line-height: 1.5;
   color: #7d8da6;
 }
-.meilu-form {
+.mercari-form {
   max-height: 70vh;
   overflow-y: auto;
   padding-right: 8px;
@@ -767,7 +767,7 @@ onMounted(() => {
 </style>
 
 <style>
-.meilu-dialog .el-dialog__body {
+.mercari-dialog .el-dialog__body {
   padding-top: 8px;
 }
 </style>

@@ -7,13 +7,13 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from ....db_manage.models.config_entry import ConfigEntryModel
-from ....db_manage.models.meilu_account import MeiluAccountModel
+from ....db_manage.models.mercari_account import MercariAccountModel
 
 _K_SHIP_FROM = "listing_defaults_shipping_from_area_id"
 _K_SHIP_METHOD = "listing_defaults_shipping_method"
 _K_SHIP_PAYER = "listing_defaults_shipping_payer"
 _K_SHIP_DAYS = "listing_defaults_shipping_days"
-_K_MEILU = "listing_defaults_meilu_account_id"
+_K_MERCARI = "listing_defaults_mercari_account_id"
 
 _ALLOWED_METHODS = frozenset({"undecided", "rakuraku", "yuuyu", "tanome", "regular_mail"})
 _ALLOWED_PAYERS = frozenset({"seller", "buyer"})
@@ -27,7 +27,7 @@ class ListingDefaultsOut(BaseModel):
     shipping_method: Optional[str] = None
     shipping_payer: Optional[str] = None
     shipping_days: Optional[str] = None
-    meilu_account_id: Optional[int] = None
+    mercari_account_id: Optional[int] = None
 
 
 class ListingDefaultsUpdate(BaseModel):
@@ -35,7 +35,7 @@ class ListingDefaultsUpdate(BaseModel):
     shipping_method: Optional[str] = None
     shipping_payer: Optional[str] = None
     shipping_days: Optional[str] = None
-    meilu_account_id: Optional[int] = None
+    mercari_account_id: Optional[int] = None
 
     @field_validator("shipping_from_area_id", mode="before")
     @classmethod
@@ -59,11 +59,11 @@ def _read_listing_defaults() -> Dict[str, Any]:
     raw_method = ConfigEntryModel.get_value(_K_SHIP_METHOD)
     raw_payer = ConfigEntryModel.get_value(_K_SHIP_PAYER)
     raw_days = ConfigEntryModel.get_value(_K_SHIP_DAYS)
-    raw_meilu = ConfigEntryModel.get_value(_K_MEILU)
+    raw_mercari = ConfigEntryModel.get_value(_K_MERCARI)
     mid: Optional[int] = None
-    if raw_meilu:
+    if raw_mercari:
         try:
-            mid = int(str(raw_meilu).strip())
+            mid = int(str(raw_mercari).strip())
             if mid <= 0:
                 mid = None
         except ValueError:
@@ -73,7 +73,7 @@ def _read_listing_defaults() -> Dict[str, Any]:
         "shipping_method": raw_method,
         "shipping_payer": raw_payer,
         "shipping_days": raw_days,
-        "meilu_account_id": mid,
+        "mercari_account_id": mid,
     }
 
 
@@ -99,12 +99,12 @@ def put_listing_defaults(body: ListingDefaultsUpdate):
         if v is not None and v not in _ALLOWED_DAYS:
             raise HTTPException(status_code=400, detail=f"无效的 shipping_days: {v}")
 
-    if "meilu_account_id" in data:
-        mid = data["meilu_account_id"]
+    if "mercari_account_id" in data:
+        mid = data["mercari_account_id"]
         if mid is not None:
             if mid <= 0:
-                raise HTTPException(status_code=400, detail="meilu_account_id 须为正整数")
-            found = MeiluAccountModel.find_all("[id] = ?", (mid,), limit=1)
+                raise HTTPException(status_code=400, detail="mercari_account_id 须为正整数")
+            found = MercariAccountModel.find_all("[id] = ?", (mid,), limit=1)
             if not found:
                 raise HTTPException(status_code=400, detail=f"煤炉账号不存在: id={mid}")
 
@@ -116,8 +116,8 @@ def put_listing_defaults(body: ListingDefaultsUpdate):
         ConfigEntryModel.set_value(_K_SHIP_PAYER, data["shipping_payer"])
     if "shipping_days" in data:
         ConfigEntryModel.set_value(_K_SHIP_DAYS, data["shipping_days"])
-    if "meilu_account_id" in data:
-        mid = data["meilu_account_id"]
-        ConfigEntryModel.set_value(_K_MEILU, str(mid) if mid is not None else None)
+    if "mercari_account_id" in data:
+        mid = data["mercari_account_id"]
+        ConfigEntryModel.set_value(_K_MERCARI, str(mid) if mid is not None else None)
 
     return ListingDefaultsOut(**_read_listing_defaults())

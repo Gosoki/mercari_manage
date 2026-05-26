@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from ...db_manage.database import DatabaseManager
-from ...db_manage.models.meilu_account import MeiluAccountModel
+from ...db_manage.models.mercari_account import MercariAccountModel
 from ...ssl_mitm_proxy.capture_config import clear_bundle_purchase_response_file
 from ...web_drive.core.mitm_session import mitm_automation_browser
 from .bundle_purchase_capture import (
@@ -167,11 +167,11 @@ def apply_bundle_purchase_sync(
 def _resolve_account_id(account_id: Optional[int]) -> int:
     """显式 account_id 优先；否则取第一个 is_open=1 且 status=active 的账号。"""
     if account_id is not None:
-        acc = MeiluAccountModel.find_by_id(id=int(account_id))
+        acc = MercariAccountModel.find_by_id(id=int(account_id))
         if acc is None:
             raise ValueError(f"煤炉账号 id={account_id} 不存在")
         return int(account_id)
-    rows = MeiluAccountModel.find_all(
+    rows = MercariAccountModel.find_all(
         where="[status] = ? AND [is_open] = 1",
         params=("active",),
         order_by="[id] ASC",

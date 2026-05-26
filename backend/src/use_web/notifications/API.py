@@ -226,7 +226,7 @@ async def _desired_price_close_endpoint(req: DesiredPriceCloseRequest) -> Dict[s
     """前端关闭降价请求弹窗时调用, 强制关闭主 profile 浏览器。
 
     复用 item_comment_close 的 close_account_browser 实现, 因二者都使用
-    同一个 meilu 账号主 profile, 关闭逻辑相同。
+    同一个 mercari 账号主 profile, 关闭逻辑相同。
     """
     try:
         return await close_account_browser(account_id=req.account_id)

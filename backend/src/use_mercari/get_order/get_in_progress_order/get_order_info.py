@@ -182,7 +182,7 @@ async def fetch_item_info(
     timeout: int = 90,
 ) -> Dict[str, Any]:
     """
-    使用 ``meilu_{account_id}`` 打开取引页面并由 MITM 截获 transaction_evidences/get，返回完整 JSON（含 result / data）。
+    使用 ``mercari_{account_id}`` 打开取引页面并由 MITM 截获 transaction_evidences/get，返回完整 JSON（含 result / data）。
     """
     if account_id is None:
         raise RuntimeError(

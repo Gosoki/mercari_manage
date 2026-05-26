@@ -3,7 +3,7 @@
 留言发送：打开 ``jp.mercari.com/item/{item_id}`` 页面，
 向「商品へのコメント」textarea 输入内容后点击「コメントを送信する」按钮。
 
-- 使用账号主 profile 持久化浏览器（``meilu_{id}``，经 MITM 代理）,不走串行队列
+- 使用账号主 profile 持久化浏览器（``mercari_{id}``，经 MITM 代理）,不走串行队列
 - 发送完成后**不关闭**浏览器:由前端关闭弹窗或离开 /notifications 页面时
   显式调用 ``/item-comment/close`` 才会关闭
 """
@@ -15,11 +15,11 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-from ...db_manage.models.meilu_account import MeiluAccountModel
+from ...db_manage.models.mercari_account import MercariAccountModel
 from ...ssl_mitm_proxy.capture_config import clear_item_get_response_file
 from ...web_drive.core.manager import EdgeWebDriveManager
 from ...web_drive.core.mitm_session import mitm_automation_browser
-from ...web_drive.core.paths import meilu_account_key
+from ...web_drive.core.paths import mercari_account_key
 from .item_comment_capture import (
     build_item_page_url,
     capture_item_get_via_mitm_session,
@@ -41,11 +41,11 @@ PAGE_SETTLE_SEC = 0.6
 
 def _resolve_account_id(account_id: Optional[int]) -> int:
     if account_id is not None:
-        acc = MeiluAccountModel.find_by_id(id=int(account_id))
+        acc = MercariAccountModel.find_by_id(id=int(account_id))
         if acc is None:
             raise ValueError(f"煤炉账号 id={account_id} 不存在")
         return int(account_id)
-    rows = MeiluAccountModel.find_all(
+    rows = MercariAccountModel.find_all(
         where="[status] = ? AND [is_open] = 1",
         params=("active",),
         order_by="[id] ASC",
@@ -157,7 +157,7 @@ async def post_item_comment(
         raise ValueError("评论内容不能超过 1000 字")
 
     aid = _resolve_account_id(account_id)
-    main_key = meilu_account_key(int(aid))
+    main_key = mercari_account_key(int(aid))
     start_url = build_item_page_url(iid)
 
     log.info(

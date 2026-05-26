@@ -76,7 +76,7 @@ backend/
     ├── auth.py                      # JWT token generation & verification
     ├── app_paths.py                 # Development vs PyInstaller path handling
     ├── image_storage.py             # Base64/upload image handling
-    ├── meilu_auto_fetch_loop.py     # Background task: periodic Mercari sync
+    ├── mercari_auto_fetch_loop.py     # Background task: periodic Mercari sync
     ├── system_service.py            # System utilities (restart, etc.)
     ├── order_goods_ratio.py         # Order-to-inventory analysis
     ├── db_manage/                   # Database layer
@@ -88,7 +88,7 @@ backend/
     │   ├── auth.py                  # Login, token refresh
     │   ├── inventory.py             # Product inventory CRUD
     │   ├── orders.py                # Order management
-    │   ├── meilu_accounts.py        # Mercari account config
+    │   ├── mercari_accounts.py        # Mercari account config
     │   ├── on_sale_items.py         # Mercari listing sync display
     │   ├── warehouses.py            # Warehouse & shelf location management
     │   └── [other routes]
@@ -127,7 +127,7 @@ Key tables in `backend/src/db_manage/models/`:
 - **users**: User accounts with bcrypt passwords
 - **inventory**: Products with barcode, SKU, price, quantity, images (Base64)
 - **warehouses**: Storage locations (shelf names duplicable per warehouse)
-- **meilu_accounts**: Mercari account config (headers in value JSON field)
+- **mercari_accounts**: Mercari account config (headers in value JSON field)
 - **on_sale_items**: Mercari listing records synced from API
 - **orders**: Mercari orders synced from API
 - **order_outbound_lines**: Line items for outbound shipments
@@ -155,8 +155,8 @@ Key tables in `backend/src/db_manage/models/`:
 
 ### Mercari Integration Pipeline
 
-1. User adds Mercari account in Web UI → headers & cookies stored in `meilu_accounts.value` (JSON)
-2. `meilu_auto_fetch_loop()` runs on startup, periodically syncs orders & items
+1. User adds Mercari account in Web UI → headers & cookies stored in `mercari_accounts.value` (JSON)
+2. `mercari_auto_fetch_loop()` runs on startup, periodically syncs orders & items
 3. `sync_data.py`: Wraps Mercari API calls (fetch orders, items, etc.)
 4. `on_sale_items_sync.py`: Incremental sync with local DB
 5. `mgmt_id_cipher.py`: Decodes secret codes embedded in item descriptions
@@ -170,7 +170,7 @@ Key tables in `backend/src/db_manage/models/`:
 - `JWT_EXPIRE_HOURS`: Token validity (default: 12)
 - `SSL_MITM_AUTO_START`: Set to `0` to disable mitmproxy (default: 1)
 - `INTERACTIVE_BROWSER_AUTO_START`: Set to `0` to disable headed browser auto-start at boot (default: 0)
-- `WEB_DRIVE_AUTOMATION_HEADLESS`: Set to `1` to launch all automation browsers (startup pre-warm / MITM listing/delete/revise / meilu MITM capture) as truly headless. Does NOT affect the manual "Open Browser" button on `/meilu-accounts` (always headed). Default: 0.
+- `WEB_DRIVE_AUTOMATION_HEADLESS`: Set to `1` to launch all automation browsers (startup pre-warm / MITM listing/delete/revise / mercari MITM capture) as truly headless. Does NOT affect the manual "Open Browser" button on `/mercari-accounts` (always headed). Default: 0.
 - `WEB_DRIVE_MITM_MINIMIZED`: Set to `0` to keep MITM automation windows in the foreground; otherwise they are minimized to the taskbar. Default: 1. Has no effect when `WEB_DRIVE_AUTOMATION_HEADLESS=1`.
 
 **Frontend** (`webside/.env.development`):

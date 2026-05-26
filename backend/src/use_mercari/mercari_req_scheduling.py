@@ -24,7 +24,7 @@ import requests
 import urllib3
 from typing import Any, Dict, Literal, Optional, Union
 
-from ..db_manage.models.meilu_account import MeiluAccountModel
+from ..db_manage.models.mercari_account import MercariAccountModel
 
 # items/get_items、出售中/履歴列表等：DPoP 用 dpop_list（或旧键 dpop）
 DPOP_FOR_ITEMS_LIST: Literal["list"] = "list"
@@ -116,17 +116,17 @@ def _fetch_active_account(account_id: Optional[int] = None) -> Dict[str, Any]:
     :raises RuntimeError: 找不到可用账号时抛出。
     """
     if account_id is not None:
-        record = MeiluAccountModel.find_by_id(id=account_id)
+        record = MercariAccountModel.find_by_id(id=account_id)
         if not record:
             raise RuntimeError(f"未找到 ID={account_id} 的煤炉账号")
         d = record.to_dict()
-        d['value'] = MeiluAccountModel._parse_value_json(
+        d['value'] = MercariAccountModel._parse_value_json(
             d['value'] if isinstance(d.get('value'), str) else None
         )
         return d
 
     # 自动选取第一个 active 账号
-    records = MeiluAccountModel.find_all(
+    records = MercariAccountModel.find_all(
         where="[status] = ?",
         params=("active",),
         order_by="id ASC",
@@ -136,7 +136,7 @@ def _fetch_active_account(account_id: Optional[int] = None) -> Dict[str, Any]:
         raise RuntimeError("数据库中无可用的 active 状态煤炉账号，请先在账号管理页面添加账号")
 
     d = records[0].to_dict()
-    d['value'] = MeiluAccountModel._parse_value_json(
+    d['value'] = MercariAccountModel._parse_value_json(
         d['value'] if isinstance(d.get('value'), str) else None
     )
     return d

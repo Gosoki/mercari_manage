@@ -45,12 +45,12 @@ async def startup():
         if r.get("error"):
             logging.getLogger(__name__).warning("SSL MITM 未启动: %s", r["error"])
 
-    from src.meilu_auto_fetch_loop import meilu_auto_fetch_loop
+    from src.mercari_auto_fetch_loop import mercari_auto_fetch_loop
 
-    asyncio.create_task(meilu_auto_fetch_loop())
+    asyncio.create_task(mercari_auto_fetch_loop())
 
     async def _startup_web_drive_browsers() -> None:
-        # 煤炉账号页「打开浏览器」：有头 meilu_{id}；INTERACTIVE_BROWSER_AUTO_START=0 可关闭
+        # 煤炉账号页「打开浏览器」：有头 mercari_{id}；INTERACTIVE_BROWSER_AUTO_START=0 可关闭
         from src.web_drive.core.interactive_browser import (
             startup_interactive_browsers_for_all_active_accounts,
         )

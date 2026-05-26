@@ -184,7 +184,7 @@ const menuItems = [
   { path: '/on-sale-items', title: '在售商品', icon: 'ShoppingBag' },
   { path: '/todos', title: '待办事项', icon: 'BellFilled' },
   { path: '/notifications', title: '煤炉通知', icon: 'Bell' },
-  { path: '/meilu-accounts', title: '煤炉账号', icon: 'User' },
+  { path: '/mercari-accounts', title: '煤炉账号', icon: 'User' },
   {
     path: '/system',
     title: '系统管理',

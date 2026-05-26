@@ -8,7 +8,7 @@
 - GET ``api.mercari.jp/transaction_messages/get_messages?item_id=...``
   → 买家·卖家消息流（含用户名、时间）
 
-直接使用账号主 profile ``meilu_{id}`` 打开浏览器（与 /meilu-accounts 「打开浏览器」
+直接使用账号主 profile ``mercari_{id}`` 打开浏览器（与 /mercari-accounts 「打开浏览器」
 一致，登录态由 Edge 持久化 cookie 自动维护，不再用 ``__auto`` 副本 + seed cookie）。
 浏览器在抓取后 **保持打开**，方便用户在原生页面上手动操作。
 """
@@ -34,7 +34,7 @@ from ...web_drive.core.mitm_session import (
     login_redirect_state_for,
     mitm_automation_browser,
 )
-from ...web_drive.core.paths import meilu_account_key, meilu_id_from_account_key
+from ...web_drive.core.paths import mercari_account_key, mercari_id_from_account_key
 from ..get_order.get_in_progress_order.get_order_info import apply_item_info_to_order
 from ..sync_progress import make_sync_reporter
 
@@ -60,7 +60,7 @@ async def _wait_for_both_captures(
     每次迭代都会检查实时登录跳转监听器是否触发；命中则提前抛
     ``MercariLoginRequiredError``，不再等满 timeout。
     """
-    aid_for_login = meilu_id_from_account_key(auto_key)
+    aid_for_login = mercari_id_from_account_key(auto_key)
     deadline = time.monotonic() + timeout
     next_reload = time.monotonic() + _RELOAD_INTERVAL_SEC
     shipping: Optional[Dict[str, Any]] = None
@@ -340,7 +340,7 @@ async def send_transaction_message(
 
     aid = int(todo.account_id)
     mgr = get_web_drive_manager()
-    auto_key = meilu_account_key(aid)
+    auto_key = mercari_account_key(aid)
 
     report("attach_browser", "正在连接已打开的浏览器交易页…")
     try:
@@ -446,7 +446,7 @@ async def start_select_shipping_class(
     aid = int(todo.account_id)
 
     mgr = get_web_drive_manager()
-    auto_key = meilu_account_key(aid)
+    auto_key = mercari_account_key(aid)
     report("attach_browser", "正在连接已打开的浏览器…")
     try:
         page = await mgr.active_tab_page(auto_key)
@@ -516,7 +516,7 @@ async def confirm_shipping_selection(
         raise ValueError(f"facility 取值非法：{facility}")
 
     mgr = get_web_drive_manager()
-    auto_key = meilu_account_key(aid)
+    auto_key = mercari_account_key(aid)
     report("attach_browser", "正在连接已打开的浏览器…")
     try:
         page = await mgr.active_tab_page(auto_key)
@@ -619,7 +619,7 @@ async def submit_transaction_review(
     aid = int(todo.account_id)
     item_id = (todo.item_id or "").strip()
     mgr = get_web_drive_manager()
-    auto_key = meilu_account_key(aid)
+    auto_key = mercari_account_key(aid)
     report("attach_browser", "正在连接已打开的浏览器…")
     try:
         page = await mgr.active_tab_page(auto_key)
@@ -788,7 +788,7 @@ async def send_message_reaction_by_index(
 
     aid = int(todo.account_id)
     mgr = get_web_drive_manager()
-    auto_key = meilu_account_key(aid)
+    auto_key = mercari_account_key(aid)
 
     report("attach_browser", "正在连接已打开的浏览器交易页…")
     try:
@@ -891,7 +891,7 @@ async def click_change_shipping_method(
     aid = int(todo.account_id)
 
     mgr = get_web_drive_manager()
-    auto_key = meilu_account_key(aid)
+    auto_key = mercari_account_key(aid)
     report("attach_browser", "正在连接已打开的浏览器…")
     try:
         page = await mgr.active_tab_page(auto_key)

@@ -22,8 +22,52 @@ def backend_root() -> str:
 def profiles_root() -> str:
     override = (os.environ.get("WEB_DRIVE_PROFILES_DIR") or "").strip()
     if override:
-        return os.path.abspath(override)
-    return os.path.join(backend_root(), "data", "web_drive_profiles")
+        root = os.path.abspath(override)
+    else:
+        root = os.path.join(backend_root(), "data", "web_drive_profiles")
+    _migrate_legacy_meilu_profile_dirs(root)
+    return root
+
+
+_LEGACY_PROFILE_MIGRATION_DONE = False
+
+
+def _migrate_legacy_meilu_profile_dirs(root: str) -> None:
+    """一次性把 ``meilu_*`` 旧 profile 目录改名为 ``mercari_*``，保留登录态。
+
+    - 如果 ``mercari_<suffix>`` 已存在，则跳过该项（保留旧目录原样）
+    - 仅在进程内执行一次，避免每次取 profile 路径都扫描目录
+    """
+    global _LEGACY_PROFILE_MIGRATION_DONE
+    if _LEGACY_PROFILE_MIGRATION_DONE:
+        return
+    _LEGACY_PROFILE_MIGRATION_DONE = True
+    if not os.path.isdir(root):
+        return
+    try:
+        entries = os.listdir(root)
+    except OSError:
+        return
+    for name in entries:
+        if not name.startswith("meilu_"):
+            continue
+        old_path = os.path.join(root, name)
+        if not os.path.isdir(old_path):
+            continue
+        new_name = "mercari_" + name[len("meilu_"):]
+        new_path = os.path.join(root, new_name)
+        if os.path.exists(new_path):
+            log.warning(
+                "[paths] 浏览器 profile 目录迁移跳过：%s 已存在，旧目录 %s 保留原样",
+                new_name,
+                name,
+            )
+            continue
+        try:
+            os.rename(old_path, new_path)
+            log.info("[paths] 浏览器 profile 目录已迁移：%s → %s", name, new_name)
+        except OSError as e:
+            log.warning("[paths] 浏览器 profile 目录迁移失败 %s → %s: %s", name, new_name, e)
 
 
 def validate_account_key(account_key: str) -> str:
@@ -43,16 +87,17 @@ def profile_dir_for(account_key: str) -> str:
     return path
 
 
-def meilu_account_key(account_id: int) -> str:
+def mercari_account_key(account_id: int) -> str:
     """账号主 profile（用户手动登录 + MITM 自动化共用，登录态由 Edge 持久化 cookie 自动维护）。"""
-    return f"meilu_{int(account_id)}"
+    return f"mercari_{int(account_id)}"
 
 
-def meilu_id_from_account_key(account_key: str) -> Optional[int]:
+def mercari_id_from_account_key(account_key: str) -> Optional[int]:
     key = (account_key or "").strip()
-    if not key.startswith("meilu_"):
+    prefix = "mercari_"
+    if not key.startswith(prefix):
         return None
     try:
-        return int(key[6:])
+        return int(key[len(prefix):])
     except ValueError:
         return None

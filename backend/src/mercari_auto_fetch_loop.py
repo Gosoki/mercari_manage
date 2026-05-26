@@ -2,15 +2,15 @@
 """
 煤炉账号「自动数据获取」后台调度。
 
-开启且 status=active 的账号，按 fetch_interval 节流；在账号配置的子任务中按需执行（与同账号 run_meilu_serial_async 串行）：
+开启且 status=active 的账号，按 fetch_interval 节流；在账号配置的子任务中按需执行（与同账号 run_mercari_serial_async 串行）：
 - auto_fetch_order_list → sync_new_data（订单页「更新列表」）
 - auto_fetch_on_sale → sync_on_sale_items_from_mercari（在售页「从煤炉同步」）
 - auto_fetch_todos → sync_todos_from_mercari（待办页「从煤炉同步」）
 - auto_fetch_notifications → sync_notifications_from_mercari（通知页「从煤炉同步」）
 
 环境变量：
-- MEILU_AUTO_FETCH：设为 0/false/off 关闭本循环（默认开启）
-- MEILU_AUTO_FETCH_TICK_SEC：轮询间隔秒（默认 60，最小 15）
+- MERCARI_AUTO_FETCH：设为 0/false/off 关闭本循环（默认开启）
+- MERCARI_AUTO_FETCH_TICK_SEC：轮询间隔秒（默认 60，最小 15）
 """
 
 from __future__ import annotations
@@ -21,12 +21,12 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
-from .db_manage.models.meilu_account import MeiluAccountModel
+from .db_manage.models.mercari_account import MercariAccountModel
 from .use_mercari.get_notifications.notification_sync import sync_notifications_from_mercari
 from .use_mercari.get_to_du_list.todolist_sync import sync_todos_from_mercari
 from .use_mercari.on_sale_items_sync import sync_on_sale_items_from_mercari
 from .use_mercari.sync_data import sync_new_data
-from .web_drive.core.account_serial_queue import queue_key_for_meilu_account, run_meilu_serial_async
+from .web_drive.core.account_serial_queue import queue_key_for_mercari_account, run_mercari_serial_async
 
 log = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ def _parse_hhmm_to_minutes(raw: Optional[str]) -> Optional[int]:
     return h * 60 + m
 
 
-def _account_in_pause_window(item: MeiluAccountModel, now_local: datetime) -> bool:
+def _account_in_pause_window(item: MercariAccountModel, now_local: datetime) -> bool:
     """根据账号 pause_start_time / pause_end_time（本地时间 HH:MM）判断当前是否处于暂停期。
 
     - 两个字段任一为空：不暂停
@@ -110,7 +110,7 @@ def _account_in_pause_window(item: MeiluAccountModel, now_local: datetime) -> bo
     return cur >= start or cur < end
 
 
-def _any_auto_task_enabled(item: MeiluAccountModel) -> bool:
+def _any_auto_task_enabled(item: MercariAccountModel) -> bool:
     return (
         _normalize_row_is_open(getattr(item, "auto_fetch_order_list", 0))
         or _normalize_row_is_open(getattr(item, "auto_fetch_on_sale", 0))
@@ -119,7 +119,7 @@ def _any_auto_task_enabled(item: MeiluAccountModel) -> bool:
     )
 
 
-def _account_due(item: MeiluAccountModel, now: datetime) -> bool:
+def _account_due(item: MercariAccountModel, now: datetime) -> bool:
     if not _normalize_row_is_open(item.is_open):
         return False
     if not _any_auto_task_enabled(item):
@@ -134,7 +134,7 @@ def _account_due(item: MeiluAccountModel, now: datetime) -> bool:
     return elapsed >= _interval_seconds(iv)
 
 
-async def _run_auto_fetch_for_account(aid: int, item: MeiluAccountModel) -> None:
+async def _run_auto_fetch_for_account(aid: int, item: MercariAccountModel) -> None:
     li = _normalize_row_is_open(getattr(item, "auto_fetch_order_list", 0))
     os_ = _normalize_row_is_open(getattr(item, "auto_fetch_on_sale", 0))
     td = _normalize_row_is_open(getattr(item, "auto_fetch_todos", 0))
@@ -152,25 +152,25 @@ async def _run_auto_fetch_for_account(aid: int, item: MeiluAccountModel) -> None
         if nt:
             await sync_notifications_from_mercari(account_id=aid)
 
-    await run_meilu_serial_async(queue_key_for_meilu_account(aid), _body)
+    await run_mercari_serial_async(queue_key_for_mercari_account(aid), _body)
 
 
 def _mark_last_at(aid: int) -> None:
-    item = MeiluAccountModel.find_by_id(id=aid)
+    item = MercariAccountModel.find_by_id(id=aid)
     if not item:
         return
     item.auto_fetch_last_at = _now_iso()
     item.save()
 
 
-async def run_meilu_auto_fetch_tick() -> None:
-    raw = (os.environ.get("MEILU_AUTO_FETCH") or "1").strip().lower()
+async def run_mercari_auto_fetch_tick() -> None:
+    raw = (os.environ.get("MERCARI_AUTO_FETCH") or "1").strip().lower()
     if raw in ("0", "false", "no", "off"):
         return
 
     now = datetime.now(timezone.utc)
     now_local = datetime.now()
-    rows = MeiluAccountModel.find_all(
+    rows = MercariAccountModel.find_all(
         where="[is_open] = 1 AND [status] = ?",
         params=("active",),
     )
@@ -183,7 +183,7 @@ async def run_meilu_auto_fetch_tick() -> None:
                 continue
             if _account_in_pause_window(item, now_local):
                 log.debug(
-                    "[meilu_auto_fetch] 账号 id=%s 当前处于暂停时间段（%s - %s），跳过",
+                    "[mercari_auto_fetch] 账号 id=%s 当前处于暂停时间段（%s - %s），跳过",
                     aid,
                     getattr(item, "pause_start_time", None),
                     getattr(item, "pause_end_time", None),
@@ -191,32 +191,32 @@ async def run_meilu_auto_fetch_tick() -> None:
                 continue
             sid = str(item.seller_id or "").strip()
             if not sid:
-                log.warning("[meilu_auto_fetch] 账号 id=%s 已开启自动获取但未配置 seller_id，跳过", aid)
+                log.warning("[mercari_auto_fetch] 账号 id=%s 已开启自动获取但未配置 seller_id，跳过", aid)
                 continue
             if not _any_auto_task_enabled(item):
                 continue
-            log.info("[meilu_auto_fetch] 开始账号 id=%s seller_id=%s", aid, sid)
+            log.info("[mercari_auto_fetch] 开始账号 id=%s seller_id=%s", aid, sid)
             await _run_auto_fetch_for_account(int(aid), item)
             _mark_last_at(int(aid))
-            log.info("[meilu_auto_fetch] 完成账号 id=%s", aid)
+            log.info("[mercari_auto_fetch] 完成账号 id=%s", aid)
         except Exception:
-            log.exception("[meilu_auto_fetch] 账号 id=%s 本轮失败", aid)
+            log.exception("[mercari_auto_fetch] 账号 id=%s 本轮失败", aid)
 
 
 def _tick_seconds() -> int:
     try:
-        n = int((os.environ.get("MEILU_AUTO_FETCH_TICK_SEC") or "60").strip() or "60")
+        n = int((os.environ.get("MERCARI_AUTO_FETCH_TICK_SEC") or "60").strip() or "60")
     except ValueError:
         n = 60
     return max(15, n)
 
 
-async def meilu_auto_fetch_loop() -> None:
+async def mercari_auto_fetch_loop() -> None:
     sec = _tick_seconds()
-    log.info("[meilu_auto_fetch] 后台循环已启动，tick=%ss", sec)
+    log.info("[mercari_auto_fetch] 后台循环已启动，tick=%ss", sec)
     while True:
         try:
-            await run_meilu_auto_fetch_tick()
+            await run_mercari_auto_fetch_tick()
         except Exception:
-            log.exception("[meilu_auto_fetch] tick 外层异常")
+            log.exception("[mercari_auto_fetch] tick 外层异常")
         await asyncio.sleep(sec)

@@ -168,7 +168,7 @@ async def fetch_open_order_items(
     timeout: int = 90,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
-    使用 ``meilu_{account_id}`` Edge（MITM）打开取引中一覧页，从截获的 items/get_items（trading）解析列表。
+    使用 ``mercari_{account_id}`` Edge（MITM）打开取引中一覧页，从截获的 items/get_items（trading）解析列表。
     """
     if account_id is None:
         raise RuntimeError(
@@ -189,7 +189,7 @@ async def fetch_and_sync_open_orders(
     从 Mercari 取引中一覧（网页 + MITM 截获）获取出售中订单列表，并同步到本地订单管理表。
 
     :param seller_id:  Mercari 卖家 ID（从账号配置读取后传入）。
-    :param account_id: 指定煤炉账号 ID；为 None 时自动选取 active 账号（WebDriver profile ``meilu_{id}``）。
+    :param account_id: 指定煤炉账号 ID；为 None 时自动选取 active 账号（WebDriver profile ``mercari_{id}``）。
     :return: 同步结果统计字典，包含 total / inserted / updated / skipped / errors。
     """
     items: List[Dict[str, Any]]

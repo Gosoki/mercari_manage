@@ -2,7 +2,7 @@
 """
 降价请求(値下げ依頼)同意 / 拒绝 = 在 desired_price 页点击「売る」/「売らない」按钮。
 
-- 使用账号主 profile 持久化浏览器(meilu_{id}, 经 MITM 代理),不走串行队列
+- 使用账号主 profile 持久化浏览器(mercari_{id}, 经 MITM 代理),不走串行队列
 - 进入 /item/{item_id}/desired_price 后:
     accept -> 按 data-location='offer_list:desired_price:accept_button' 点击「売る」
     reject -> 按 data-location='offer_list:desired_price:reject_button' 点击「売らない」
@@ -18,10 +18,10 @@ import time
 from typing import Any, Dict, List, Optional, Sequence
 
 from ...db_manage.database import DatabaseManager
-from ...db_manage.models.meilu_account import MeiluAccountModel
+from ...db_manage.models.mercari_account import MercariAccountModel
 from ...web_drive.core.manager import EdgeWebDriveManager
 from ...web_drive.core.mitm_session import mitm_automation_browser
-from ...web_drive.core.paths import meilu_account_key
+from ...web_drive.core.paths import mercari_account_key
 from .desired_price_capture import build_desired_price_page_url
 
 log = logging.getLogger(__name__)
@@ -78,11 +78,11 @@ class DesiredPriceAlreadyDecidedError(RuntimeError):
 
 def _resolve_account_id(account_id: Optional[int]) -> int:
     if account_id is not None:
-        acc = MeiluAccountModel.find_by_id(id=int(account_id))
+        acc = MercariAccountModel.find_by_id(id=int(account_id))
         if acc is None:
             raise ValueError(f"煤炉账号 id={account_id} 不存在")
         return int(account_id)
-    rows = MeiluAccountModel.find_all(
+    rows = MercariAccountModel.find_all(
         where="[status] = ? AND [is_open] = 1",
         params=("active",),
         order_by="[id] ASC",
@@ -204,7 +204,7 @@ async def decide_desired_price(
         raise ValueError(f"非法 action: {action!r}")
 
     aid = _resolve_account_id(account_id)
-    main_key = meilu_account_key(int(aid))
+    main_key = mercari_account_key(int(aid))
     start_url = build_desired_price_page_url(iid)
 
     existing_state = _get_existing_state(int(aid), iid)

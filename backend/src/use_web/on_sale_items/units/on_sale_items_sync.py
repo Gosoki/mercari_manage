@@ -7,9 +7,9 @@ from fastapi import HTTPException
 
 from ....db_manage.models.on_sale_item import OnSaleItemModel
 from ....web_drive.core.account_serial_queue import (
-    queue_key_for_meilu_account,
-    resolve_meilu_account_id,
-    run_meilu_serial_async,
+    queue_key_for_mercari_account,
+    resolve_mercari_account_id,
+    run_mercari_serial_async,
 )
 from ....use_mercari.on_sale_item_detail_sync import fetch_detail_and_sync_inventory
 from ....use_mercari.on_sale_items_sync import sync_on_sale_items_from_mercari
@@ -34,7 +34,7 @@ _SYNC_JOB_ID_RE = re.compile(r"^[a-zA-Z0-9_.-]{1,128}$")
 
 async def sync_on_sale(data: SyncOnSaleRequest):
     """
-    从煤炉拉取在售列表并同步本地：用账号主 profile ``meilu_{id}`` 经 MITM 打开
+    从煤炉拉取在售列表并同步本地：用账号主 profile ``mercari_{id}`` 经 MITM 打开
     jp.mercari.com/mypage/listings，截获 api.mercari.jp/items/get_items 响应。
     在同一浏览器会话内，对本次**新增**的商品依次打开商品页截获 items/get，执行与「获取详情」相同的库存回写（可用 WEB_DRIVE_ON_SALE_SYNC_AUTO_DETAIL=0 关闭）。
     新列表中不存在的本地记录不物理删除，而是标记 is_delete=1（软删除）。
@@ -47,9 +47,9 @@ async def sync_on_sale(data: SyncOnSaleRequest):
     if jid and not _SYNC_JOB_ID_RE.fullmatch(jid):
         raise HTTPException(status_code=400, detail="invalid progress_job_id")
     try:
-        aid = resolve_meilu_account_id(data.account_id)
-        result = await run_meilu_serial_async(
-            queue_key_for_meilu_account(aid),
+        aid = resolve_mercari_account_id(data.account_id)
+        result = await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
             lambda: sync_on_sale_items_from_mercari(
                 account_id=aid,
                 progress_job_id=jid,
@@ -115,8 +115,8 @@ async def fetch_on_sale_item_detail(data: FetchOnSaleDetailRequest):
             )
 
     try:
-        qk = queue_key_for_meilu_account(int(account_id))
-        payload = await run_meilu_serial_async(
+        qk = queue_key_for_mercari_account(int(account_id))
+        payload = await run_mercari_serial_async(
             qk,
             lambda: fetch_detail_and_sync_inventory(
                 item_id,
@@ -140,7 +140,7 @@ async def fetch_on_sale_item_detail(data: FetchOnSaleDetailRequest):
 async def fetch_on_sale_item_details_batch(data: FetchOnSaleDetailsBatchRequest):
     """
     对多个 item_id 依次执行 fetch_detail_and_sync_inventory，且整段只提交一次
-    run_meilu_serial_async（与单条 fetch-detail、在售同步同一队列键 FIFO），避免多 HTTP
+    run_mercari_serial_async（与单条 fetch-detail、在售同步同一队列键 FIFO），避免多 HTTP
     并发在同一账号下抢占 Edge / MITM。
     """
     raw_ids = data.item_ids or []
@@ -161,8 +161,8 @@ async def fetch_on_sale_item_details_batch(data: FetchOnSaleDetailsBatchRequest)
         )
 
     try:
-        aid = resolve_meilu_account_id(data.account_id)
-        qk = queue_key_for_meilu_account(int(aid))
+        aid = resolve_mercari_account_id(data.account_id)
+        qk = queue_key_for_mercari_account(int(aid))
 
         async def _run_batch() -> Dict[str, Any]:
             results: List[Dict[str, Any]] = []
@@ -188,7 +188,7 @@ async def fetch_on_sale_item_details_batch(data: FetchOnSaleDetailsBatchRequest)
                 "results": results,
             }
 
-        out = await run_meilu_serial_async(qk, _run_batch)
+        out = await run_mercari_serial_async(qk, _run_batch)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except TimeoutError as exc:

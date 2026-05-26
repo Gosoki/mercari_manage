@@ -99,17 +99,17 @@
         </el-form-item>
         <el-form-item label="默认出品账号">
           <el-select
-            v-model="listingDefForm.meilu_account_id"
+            v-model="listingDefForm.mercari_account_id"
             clearable
             filterable
             placeholder="不设置则出品时需手动选择煤炉账号"
             style="width: 100%; max-width: 420px"
-            :loading="meiluAccountsLoading"
+            :loading="mercariAccountsLoading"
           >
             <el-option
-              v-for="a in meiluAccountOptions"
+              v-for="a in mercariAccountOptions"
               :key="a.id"
-              :label="meiluAccountOptionLabel(a)"
+              :label="mercariAccountOptionLabel(a)"
               :value="a.id"
             />
           </el-select>
@@ -145,7 +145,7 @@
 import { reactive, ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
-import { authApi, configApi, meiluAccountApi, systemApi } from '@/api/index.js'
+import { authApi, configApi, mercariAccountApi, systemApi } from '@/api/index.js'
 import {
   MERCARI_AREAS,
   JP_REGION_OPTIONS,
@@ -200,7 +200,7 @@ function buildShippingFromPath(areaId) {
   return [`${SHIPPING_FROM_REGION_PREFIX}${regionId}`, `${SHIPPING_FROM_AREA_PREFIX}${areaId}`]
 }
 
-function meiluAccountOptionLabel(a) {
+function mercariAccountOptionLabel(a) {
   const name = (a?.account_name || '').trim() || `ID ${a?.id}`
   const sid = String(a?.seller_id || '').trim()
   const tail = sid ? ` · 卖家 ${sid}` : ''
@@ -213,13 +213,13 @@ const listingDefForm = reactive({
   shipping_method: null,
   shipping_payer: null,
   shipping_days: null,
-  meilu_account_id: null
+  mercari_account_id: null
 })
 
 const listingDefLoading = ref(false)
 const listingDefSaving = ref(false)
-const meiluAccountOptions = ref([])
-const meiluAccountsLoading = ref(false)
+const mercariAccountOptions = ref([])
+const mercariAccountsLoading = ref(false)
 
 function onShippingFromChange(path) {
   const picked = Array.isArray(path) ? path[path.length - 1] : null
@@ -228,15 +228,15 @@ function onShippingFromChange(path) {
   }
 }
 
-async function fetchMeiluAccounts() {
-  meiluAccountsLoading.value = true
+async function fetchMercariAccounts() {
+  mercariAccountsLoading.value = true
   try {
-    const res = await meiluAccountApi.list({ page: 1, page_size: 500 })
-    meiluAccountOptions.value = Array.isArray(res?.items) ? res.items : []
+    const res = await mercariAccountApi.list({ page: 1, page_size: 500 })
+    mercariAccountOptions.value = Array.isArray(res?.items) ? res.items : []
   } catch {
-    meiluAccountOptions.value = []
+    mercariAccountOptions.value = []
   } finally {
-    meiluAccountsLoading.value = false
+    mercariAccountsLoading.value = false
   }
 }
 
@@ -250,16 +250,16 @@ function pathToAreaId(path) {
 async function loadListingDefaults() {
   listingDefLoading.value = true
   try {
-    await fetchMeiluAccounts()
+    await fetchMercariAccounts()
     const d = await configApi.getListingDefaults()
     const area = normalizeShippingFromSeed(d?.shipping_from_area_id)
     listingDefForm.shipping_from_path = buildShippingFromPath(area)
     listingDefForm.shipping_method = d?.shipping_method ?? null
     listingDefForm.shipping_payer = d?.shipping_payer ?? null
     listingDefForm.shipping_days = d?.shipping_days ?? null
-    listingDefForm.meilu_account_id =
-      d?.meilu_account_id != null && Number.isFinite(Number(d.meilu_account_id)) && Number(d.meilu_account_id) > 0
-        ? Number(d.meilu_account_id)
+    listingDefForm.mercari_account_id =
+      d?.mercari_account_id != null && Number.isFinite(Number(d.mercari_account_id)) && Number(d.mercari_account_id) > 0
+        ? Number(d.mercari_account_id)
         : null
   } catch {
     /* 拦截器已提示 */
@@ -277,7 +277,7 @@ async function saveListingDefaults() {
       shipping_method: listingDefForm.shipping_method,
       shipping_payer: listingDefForm.shipping_payer,
       shipping_days: listingDefForm.shipping_days,
-      meilu_account_id: listingDefForm.meilu_account_id
+      mercari_account_id: listingDefForm.mercari_account_id
     })
     ElMessage.success('出品默认值已保存')
     await loadListingDefaults()

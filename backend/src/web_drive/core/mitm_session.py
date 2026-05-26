@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-MITM 自动化：按账号打开主 profile ``meilu_{id}`` 的有头 Edge 浏览器,
+MITM 自动化：按账号打开主 profile ``mercari_{id}`` 的有头 Edge 浏览器,
 经 MITM 代理捕获煤炉 API 响应。
 
 设计要点：
   - 直接使用主 profile,登录态由 Edge 持久化 cookie 自动维护,无需 cookie seed
     与首页 prewarm。
-  - 同账号通过 ``run_meilu_serial_async`` 串行执行,无并发问题;
+  - 同账号通过 ``run_mercari_serial_async`` 串行执行,无并发问题;
     浏览器自动关闭由队列(``account_serial_queue.py``)负责:队列归 0 后
     经 ``WEB_DRIVE_QUEUE_IDLE_CLOSE_SEC`` 秒延迟自动关闭。
-  - 若同账号已存在「非 MITM 代理」的主浏览器(用户从 /meilu-accounts 打开的),
+  - 若同账号已存在「非 MITM 代理」的主浏览器(用户从 /mercari-accounts 打开的),
     首次进入会强制关闭并以 MITM 代理重新启动。
 """
 
@@ -29,7 +29,7 @@ from .manager import (
     automation_headless_enabled,
     get_web_drive_manager,
 )
-from .paths import meilu_account_key
+from .paths import mercari_account_key
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ _login_redirect_state: Dict[int, Dict[str, Any]] = {}
 class MercariLoginRequiredError(RuntimeError):
     """打开账号浏览器后跳到 ``login.jp.mercari.com`` 登录页：账号 cookie 已失效。
 
-    抛出前已将 ``meilu_accounts.status`` 置为 ``'disabled'``，并强制关闭该账号
+    抛出前已将 ``mercari_accounts.status`` 置为 ``'disabled'``，并强制关闭该账号
     的 MITM 浏览器。前端可在「煤炉账号」页打开浏览器手动重新登录后再启用账号。
     """
 
@@ -94,14 +94,14 @@ def _record_login_redirect(account_id: int, account_name: str, login_url: str) -
     }
 
 
-def _disable_meilu_account_by_id(account_id: int) -> str:
-    """将 meilu_accounts.status 置为 'disabled' 并返回 account_name（best-effort）。"""
+def _disable_mercari_account_by_id(account_id: int) -> str:
+    """将 mercari_accounts.status 置为 'disabled' 并返回 account_name（best-effort）。"""
     aid = int(account_id)
     account_name = ""
     try:
-        from ...db_manage.models.meilu_account import MeiluAccountModel
+        from ...db_manage.models.mercari_account import MercariAccountModel
 
-        acc = MeiluAccountModel.find_by_id(id=aid)
+        acc = MercariAccountModel.find_by_id(id=aid)
         if acc is None:
             return ""
         account_name = str(getattr(acc, "account_name", "") or "").strip()
@@ -148,7 +148,7 @@ def _install_login_redirect_listener(
             log.warning(
                 "[mitm] 实时检测到跳转到登录页 account_id=%d url=%s", aid, url
             )
-            account_name = _disable_meilu_account_by_id(aid)
+            account_name = _disable_mercari_account_by_id(aid)
             _record_login_redirect(aid, account_name, url)
 
             # 异步强制关闭浏览器（不在监听器里阻塞）
@@ -221,7 +221,7 @@ async def _detect_login_redirect_and_disable(
         account_id,
         detected_login_url,
     )
-    account_name = _disable_meilu_account_by_id(account_id)
+    account_name = _disable_mercari_account_by_id(account_id)
     _record_login_redirect(account_id, account_name, detected_login_url)
 
     # 关闭被登录页占用的浏览器，避免后续操作再次进入相同失效会话
@@ -331,14 +331,14 @@ async def mitm_automation_browser(
     刷新标签页,不会重新决定窗口状态。
     """
     aid = int(account_id)
-    main_key = meilu_account_key(aid)
+    main_key = mercari_account_key(aid)
     mgr = get_web_drive_manager()
     target_url = (start_url or "").strip()
     use_minimized = _default_minimized() if minimized is None else bool(minimized)
     use_headless = automation_headless_enabled()
 
     # 每次进入都清掉上一轮残留的「需重新登录」标记；若本轮再次跳转登录页，
-    # 监听器 / 一次性检查会重新落标。这样支持用户在 /meilu-accounts 改回 active
+    # 监听器 / 一次性检查会重新落标。这样支持用户在 /mercari-accounts 改回 active
     # 后直接重试，无需重启进程。
     clear_login_redirect_state(aid)
 
@@ -377,7 +377,7 @@ async def mitm_automation_browser(
         )
 
     # ── 检测登录态失效（重定向到 login.jp.mercari.com）── #
-    # 命中则关浏览器 + 将 meilu_accounts.status 置为 'disabled' + 抛错；
+    # 命中则关浏览器 + 将 mercari_accounts.status 置为 'disabled' + 抛错；
     # 失败/正常加载则提前返回，不影响后续 MITM 截获。
     await _detect_login_redirect_and_disable(mgr, aid, main_key)
 
@@ -409,15 +409,15 @@ async def wait_mitm_capture(
     轮询 MITM 落盘文件;超时前按间隔刷新当前标签页以再次触发目标 API。
 
     形参名 ``auto_key`` 系历史命名,实际传任意会话 key
-    (新版传入 ``meilu_account_key(aid)`` 主 profile key)。
+    (新版传入 ``mercari_account_key(aid)`` 主 profile key)。
 
     每次轮询都会检查实时监听器是否已记录「跳转到登录页」；命中则提前抛
     ``MercariLoginRequiredError``，不再等待 MITM 超时。
     """
     # 从 auto_key 反解出 account_id 用于实时登录状态检查
-    from .paths import meilu_id_from_account_key
+    from .paths import mercari_id_from_account_key
 
-    aid_for_login = meilu_id_from_account_key(auto_key)
+    aid_for_login = mercari_id_from_account_key(auto_key)
 
     deadline = time.monotonic() + wait_seconds
     next_reload = time.monotonic() + reload_interval_sec

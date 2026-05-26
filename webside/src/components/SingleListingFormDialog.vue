@@ -122,18 +122,18 @@
           <el-option v-for="s in listingStatusOptions" :key="s.value" :label="s.label" :value="s.value" />
         </el-select>
       </el-form-item>
-      <el-form-item label="出品账号" prop="meilu_account_id" required>
+      <el-form-item label="出品账号" prop="mercari_account_id" required>
         <el-select
-          v-model="form.meilu_account_id"
+          v-model="form.mercari_account_id"
           placeholder="请选择煤炉账号"
           style="width: 100%"
           filterable
-          :loading="meiluAccountsLoading"
+          :loading="mercariAccountsLoading"
         >
           <el-option
-            v-for="a in meiluAccountOptions"
+            v-for="a in mercariAccountOptions"
             :key="a.id"
-            :label="meiluAccountOptionLabel(a)"
+            :label="mercariAccountOptionLabel(a)"
             :value="a.id"
           />
         </el-select>
@@ -213,7 +213,7 @@
 <script setup>
 import { ref, watch, computed, nextTick } from 'vue'
 import { Rank } from '@element-plus/icons-vue'
-import { meiluAccountApi } from '@/api/index.js'
+import { mercariAccountApi } from '@/api/index.js'
 import { encodeMgmtIds, stripTrailingMgmtBlock } from '@/utils/mgmtIdCipher.js'
 import {
   MERCARI_AREAS,
@@ -325,7 +325,7 @@ const listingFormRules = {
     }
   ],
   status: [{ required: true, message: '请选择商品状态', trigger: 'change' }],
-  meilu_account_id: [
+  mercari_account_id: [
     {
       required: true,
       message: '请选择出品账号',
@@ -456,8 +456,8 @@ const descriptionBodyMaxLength = computed(() => {
   const reserved = foot.length + 2
   return Math.max(0, 1000 - reserved)
 })
-const meiluAccountOptions = ref([])
-const meiluAccountsLoading = ref(false)
+const mercariAccountOptions = ref([])
+const mercariAccountsLoading = ref(false)
 
 const categoryTypeCascaderProps = {
   value: 'value',
@@ -575,7 +575,7 @@ const saleTypeOptions = [
   { label: '拍卖', value: 'auction' }
 ]
 
-function meiluAccountOptionLabel(a) {
+function mercariAccountOptionLabel(a) {
   const name = (a?.account_name || '').trim() || `ID ${a?.id}`
   const sid = String(a?.seller_id || '').trim()
   const tail = sid ? ` · 卖家 ${sid}` : ''
@@ -583,15 +583,15 @@ function meiluAccountOptionLabel(a) {
   return `${name}${tail}${inactive}`
 }
 
-async function fetchMeiluAccounts() {
-  meiluAccountsLoading.value = true
+async function fetchMercariAccounts() {
+  mercariAccountsLoading.value = true
   try {
-    const res = await meiluAccountApi.list({ page: 1, page_size: 500 })
-    meiluAccountOptions.value = Array.isArray(res?.items) ? res.items : []
+    const res = await mercariAccountApi.list({ page: 1, page_size: 500 })
+    mercariAccountOptions.value = Array.isArray(res?.items) ? res.items : []
   } catch {
-    meiluAccountOptions.value = []
+    mercariAccountOptions.value = []
   } finally {
-    meiluAccountsLoading.value = false
+    mercariAccountsLoading.value = false
   }
 }
 
@@ -607,7 +607,7 @@ watch(
   () => props.modelValue,
   (visible) => {
     if (!visible) return
-    fetchMeiluAccounts()
+    fetchMercariAccounts()
     const seed = props.initialData || {}
     const cfg = props.listingDefaults || {}
     const seedMappingId = seed.category_mapping_id != null ? String(seed.category_mapping_id) : null
@@ -617,8 +617,8 @@ watch(
     const areaFromSeed = normalizeShippingFromSeed(seed.shipping_from)
     const areaFromCfg = normalizeShippingFromSeed(cfg.shipping_from_area_id)
     const areaId = areaFromSeed || areaFromCfg || ''
-    const accId = seed.meilu_account_id != null ? Number(seed.meilu_account_id) : null
-    const cfgMid = cfg.meilu_account_id != null ? Number(cfg.meilu_account_id) : null
+    const accId = seed.mercari_account_id != null ? Number(seed.mercari_account_id) : null
+    const cfgMid = cfg.mercari_account_id != null ? Number(cfg.mercari_account_id) : null
     const seedPrice = seed.price != null ? Math.round(Number(seed.price)) : 0
     const priceVal = Number.isFinite(seedPrice) && seedPrice >= 0 ? seedPrice : 0
     const seedUrls = normalizeListingImageUrlList(seed.listing_image_urls)
@@ -641,7 +641,7 @@ watch(
       inventory_ids: Array.isArray(seed.inventory_ids)
         ? seed.inventory_ids.map((x) => Number(x)).filter((x) => Number.isFinite(x))
         : [],
-      meilu_account_id:
+      mercari_account_id:
         Number.isFinite(accId) && accId > 0
           ? accId
           : Number.isFinite(cfgMid) && cfgMid > 0
@@ -657,8 +657,8 @@ watch(
 
 function getDefaultForm() {
   return {
-    /** meilu_accounts.id，用于指定以哪一账号出品 */
-    meilu_account_id: null,
+    /** mercari_accounts.id，用于指定以哪一账号出品 */
+    mercari_account_id: null,
     /** 与库存一致的全部商品图 URL，提交自动化时写入 image_urls */
     listing_image_urls: [],
     image: '',

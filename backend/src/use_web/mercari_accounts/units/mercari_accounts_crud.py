@@ -5,8 +5,8 @@ from typing import Optional
 
 from fastapi import HTTPException
 
-from ....db_manage.models.meilu_account import MeiluAccountModel
-from .meilu_accounts_helpers import (
+from ....db_manage.models.mercari_account import MercariAccountModel
+from .mercari_accounts_helpers import (
     _item_api_dict,
     _norm_auto_fetch,
     _norm_headers_dict,
@@ -16,10 +16,10 @@ from .meilu_accounts_helpers import (
     _normalize_is_open,
     _validate_status,
 )
-from .meilu_accounts_models import MeiluAccountCreate, MeiluAccountUpdate
+from .mercari_accounts_models import MercariAccountCreate, MercariAccountUpdate
 
 
-def list_meilu_accounts(
+def list_mercari_accounts(
     keyword: Optional[str] = None,
     status: Optional[str] = None,
     page: int = 1,
@@ -27,7 +27,7 @@ def list_meilu_accounts(
 ):
     if status:
         _validate_status(status)
-    return MeiluAccountModel.find_detail_list(
+    return MercariAccountModel.find_detail_list(
         keyword=keyword,
         status=status,
         page=page,
@@ -35,7 +35,7 @@ def list_meilu_accounts(
     )
 
 
-def _value_json_for_create(data: MeiluAccountCreate) -> str:
+def _value_json_for_create(data: MercariAccountCreate) -> str:
     raw = data.value
     if not raw or not isinstance(raw, dict):
         return json.dumps({}, ensure_ascii=False)
@@ -45,7 +45,7 @@ def _value_json_for_create(data: MeiluAccountCreate) -> str:
     return json.dumps(headers, ensure_ascii=False)
 
 
-def create_meilu_account(data: MeiluAccountCreate):
+def create_mercari_account(data: MercariAccountCreate):
     _validate_status(data.status)
     value_json = _value_json_for_create(data)
     name = _norm_required_text(data.account_name, "账号名称")
@@ -59,7 +59,7 @@ def create_meilu_account(data: MeiluAccountCreate):
         _normalize_is_open(data.auto_fetch_notifications),
     )
     pause_s, pause_e = _norm_pause_window(data.pause_start_time, data.pause_end_time)
-    item = MeiluAccountModel(
+    item = MercariAccountModel(
         account_name=name,
         login_id=lid,
         seller_id=_norm_seller_id(data.seller_id),
@@ -81,8 +81,8 @@ def create_meilu_account(data: MeiluAccountCreate):
     return _item_api_dict(item)
 
 
-def update_meilu_account(aid: int, data: MeiluAccountUpdate):
-    item = MeiluAccountModel.find_by_id(id=aid)
+def update_mercari_account(aid: int, data: MercariAccountUpdate):
+    item = MercariAccountModel.find_by_id(id=aid)
     if not item:
         raise HTTPException(status_code=404, detail="账号不存在")
 
@@ -155,8 +155,8 @@ def update_meilu_account(aid: int, data: MeiluAccountUpdate):
     return _item_api_dict(item)
 
 
-def delete_meilu_account(aid: int):
-    item = MeiluAccountModel.find_by_id(id=aid)
+def delete_mercari_account(aid: int):
+    item = MercariAccountModel.find_by_id(id=aid)
     if not item:
         raise HTTPException(status_code=404, detail="账号不存在")
     if not item.delete():

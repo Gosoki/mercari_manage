@@ -18,6 +18,6 @@ class FetchOnSaleDetailRequest(PydanticModel):
 
 
 class FetchOnSaleDetailsBatchRequest(PydanticModel):
-    """同一账号下批量 items/get：在 run_meilu_serial_async 内串行执行，避免多请求并发抢占 WebDriver。"""
+    """同一账号下批量 items/get：在 run_mercari_serial_async 内串行执行，避免多请求并发抢占 WebDriver。"""
     item_ids: List[str]
     account_id: Optional[int] = None

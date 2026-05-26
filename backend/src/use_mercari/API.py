@@ -15,9 +15,9 @@ from pydantic import BaseModel as PydanticModel
 
 from ..web_drive.core.account_serial_queue import (
     GLOBAL_QUEUE_KEY,
-    queue_key_for_meilu_account,
-    resolve_meilu_account_id,
-    run_meilu_serial_async,
+    queue_key_for_mercari_account,
+    resolve_mercari_account_id,
+    run_mercari_serial_async,
 )
 from .sync_data import (
     batch_refresh_orders_info,
@@ -50,9 +50,9 @@ async def api_sync_new_data(data: SyncOrdersRequest):
     if jid and not _SYNC_JOB_ID_RE.fullmatch(jid):
         raise HTTPException(status_code=400, detail="invalid progress_job_id")
     try:
-        aid = resolve_meilu_account_id(data.account_id)
-        result = await run_meilu_serial_async(
-            queue_key_for_meilu_account(aid),
+        aid = resolve_mercari_account_id(data.account_id)
+        result = await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
             lambda: sync_new_data(account_id=aid, progress_job_id=jid),
         )
     except RuntimeError as exc:
@@ -79,8 +79,8 @@ async def api_batch_refresh_info(data: SyncOrdersRequest):
         raise HTTPException(status_code=400, detail="invalid progress_job_id")
     try:
         if data.account_id is not None:
-            qk = queue_key_for_meilu_account(int(data.account_id))
-            result = await run_meilu_serial_async(
+            qk = queue_key_for_mercari_account(int(data.account_id))
+            result = await run_mercari_serial_async(
                 qk,
                 lambda: batch_refresh_orders_info(
                     account_id=int(data.account_id),
@@ -88,7 +88,7 @@ async def api_batch_refresh_info(data: SyncOrdersRequest):
                 ),
             )
         else:
-            result = await run_meilu_serial_async(
+            result = await run_mercari_serial_async(
                 GLOBAL_QUEUE_KEY,
                 lambda: batch_refresh_orders_info(
                     account_id=None,
@@ -143,9 +143,9 @@ async def sync_orders(data: SyncOrdersRequest):
     - 卖家ID: 从煤炉账号配置中读取（不再由接口传入）。
     """
     try:
-        aid = resolve_meilu_account_id(data.account_id)
-        result = await run_meilu_serial_async(
-            queue_key_for_meilu_account(aid),
+        aid = resolve_mercari_account_id(data.account_id)
+        result = await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
             lambda: sync_open_orders(account_id=aid),
         )
     except RuntimeError as exc:
