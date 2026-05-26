@@ -124,12 +124,6 @@
           <el-form-item label="同步项">
             <div class="af-task-checks">
               <el-checkbox
-                v-model="form.auto_fetch_order_status"
-                :true-value="1"
-                :false-value="0"
-                @change="onAutoFetchTaskChange"
-              >订单：更新状态</el-checkbox>
-              <el-checkbox
                 v-model="form.auto_fetch_order_list"
                 :true-value="1"
                 :false-value="0"
@@ -147,6 +141,12 @@
                 :false-value="0"
                 @change="onAutoFetchTaskChange"
               >待办：从煤炉同步</el-checkbox>
+              <el-checkbox
+                v-model="form.auto_fetch_notifications"
+                :true-value="1"
+                :false-value="0"
+                @change="onAutoFetchTaskChange"
+              >通知：从煤炉同步</el-checkbox>
             </div>
           </el-form-item>
           <el-form-item label="间隔" prop="fetch_interval">
@@ -239,20 +239,20 @@ function fetchIntervalLabel(v) {
 function autoFetchTasksLabel(row) {
   if (!row || row.is_open !== 1) return ''
   const parts = []
-  if (row.auto_fetch_order_status === 1) parts.push('订单状态')
   if (row.auto_fetch_order_list === 1) parts.push('订单列表')
   if (row.auto_fetch_on_sale === 1) parts.push('在售同步')
   if (row.auto_fetch_todos === 1) parts.push('待办同步')
+  if (row.auto_fetch_notifications === 1) parts.push('通知同步')
   return parts.join('、')
 }
 
 function onAutoFetchToggle() {
   if (form.value.is_open !== 1) {
     form.value.fetch_interval = ''
-    form.value.auto_fetch_order_status = 0
     form.value.auto_fetch_order_list = 0
     form.value.auto_fetch_on_sale = 0
     form.value.auto_fetch_todos = 0
+    form.value.auto_fetch_notifications = 0
   }
   nextTick(() => formRef.value?.clearValidate(['fetch_interval']))
 }
@@ -269,10 +269,10 @@ const createDefaultForm = () => ({
   remark: '',
   is_open: 0,
   fetch_interval: '',
-  auto_fetch_order_status: 0,
   auto_fetch_order_list: 0,
   auto_fetch_on_sale: 0,
   auto_fetch_todos: 0,
+  auto_fetch_notifications: 0,
 })
 
 const form = ref(createDefaultForm())
@@ -303,10 +303,10 @@ const formRules = {
             return
           }
           const anyTask =
-            form.value.auto_fetch_order_status === 1 ||
             form.value.auto_fetch_order_list === 1 ||
             form.value.auto_fetch_on_sale === 1 ||
-            form.value.auto_fetch_todos === 1
+            form.value.auto_fetch_todos === 1 ||
+            form.value.auto_fetch_notifications === 1
           if (!anyTask) {
             cb(new Error('请至少选择一项同步任务'))
             return
@@ -390,10 +390,10 @@ function openEdit(row) {
     remark: row.remark || '',
     is_open: open,
     fetch_interval: open === 1 ? String(row.fetch_interval != null ? row.fetch_interval : '') : '',
-    auto_fetch_order_status: row.auto_fetch_order_status === 1 ? 1 : 0,
     auto_fetch_order_list: row.auto_fetch_order_list === 1 ? 1 : 0,
     auto_fetch_on_sale: row.auto_fetch_on_sale === 1 ? 1 : 0,
     auto_fetch_todos: row.auto_fetch_todos === 1 ? 1 : 0,
+    auto_fetch_notifications: row.auto_fetch_notifications === 1 ? 1 : 0,
   }
   dialogVisible.value = true
 }
@@ -409,10 +409,10 @@ function buildPayload() {
     remark: form.value.remark || null,
     is_open: open,
     fetch_interval: open === 1 ? String(form.value.fetch_interval || '').trim() || null : null,
-    auto_fetch_order_status: open === 1 && form.value.auto_fetch_order_status === 1 ? 1 : 0,
     auto_fetch_order_list: open === 1 && form.value.auto_fetch_order_list === 1 ? 1 : 0,
     auto_fetch_on_sale: open === 1 && form.value.auto_fetch_on_sale === 1 ? 1 : 0,
     auto_fetch_todos: open === 1 && form.value.auto_fetch_todos === 1 ? 1 : 0,
+    auto_fetch_notifications: open === 1 && form.value.auto_fetch_notifications === 1 ? 1 : 0,
   }
   if (form.value.id) {
     return base

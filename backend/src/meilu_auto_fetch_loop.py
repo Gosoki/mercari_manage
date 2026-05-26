@@ -3,9 +3,10 @@
 煤炉账号「自动数据获取」后台调度。
 
 开启且 status=active 的账号，按 fetch_interval 节流；在账号配置的子任务中按需执行（与同账号 run_meilu_serial_async 串行）：
-- auto_fetch_order_status → batch_refresh_orders_info（订单页「更新状态」）
 - auto_fetch_order_list → sync_new_data（订单页「更新列表」）
 - auto_fetch_on_sale → sync_on_sale_items_from_mercari（在售页「从煤炉同步」）
+- auto_fetch_todos → sync_todos_from_mercari（待办页「从煤炉同步」）
+- auto_fetch_notifications → sync_notifications_from_mercari（通知页「从煤炉同步」）
 
 环境变量：
 - MEILU_AUTO_FETCH：设为 0/false/off 关闭本循环（默认开启）
@@ -21,9 +22,10 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from .db_manage.models.meilu_account import MeiluAccountModel
+from .use_mercari.get_notifications.notification_sync import sync_notifications_from_mercari
 from .use_mercari.get_to_du_list.todolist_sync import sync_todos_from_mercari
 from .use_mercari.on_sale_items_sync import sync_on_sale_items_from_mercari
-from .use_mercari.sync_data import batch_refresh_orders_info, sync_new_data
+from .use_mercari.sync_data import sync_new_data
 from .web_drive.core.account_serial_queue import queue_key_for_meilu_account, run_meilu_serial_async
 
 log = logging.getLogger(__name__)
@@ -77,10 +79,10 @@ def _normalize_row_is_open(v) -> bool:
 
 def _any_auto_task_enabled(item: MeiluAccountModel) -> bool:
     return (
-        _normalize_row_is_open(getattr(item, "auto_fetch_order_status", 0))
-        or _normalize_row_is_open(getattr(item, "auto_fetch_order_list", 0))
+        _normalize_row_is_open(getattr(item, "auto_fetch_order_list", 0))
         or _normalize_row_is_open(getattr(item, "auto_fetch_on_sale", 0))
         or _normalize_row_is_open(getattr(item, "auto_fetch_todos", 0))
+        or _normalize_row_is_open(getattr(item, "auto_fetch_notifications", 0))
     )
 
 
@@ -100,22 +102,22 @@ def _account_due(item: MeiluAccountModel, now: datetime) -> bool:
 
 
 async def _run_auto_fetch_for_account(aid: int, item: MeiluAccountModel) -> None:
-    st = _normalize_row_is_open(getattr(item, "auto_fetch_order_status", 0))
     li = _normalize_row_is_open(getattr(item, "auto_fetch_order_list", 0))
     os_ = _normalize_row_is_open(getattr(item, "auto_fetch_on_sale", 0))
     td = _normalize_row_is_open(getattr(item, "auto_fetch_todos", 0))
-    if not (st or li or os_ or td):
+    nt = _normalize_row_is_open(getattr(item, "auto_fetch_notifications", 0))
+    if not (li or os_ or td or nt):
         return
 
     async def _body():
-        if st:
-            await batch_refresh_orders_info(account_id=aid)
         if li:
             await sync_new_data(account_id=aid)
         if os_:
             await sync_on_sale_items_from_mercari(account_id=aid)
         if td:
             await sync_todos_from_mercari(account_id=aid)
+        if nt:
+            await sync_notifications_from_mercari(account_id=aid)
 
     await run_meilu_serial_async(queue_key_for_meilu_account(aid), _body)
 

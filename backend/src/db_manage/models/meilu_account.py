@@ -78,12 +78,7 @@ class MeiluAccountModel(BaseModel):
                 'not_null': False,
                 'default': None,
             },
-            # 自动同步子任务（与订单页 / 在售页按钮对应）；总开关仍为 is_open + fetch_interval
-            'auto_fetch_order_status': {
-                'type': 'INTEGER',
-                'not_null': True,
-                'default': 0,
-            },
+            # 自动同步子任务（与订单页 / 在售页 / 待办页 / 通知页按钮对应）；总开关仍为 is_open + fetch_interval
             'auto_fetch_order_list': {
                 'type': 'INTEGER',
                 'not_null': True,
@@ -96,6 +91,12 @@ class MeiluAccountModel(BaseModel):
             },
             # 待办事项页「从煤炉同步」对应的自动开关
             'auto_fetch_todos': {
+                'type': 'INTEGER',
+                'not_null': True,
+                'default': 0,
+            },
+            # 通知页「从煤炉同步」对应的自动开关
+            'auto_fetch_notifications': {
                 'type': 'INTEGER',
                 'not_null': True,
                 'default': 0,
@@ -114,26 +115,26 @@ class MeiluAccountModel(BaseModel):
 
     @classmethod
     def _migrate_auto_fetch_task_defaults(cls) -> None:
-        """旧数据 is_open=1 且子任务全 0 时，视为三项全开（与升级前行为一致）。"""
+        """旧数据 is_open=1 且子任务全 0 时，视为「订单列表 + 在售」默认开启（与升级前行为一致）。"""
         db = cls().db
         table = cls.get_table_name()
         if not db.table_exists(table):
             return
         names = {c['name'] for c in db.get_table_columns(table)}
-        for col in ('auto_fetch_order_status', 'auto_fetch_order_list', 'auto_fetch_on_sale'):
+        for col in ('auto_fetch_order_list', 'auto_fetch_on_sale'):
             if col not in names:
                 return
         try:
             db.execute_update(
                 f"""
                 UPDATE [{table}]
-                SET [auto_fetch_order_status] = 1,
-                    [auto_fetch_order_list] = 1,
+                SET [auto_fetch_order_list] = 1,
                     [auto_fetch_on_sale] = 1
                 WHERE [is_open] = 1
-                  AND IFNULL([auto_fetch_order_status], 0) = 0
                   AND IFNULL([auto_fetch_order_list], 0) = 0
                   AND IFNULL([auto_fetch_on_sale], 0) = 0
+                  AND IFNULL([auto_fetch_todos], 0) = 0
+                  AND IFNULL([auto_fetch_notifications], 0) = 0
                 """,
                 (),
             )
@@ -194,12 +195,12 @@ class MeiluAccountModel(BaseModel):
 
         total = db.execute_query(f"SELECT COUNT(*) {base_sql}", tuple(params))[0][0]
         select_sql = f"""
-            SELECT m.id, m.account_name, m.login_id, m.seller_id, m.login_password, m.status, m.remark, m.[value], m.is_open, m.fetch_interval, m.auto_fetch_last_at, m.auto_fetch_order_status, m.auto_fetch_order_list, m.auto_fetch_on_sale, m.auto_fetch_todos
+            SELECT m.id, m.account_name, m.login_id, m.seller_id, m.login_password, m.status, m.remark, m.[value], m.is_open, m.fetch_interval, m.auto_fetch_last_at, m.auto_fetch_order_list, m.auto_fetch_on_sale, m.auto_fetch_todos, m.auto_fetch_notifications
             {base_sql}
             ORDER BY m.id DESC
             LIMIT ? OFFSET ?
         """
-        keys = ['id', 'account_name', 'login_id', 'seller_id', 'login_password', 'status', 'remark', 'value', 'is_open', 'fetch_interval', 'auto_fetch_last_at', 'auto_fetch_order_status', 'auto_fetch_order_list', 'auto_fetch_on_sale', 'auto_fetch_todos']
+        keys = ['id', 'account_name', 'login_id', 'seller_id', 'login_password', 'status', 'remark', 'value', 'is_open', 'fetch_interval', 'auto_fetch_last_at', 'auto_fetch_order_list', 'auto_fetch_on_sale', 'auto_fetch_todos', 'auto_fetch_notifications']
         rows = db.execute_query(select_sql, tuple(params + [page_size, (page - 1) * page_size]))
         items = []
         for row in rows:
@@ -208,10 +209,10 @@ class MeiluAccountModel(BaseModel):
             raw = d.pop('value', None)
             d['value'] = cls._parse_value_json(raw)
             d['is_open'] = 1 if d.get('is_open') else 0
-            d['auto_fetch_order_status'] = 1 if d.get('auto_fetch_order_status') else 0
             d['auto_fetch_order_list'] = 1 if d.get('auto_fetch_order_list') else 0
             d['auto_fetch_on_sale'] = 1 if d.get('auto_fetch_on_sale') else 0
             d['auto_fetch_todos'] = 1 if d.get('auto_fetch_todos') else 0
+            d['auto_fetch_notifications'] = 1 if d.get('auto_fetch_notifications') else 0
             items.append(d)
         return {
             'total': total,

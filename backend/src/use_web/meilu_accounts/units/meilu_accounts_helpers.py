@@ -47,10 +47,10 @@ def _normalize_is_open(v: Any) -> int:
 def _norm_auto_fetch(
     is_open: int,
     fetch_interval: Optional[str],
-    order_status: int,
     order_list: int,
     on_sale: int,
-    todos: int = 0,
+    todos: int,
+    notifications: int,
 ) -> tuple:
     """
     规范化自动同步：总开关关闭时清空间隔与子任务；
@@ -62,13 +62,13 @@ def _norm_auto_fetch(
     iv = (fetch_interval or "").strip()
     if iv not in ALLOWED_FETCH_INTERVALS:
         raise HTTPException(status_code=400, detail="开启自动数据获取时，请选择有效的时间间隔")
-    st = 1 if order_status else 0
     li = 1 if order_list else 0
     os_ = 1 if on_sale else 0
     td = 1 if todos else 0
-    if not (st or li or os_ or td):
+    nt = 1 if notifications else 0
+    if not (li or os_ or td or nt):
         raise HTTPException(status_code=400, detail="开启自动数据获取时，请至少选择一项同步任务")
-    return 1, iv, st, li, os_, td
+    return 1, iv, li, os_, td, nt
 
 
 def _norm_headers_dict(d: Optional[dict]) -> dict:
@@ -98,8 +98,8 @@ def _item_api_dict(item: MeiluAccountModel) -> dict:
     raw = d.pop('value', None)
     d['value'] = MeiluAccountModel._parse_value_json(raw if isinstance(raw, str) else None)
     d['is_open'] = 1 if d.get('is_open') else 0
-    d['auto_fetch_order_status'] = 1 if d.get('auto_fetch_order_status') else 0
     d['auto_fetch_order_list'] = 1 if d.get('auto_fetch_order_list') else 0
     d['auto_fetch_on_sale'] = 1 if d.get('auto_fetch_on_sale') else 0
     d['auto_fetch_todos'] = 1 if d.get('auto_fetch_todos') else 0
+    d['auto_fetch_notifications'] = 1 if d.get('auto_fetch_notifications') else 0
     return d
