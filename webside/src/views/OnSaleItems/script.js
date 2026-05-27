@@ -16,21 +16,21 @@ export default defineComponent({
       set: (v) => mercariAccountStore.setSelected(v),
     })
 
-    /** 煤炉商品 item.status → 中文（与 API 原始值对应） */
+    /** 煤炉商品 item.status → i18n label（key 对应 onSaleItems/i18n.js 的 statusXxx 字段） */
     const onSaleStatusMap = {
-      on_sale: { labelKey: 'onSaleItems.status.on_sale', tag: 'success' },
-      stop: { labelKey: 'onSaleItems.status.stop', tag: 'warning' },
-      trading: { labelKey: 'onSaleItems.status.trading', tag: 'primary' },
-      wait_payment: { labelKey: 'onSaleItems.status.wait_payment', tag: 'warning' },
-      wait_shipping: { labelKey: 'onSaleItems.status.wait_shipping', tag: 'warning' },
-      wait_review: { labelKey: 'onSaleItems.status.wait_review', tag: 'primary' },
-      sold_out: { labelKey: 'onSaleItems.status.sold_out', tag: 'info' },
-      done: { labelKey: 'onSaleItems.status.done', tag: 'success' },
-      cancelled: { labelKey: 'onSaleItems.status.cancelled', tag: 'info' },
-      cancel_request: { labelKey: 'onSaleItems.status.cancel_request', tag: 'danger' },
-      deleted: { labelKey: 'onSaleItems.status.deleted', tag: 'danger' },
-      private: { labelKey: 'onSaleItems.status.private', tag: 'info' },
-      pending: { labelKey: 'onSaleItems.status.pending', tag: 'info' },
+      on_sale: { labelKey: 'onSaleItems.statusOnSale', tag: 'success' },
+      stop: { labelKey: 'onSaleItems.statusStop', tag: 'warning' },
+      trading: { labelKey: 'onSaleItems.statusTrading', tag: 'primary' },
+      wait_payment: { labelKey: 'onSaleItems.statusWaitPayment', tag: 'warning' },
+      wait_shipping: { labelKey: 'onSaleItems.statusWaitShipping', tag: 'warning' },
+      wait_review: { labelKey: 'onSaleItems.statusWaitReview', tag: 'primary' },
+      sold_out: { labelKey: 'onSaleItems.statusSoldOut', tag: 'info' },
+      done: { labelKey: 'onSaleItems.statusDone', tag: 'success' },
+      cancelled: { labelKey: 'onSaleItems.statusCancelled', tag: 'info' },
+      cancel_request: { labelKey: 'onSaleItems.statusCancelRequest', tag: 'danger' },
+      deleted: { labelKey: 'onSaleItems.statusDeleted', tag: 'danger' },
+      private: { labelKey: 'onSaleItems.statusPrivate', tag: 'info' },
+      pending: { labelKey: 'onSaleItems.statusPending', tag: 'info' },
     }
 
     function onSaleStatusLabel(status) {
