@@ -1,0 +1,606 @@
+import { defineComponent, computed, ref, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
+import { warehouseApi } from '@/api/index.js'
+import { warehouseShelfLabel, warehouseShelfLeafLabel } from '@/utils/warehouseLabel.js'
+
+export default defineComponent({
+  setup() {
+    const { t } = useI18n()
+
+    const DEFAULT_WAREHOUSE = '默认仓库'
+
+    function normalizeWarehouseName(w) {
+      if (w == null || (typeof w === 'string' && !w.trim())) return DEFAULT_WAREHOUSE
+      return String(w).trim()
+    }
+
+    const EMPTY_SHELF_NAME_KEY = '__shelf_name_empty__'
+
+    /** 三级结构：在同一仓库下按 shelf_name 分组成二级，每组内为货架号（行） */
+    function buildShelfNameGroups(shelves) {
+      const m = new Map()
+      for (const row of shelves) {
+        const raw = row.shelf_name && String(row.shelf_name).trim() ? String(row.shelf_name).trim() : ''
+        const key = raw || EMPTY_SHELF_NAME_KEY
+        if (!m.has(key)) {
+          m.set(key, {
+            key,
+            rawShelfName: raw,
+            label: raw,
+            shelves: []
+          })
+        }
+        m.get(key).shelves.push(row)
+      }
+      const list = [...m.values()].map((g) => {
+        const productTypes = g.shelves.reduce((s, i) => s + Number(i.product_types || 0), 0)
+        const totalQuantity = g.shelves.reduce((s, i) => s + Number(i.total_quantity || 0), 0)
+        return {
+          ...g,
+          label: g.rawShelfName || t('system.unsetShelfName'),
+          shelfCount: g.shelves.length,
+          productTypes,
+          totalQuantity
+        }
+      })
+      list.sort((a, b) => {
+        if (a.key === EMPTY_SHELF_NAME_KEY) return 1
+        if (b.key === EMPTY_SHELF_NAME_KEY) return -1
+        return (a.rawShelfName || '').localeCompare(b.rawShelfName || '', 'zh-CN')
+      })
+      return list
+    }
+
+    const list = ref([])
+    const activeCollapse = ref([])
+    /** 二级折叠（货架名称）每组展开的 name，按仓库分 key */
+    const activeShelfNameByWh = ref({})
+    const dialogVisible = ref(false)
+    const addWarehouseNameDialogVisible = ref(false)
+    const newWarehouseNameInput = ref('')
+    const renameWarehouseDialogVisible = ref(false)
+    /** 弹窗内列表筛选键（改名成功后会更新为新名称） */
+    const renameWarehouseGroupKey = ref('')
+    const renameWarehouseOld = ref('')
+    const renameWarehouseNew = ref('')
+    const renameWarehouseSubmitting = ref(false)
+    const renameShelfNameDialogVisible = ref(false)
+    const renameShelfWarehouse = ref('')
+    const renameShelfOldRaw = ref('')
+    const renameShelfOldDisplay = ref('')
+    const renameShelfNew = ref('')
+    const renameShelfSubmitting = ref(false)
+    const submitting = ref(false)
+    const formRef = ref()
+    const form = ref({
+      id: null,
+      warehouse: '默认仓库',
+      shelf_name: '',
+      name: '',
+      location: '',
+      description: ''
+    })
+    /** 新建来源：shelfOnly = 添加货架（货架号可空）；shelfNo = 添加货架号；shelf = 编辑等 */
+    const createDialogKind = ref('shelf')
+
+    const migrateInventoryDialogVisible = ref(false)
+    const migrateSourceWarehouseId = ref(null)
+    const migrateTargetWarehouseId = ref(null)
+    const migrateTargetWarehousePath = ref([])
+    const migrateInventorySubmitting = ref(false)
+
+    const shelfDialogTitle = computed(() => {
+      if (form.value?.id) return t('system.editShelf')
+      const wh = normalizeWarehouseName(form.value?.warehouse)
+      if (createDialogKind.value === 'shelfNo') {
+        const sn = (form.value?.shelf_name || '').trim()
+        if (sn) return `${t('system.addShelfNumber')} · ${wh} / ${sn}`
+        return `${t('system.addShelfNumber')} · ${wh}`
+      }
+      if (createDialogKind.value === 'shelfOnly') {
+        if (wh && wh !== DEFAULT_WAREHOUSE) return `${t('system.addShelfSlot')} · ${wh}`
+        return t('system.addShelfSlot')
+      }
+      if (wh && wh !== DEFAULT_WAREHOUSE) return `${t('system.createShelf')} · ${wh}`
+      return t('system.createShelf')
+    })
+
+    const rules = {
+      warehouse: [{ required: true, message: t('system.pleaseFillWarehouse'), trigger: 'blur' }],
+      name: [
+        {
+          validator: (_, val, cb) => {
+            if (!form.value.id && createDialogKind.value === 'shelfOnly') return cb()
+            if (!String(val ?? '').trim()) return cb(new Error(t('system.pleaseFillShelfNumber')))
+            cb()
+          },
+          trigger: 'blur',
+        },
+      ],
+    }
+
+    /** 一级：仓库 → 二级：货架名称分组 → 三级：货架号表格 */
+    const groupedByWarehouse = computed(() => {
+      const rows = list.value
+      const map = new Map()
+      for (const row of rows) {
+        const key = normalizeWarehouseName(row.warehouse)
+        if (!map.has(key)) map.set(key, [])
+        map.get(key).push(row)
+      }
+      const names = [...map.keys()].sort((a, b) => {
+        if (a === DEFAULT_WAREHOUSE) return -1
+        if (b === DEFAULT_WAREHOUSE) return 1
+        return a.localeCompare(b, 'zh-CN')
+      })
+      return names.map((name) => {
+        const shelves = map.get(name)
+        const shelfNameGroups = buildShelfNameGroups(shelves)
+        const productTypes = shelves.reduce((s, i) => s + Number(i.product_types || 0), 0)
+        const totalQuantity = shelves.reduce((s, i) => s + Number(i.total_quantity || 0), 0)
+        return {
+          warehouse: name,
+          shelves,
+          shelfNameGroups,
+          shelfCount: shelves.length,
+          productTypes,
+          totalQuantity,
+        }
+      })
+    })
+
+    const mergedWarehouse = computed(() => {
+      const productTypes = list.value.reduce((sum, item) => sum + Number(item.product_types || 0), 0)
+      const totalQuantity = list.value.reduce((sum, item) => sum + Number(item.total_quantity || 0), 0)
+      return {
+        shelf_count: list.value.length,
+        product_types: productTypes,
+        total_quantity: totalQuantity
+      }
+    })
+
+    const migrateInventoryOptions = computed(() => {
+      const sid = migrateSourceWarehouseId.value
+      return list.value
+        .filter((w) => w.id != null && Number(w.id) !== Number(sid))
+        .map((w) => ({
+          value: Number(w.id),
+          label: `${normalizeWarehouseName(w.warehouse)} · ${warehouseShelfLabel(w)}`,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'))
+    })
+
+    const migrateTargetCascaderProps = {
+      value: 'value',
+      label: 'label',
+      children: 'children',
+      emitPath: true,
+      checkStrictly: false,
+    }
+
+    const migrateTargetCascaderOptions = computed(() => {
+      const sid = Number(migrateSourceWarehouseId.value)
+      const byWh = new Map()
+      for (const row of list.value) {
+        const id = Number(row?.id)
+        if (!Number.isFinite(id) || id === sid) continue
+        const wh = normalizeWarehouseName(row.warehouse)
+        if (!byWh.has(wh)) byWh.set(wh, [])
+        byWh.get(wh).push(row)
+      }
+      const whNames = [...byWh.keys()].sort((a, b) => {
+        if (a === DEFAULT_WAREHOUSE) return -1
+        if (b === DEFAULT_WAREHOUSE) return 1
+        return a.localeCompare(b, 'zh-CN')
+      })
+      const UNSET = t('system.unsetShelfName')
+      return whNames.map((wh) => {
+        const rows = byWh.get(wh)
+        const shelfMap = new Map()
+        for (const r of rows) {
+          const sn = r?.shelf_name && String(r.shelf_name).trim()
+            ? String(r.shelf_name).trim()
+            : UNSET
+          if (!shelfMap.has(sn)) shelfMap.set(sn, [])
+          shelfMap.get(sn).push(r)
+        }
+        const snKeys = [...shelfMap.keys()].sort((a, b) => {
+          if (a === UNSET) return 1
+          if (b === UNSET) return -1
+          return a.localeCompare(b, 'zh-CN')
+        })
+        return {
+          value: `WH:${encodeURIComponent(wh)}`,
+          label: wh,
+          children: snKeys.map((sn) => ({
+            value: `SN:${encodeURIComponent(wh)}::${encodeURIComponent(sn)}`,
+            label: sn,
+            children: shelfMap.get(sn)
+              .slice()
+              .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN'))
+              .map((r) => ({
+                value: `SID:${r.id}`,
+                label: warehouseShelfLeafLabel(r),
+                children: [],
+              })),
+          })),
+        }
+      })
+    })
+
+    function onMigrateTargetChange(path) {
+      const picked = Array.isArray(path) ? path[path.length - 1] : null
+      if (!picked || !String(picked).startsWith('SID:')) {
+        migrateTargetWarehouseId.value = null
+        return
+      }
+      const id = Number(String(picked).slice(4))
+      migrateTargetWarehouseId.value = Number.isFinite(id) ? id : null
+    }
+
+    const renameDialogShelves = computed(() => {
+      if (!renameWarehouseDialogVisible.value || !renameWarehouseGroupKey.value) return []
+      const key = renameWarehouseGroupKey.value
+      return list.value.filter((r) => normalizeWarehouseName(r.warehouse) === key)
+    })
+
+    function onMigrateInventoryDialogClosed() {
+      migrateSourceWarehouseId.value = null
+      migrateTargetWarehouseId.value = null
+      migrateTargetWarehousePath.value = []
+    }
+
+    function openMigrateInventoryDialog() {
+      if (!form.value?.id) return
+      migrateSourceWarehouseId.value = Number(form.value.id)
+      migrateTargetWarehouseId.value = null
+      migrateTargetWarehousePath.value = []
+      migrateInventoryDialogVisible.value = true
+    }
+
+    async function confirmMigrateInventory() {
+      const tid = migrateTargetWarehouseId.value
+      const sid = migrateSourceWarehouseId.value
+      if (tid == null || tid === '') {
+        ElMessage.warning(t('system.pleaseSelectTargetShelf'))
+        return
+      }
+      if (Number(tid) === Number(sid)) {
+        ElMessage.warning(t('system.targetSameAsCurrent'))
+        return
+      }
+      migrateInventorySubmitting.value = true
+      try {
+        const res = await warehouseApi.migrateInventory(sid, { target_warehouse_id: Number(tid) })
+        const n = res?.moved ?? 0
+        try {
+          await warehouseApi.remove(Number(sid))
+          ElMessage.success(n > 0 ? t('system.migratedAndDeleted', { n }) : t('system.deletedOriginalShelf'))
+        } catch (e2) {
+          const msg = apiErrorMessage(e2)
+          ElMessage.warning(
+            n > 0
+              ? t('system.migratedButDeleteFailed', { n, msg })
+              : t('system.migrateDoneDeleteFailed', { msg })
+          )
+        }
+        migrateInventoryDialogVisible.value = false
+        dialogVisible.value = false
+        await load()
+      } catch (e) {
+        ElMessage.error(apiErrorMessage(e))
+      } finally {
+        migrateInventorySubmitting.value = false
+      }
+    }
+
+    async function load() {
+      const rows = await warehouseApi.list()
+      list.value = rows.map((item) => ({ ...item, warehouse: normalizeWarehouseName(item.warehouse) }))
+    }
+
+    function onAddWarehouseNameDialogClosed() {
+      newWarehouseNameInput.value = ''
+    }
+
+    function onRenameShelfNameDialogClosed() {
+      renameShelfWarehouse.value = ''
+      renameShelfOldRaw.value = ''
+      renameShelfOldDisplay.value = ''
+      renameShelfNew.value = ''
+    }
+
+    function openRenameShelfNameDialog(grp, sub) {
+      renameShelfWarehouse.value = String(grp?.warehouse ?? '').trim() || DEFAULT_WAREHOUSE
+      renameShelfOldRaw.value = sub?.rawShelfName != null ? String(sub.rawShelfName).trim() : ''
+      renameShelfOldDisplay.value = String(sub?.label ?? '').trim() || t('system.unsetShelfName')
+      renameShelfNew.value = renameShelfOldRaw.value
+      renameShelfNameDialogVisible.value = true
+    }
+
+    async function submitRenameShelfName() {
+      const oldRaw = String(renameShelfOldRaw.value ?? '').trim()
+      const newT = String(renameShelfNew.value ?? '').trim()
+      if (oldRaw === newT) {
+        ElMessage.warning(t('system.nameUnchanged'))
+        return
+      }
+      renameShelfSubmitting.value = true
+      try {
+        await warehouseApi.renameShelfNameGroup({
+          warehouse: renameShelfWarehouse.value,
+          old_shelf_name: oldRaw,
+          new_shelf_name: newT,
+        })
+        ElMessage.success(t('system.shelfNameUpdated'))
+        renameShelfNameDialogVisible.value = false
+        await load()
+      } catch (e) {
+        ElMessage.error(apiErrorMessage(e))
+      } finally {
+        renameShelfSubmitting.value = false
+      }
+    }
+
+    function onRenameWarehouseDialogClosed() {
+      renameWarehouseGroupKey.value = ''
+      renameWarehouseOld.value = ''
+      renameWarehouseNew.value = ''
+    }
+
+    function openRenameWarehouseDialog(grp) {
+      const name = String(grp?.warehouse ?? '').trim() || DEFAULT_WAREHOUSE
+      renameWarehouseGroupKey.value = name
+      renameWarehouseOld.value = name
+      renameWarehouseNew.value = name
+      renameWarehouseDialogVisible.value = true
+    }
+
+    async function submitRenameWarehouse() {
+      const oldW = (renameWarehouseOld.value || '').trim()
+      const newW = (renameWarehouseNew.value || '').trim()
+      if (!newW) {
+        ElMessage.warning(t('system.pleaseEnterNewWarehouseName'))
+        return
+      }
+      if (normalizeWarehouseName(oldW) === normalizeWarehouseName(newW)) {
+        ElMessage.warning(t('system.nameUnchanged'))
+        return
+      }
+      renameWarehouseSubmitting.value = true
+      try {
+        await warehouseApi.renameGroup({ old_warehouse: oldW, new_warehouse: newW })
+        ElMessage.success(t('system.warehouseNameUpdated'))
+        const nextKey = normalizeWarehouseName(newW)
+        renameWarehouseGroupKey.value = nextKey
+        renameWarehouseOld.value = nextKey
+        renameWarehouseNew.value = nextKey
+        await load()
+      } catch (e) {
+        ElMessage.error(apiErrorMessage(e))
+      } finally {
+        renameWarehouseSubmitting.value = false
+      }
+    }
+
+    function openAddWarehouseNameDialog() {
+      newWarehouseNameInput.value = ''
+      addWarehouseNameDialogVisible.value = true
+    }
+
+    function confirmAddWarehouseName() {
+      const raw = (newWarehouseNameInput.value || '').trim()
+      if (!raw) {
+        ElMessage.warning(t('system.pleaseEnterWarehouseName'))
+        return
+      }
+      const name = normalizeWarehouseName(raw)
+      addWarehouseNameDialogVisible.value = false
+      openDialogShelfOnly(name, '')
+    }
+
+    function warehouseDeleteConfirmTextForDialog() {
+      const n = renameDialogShelves.value.length
+      const wh = renameWarehouseGroupKey.value || ''
+      const base = t('system.warehouseDeleteConfirmBase', { n, wh })
+      if (wh === DEFAULT_WAREHOUSE) return t('system.warehouseDeleteConfirmDefault', { base })
+      return base
+    }
+
+    async function removeWarehouseGroupForDialog() {
+      const shelves = [...renameDialogShelves.value]
+      if (!shelves.length) return
+      const grp = {
+        warehouse: renameWarehouseGroupKey.value,
+        shelves,
+        shelfCount: shelves.length,
+      }
+      await removeWarehouseGroup(grp, { closeRenameDialog: true })
+    }
+
+    async function removeWarehouseGroup(grp, options = {}) {
+      const shelves = [...(grp.shelves || [])]
+      if (!shelves.length) return
+      let removed = 0
+      for (const row of shelves) {
+        try {
+          await warehouseApi.remove(row.id)
+          removed++
+        } catch {
+          await load()
+          if (removed > 0) {
+            ElMessage.warning(t('system.removedThenAborted', { removed }))
+          }
+          return
+        }
+      }
+      ElMessage.success(t('system.removedWarehouseSummary', { wh: grp.warehouse, removed }))
+      await load()
+      if (options.closeRenameDialog) renameWarehouseDialogVisible.value = false
+    }
+
+    async function removeShelfFromRenameDialog(id) {
+      try {
+        await warehouseApi.remove(id)
+        ElMessage.success(t('system.deleteSuccess'))
+        await load()
+        if (!renameDialogShelves.value.length) renameWarehouseDialogVisible.value = false
+      } catch (e) {
+        ElMessage.error(apiErrorMessage(e))
+      }
+    }
+
+    function openDialog(row = null) {
+      if (row) {
+        createDialogKind.value = 'shelf'
+        form.value = { ...row, warehouse: normalizeWarehouseName(row.warehouse), shelf_name: row.shelf_name || '' }
+      } else {
+        openDialogShelfOnly(DEFAULT_WAREHOUSE, '')
+        return
+      }
+      dialogVisible.value = true
+    }
+
+    /**
+     * 二级「添加货架」：不必填货架号，预填当前分区的货架名称（rawShelfName 可为空）
+     */
+    function openDialogShelfOnly(warehouseName, rawShelfName = '') {
+      createDialogKind.value = 'shelfOnly'
+      form.value = {
+        id: null,
+        warehouse: normalizeWarehouseName(warehouseName),
+        shelf_name: rawShelfName != null && String(rawShelfName).trim() ? String(rawShelfName).trim() : '',
+        name: '',
+        location: '',
+        description: '',
+      }
+      dialogVisible.value = true
+    }
+
+    /** 在三级列表添加货架号（预填仓库 + 货架名称） */
+    function openDialogForShelfGroup(warehouseName, rawShelfName) {
+      createDialogKind.value = 'shelfNo'
+      form.value = {
+        id: null,
+        warehouse: normalizeWarehouseName(warehouseName),
+        shelf_name: rawShelfName ? String(rawShelfName).trim() : '',
+        name: '',
+        location: '',
+        description: '',
+      }
+      dialogVisible.value = true
+    }
+
+    function apiErrorMessage(err) {
+      const d = err?.response?.data?.detail
+      if (typeof d === 'string') return d
+      if (Array.isArray(d) && d[0]?.msg) return d.map((x) => x.msg).join('；')
+      return err?.message || t('system.requestFailed')
+    }
+
+    async function submit() {
+      await formRef.value.validate()
+      submitting.value = true
+      try {
+        const payload = {
+          warehouse: form.value.warehouse,
+          name: (form.value.name || '').trim() || null,
+          shelf_name: (form.value.shelf_name || '').trim() || null,
+          location: form.value.location,
+          description: form.value.description
+        }
+        if (form.value.id) {
+          await warehouseApi.update(form.value.id, payload)
+          ElMessage.success(t('system.saveSuccess'))
+        } else {
+          const created = await warehouseApi.create(payload)
+          ElMessage.success(t('system.saveSuccessWithId', { id: created?.id ?? '—' }))
+        }
+        dialogVisible.value = false
+        load()
+      } catch (e) {
+        ElMessage.error(apiErrorMessage(e))
+      } finally {
+        submitting.value = false
+      }
+    }
+
+    onMounted(load)
+
+    return {
+      computed,
+      ref,
+      onMounted,
+      ElMessage,
+      Plus,
+      useI18n,
+      warehouseApi,
+      warehouseShelfLabel,
+      warehouseShelfLeafLabel,
+      t,
+      DEFAULT_WAREHOUSE,
+      normalizeWarehouseName,
+      EMPTY_SHELF_NAME_KEY,
+      buildShelfNameGroups,
+      list,
+      activeCollapse,
+      activeShelfNameByWh,
+      dialogVisible,
+      addWarehouseNameDialogVisible,
+      newWarehouseNameInput,
+      renameWarehouseDialogVisible,
+      renameWarehouseGroupKey,
+      renameWarehouseOld,
+      renameWarehouseNew,
+      renameWarehouseSubmitting,
+      renameShelfNameDialogVisible,
+      renameShelfWarehouse,
+      renameShelfOldRaw,
+      renameShelfOldDisplay,
+      renameShelfNew,
+      renameShelfSubmitting,
+      submitting,
+      formRef,
+      form,
+      createDialogKind,
+      migrateInventoryDialogVisible,
+      migrateSourceWarehouseId,
+      migrateTargetWarehouseId,
+      migrateTargetWarehousePath,
+      migrateInventorySubmitting,
+      shelfDialogTitle,
+      rules,
+      groupedByWarehouse,
+      mergedWarehouse,
+      migrateInventoryOptions,
+      migrateTargetCascaderProps,
+      migrateTargetCascaderOptions,
+      onMigrateTargetChange,
+      renameDialogShelves,
+      onMigrateInventoryDialogClosed,
+      openMigrateInventoryDialog,
+      confirmMigrateInventory,
+      load,
+      onAddWarehouseNameDialogClosed,
+      onRenameShelfNameDialogClosed,
+      openRenameShelfNameDialog,
+      submitRenameShelfName,
+      onRenameWarehouseDialogClosed,
+      openRenameWarehouseDialog,
+      submitRenameWarehouse,
+      openAddWarehouseNameDialog,
+      confirmAddWarehouseName,
+      warehouseDeleteConfirmTextForDialog,
+      removeWarehouseGroupForDialog,
+      removeWarehouseGroup,
+      removeShelfFromRenameDialog,
+      openDialog,
+      openDialogShelfOnly,
+      openDialogForShelfGroup,
+      apiErrorMessage,
+      submit,
+    }
+  },
+})

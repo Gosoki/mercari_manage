@@ -1,0 +1,5 @@
+.search-card { margin-bottom: 16px; border-radius: 8px; }
+.table-card { border-radius: 8px; }
+.inline-fields { display: flex; gap: 8px; width: 100%; }
+.field-main { flex: 7; }
+.field-pos { flex: 3; min-width: 0; }

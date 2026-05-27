@@ -1,0 +1,275 @@
+.list-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.list-card-header-start {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.header-overview-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+  justify-content: flex-start;
+}
+.header-overview-item {
+  background: #161f33;
+  border-radius: 8px;
+  text-align: center;
+  padding: 8px 14px;
+  min-width: 88px;
+  border: 1px solid #2a3446;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.header-overview-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #409eff;
+  line-height: 1.2;
+}
+.header-overview-label {
+  font-size: 11px;
+  color: #9ba8bf;
+  margin-top: 2px;
+}
+.header-primary-btn {
+  flex-shrink: 0;
+}
+.rename-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+}
+.rename-dialog-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.rename-shelf-table {
+  width: 100%;
+}
+.list-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e6edf7;
+  flex-shrink: 0;
+}
+.warehouse-list-card :deep(.el-card__header) {
+  background: #131c2f;
+  border-bottom: 1px solid #28354a;
+}
+.warehouse-list-card :deep(.el-card__body) {
+  padding-top: 12px;
+}
+.warehouse-collapse {
+  border: none;
+  --el-collapse-header-bg-color: #161f33;
+  --el-collapse-header-text-color: #e6edf7;
+  --el-collapse-border-color: #28354a;
+}
+.warehouse-collapse :deep(.el-collapse-item) {
+  margin-bottom: 10px;
+  border: 1px solid #28354a;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #131c2f;
+}
+.warehouse-collapse :deep(.el-collapse-item__header) {
+  padding: 12px 14px;
+  font-weight: 600;
+  border-bottom: 1px solid #28354a;
+  flex-wrap: nowrap;
+  align-items: center;
+  height: auto;
+  line-height: 1.35;
+}
+/* 插槽根节点占满箭头左侧区域，避免内部 grid 仅随内容宽度被摆在视觉中间 */
+.warehouse-collapse :deep(.el-collapse-item__header > :first-child) {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.warehouse-collapse :deep(.el-collapse-item__wrap) {
+  border-bottom: none;
+  background: #0f1628;
+}
+.warehouse-collapse :deep(.el-collapse-item__content) {
+  padding: 12px;
+}
+/* 标题列随内容宽度，统计紧跟标题，避免 1fr 把标题撑开导致卡片视觉上居中 */
+.collapse-title {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding-right: 4px;
+}
+.collapse-title-start {
+  justify-self: start;
+  min-width: 0;
+  max-width: min(320px, 42vw);
+  overflow: hidden;
+}
+.collapse-title-stats {
+  justify-self: start;
+  min-width: 0;
+  max-width: 100%;
+}
+.collapse-title-end {
+  justify-self: end;
+}
+.collapse-wh-name {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: #e6edf7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.collapse-stat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.collapse-stat-grid--primary .collapse-stat-item {
+  min-width: 76px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.collapse-stat-grid--secondary {
+  gap: 6px;
+}
+.collapse-stat-item {
+  background: #161f33;
+  border-radius: 8px;
+  text-align: center;
+  padding: 10px 12px;
+  border: 1px solid #2a3446;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+}
+.collapse-stat-item--compact {
+  padding: 7px 10px;
+  min-width: 68px;
+  border-radius: 6px;
+}
+.collapse-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #409eff;
+  line-height: 1.15;
+}
+.collapse-stat-item--compact .collapse-stat-value {
+  font-size: 16px;
+}
+.collapse-stat-label {
+  font-size: 11px;
+  color: #9ba8bf;
+  margin-top: 3px;
+  line-height: 1.2;
+}
+.shelf-name-collapse .collapse-stat-item {
+  background: #121a2b;
+  border-color: #2a3446;
+}
+.collapse-add-btn {
+  flex-shrink: 0;
+}
+.collapse-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+/* 二级：按货架名称折叠 */
+.shelf-name-collapse {
+  border: none;
+  --el-collapse-header-bg-color: #141d30;
+}
+.shelf-name-collapse :deep(.el-collapse-item) {
+  margin-bottom: 8px;
+  border: 1px solid #253149;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #0c1322;
+}
+.shelf-name-collapse :deep(.el-collapse-item:last-child) {
+  margin-bottom: 0;
+}
+.shelf-name-collapse :deep(.el-collapse-item__header) {
+  padding: 10px 12px;
+  font-weight: 600;
+  flex-wrap: nowrap;
+  align-items: center;
+  border-bottom: 1px solid #28354a;
+  height: auto;
+  line-height: 1.35;
+}
+.shelf-name-collapse :deep(.el-collapse-item__header > :first-child) {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.shelf-name-collapse :deep(.el-collapse-item__wrap) {
+  background: #0a0f1a;
+}
+.shelf-name-collapse :deep(.el-collapse-item__content) {
+  padding: 10px 12px;
+}
+.shelf-name-title-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding-right: 4px;
+}
+.shelf-name-title-start {
+  justify-self: start;
+  min-width: 0;
+  max-width: min(280px, 38vw);
+  overflow: hidden;
+}
+.shelf-name-title-stats {
+  justify-self: start;
+  min-width: 0;
+  max-width: 100%;
+}
+.shelf-name-title-end {
+  justify-self: end;
+}
+.shelf-name-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.shelf-name-title-text {
+  font-size: 14px;
+  color: #cbd5e8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shelf-subtable {
+  width: 100%;
+}
+.shelf-no-table {
+  margin-top: 0;
+}

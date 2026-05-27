@@ -1,0 +1,49 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top, #1f2a44 0%, #0b1220 55%);
+  padding: 16px;
+  position: relative;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 520px;
+  border: 1px solid #2a3446;
+}
+
+.title-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #b8c4d0;
+}
+
+.title-wrap__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.login-lang-switcher {
+  width: 130px;
+  flex-shrink: 0;
+}
+
+/* 覆盖 App.vue 中 .el-input { width: 180px !important } 的全局规则 */
+.login-card :deep(.el-form .el-input) {
+  width: 100% !important;
+}
+
+.tip {
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+}

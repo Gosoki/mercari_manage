@@ -1,0 +1,435 @@
+.search-card {
+  margin-bottom: 16px;
+  border-radius: 8px;
+}
+.search-row {
+  justify-content: space-between;
+  row-gap: 10px;
+}
+.search-left-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.search-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sync-account-select {
+  width: 180px;
+}
+.table-card {
+  border-radius: 8px;
+}
+.todo-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  display: block;
+}
+.thumb-fallback {
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
+}
+.cell-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.cell-message {
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.cell-itemid {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.cell-itemname {
+  color: var(--el-text-color-secondary);
+}
+.cell-buyer {
+  font-weight: 500;
+}
+.cell-sender-id {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.cell-muted {
+  color: var(--el-text-color-placeholder);
+}
+.cell-muted-sm {
+  color: var(--el-text-color-placeholder);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.row-tag-done {
+  margin-top: 4px;
+  color: var(--el-color-success);
+  font-size: 11px;
+}
+.pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
+  display: flex;
+}
+/* ─── 交易详情面板 ─── */
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.detail-header code {
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+.detail-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.detail-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  min-height: 560px;
+  max-height: 70vh;
+}
+.detail-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+}
+.detail-col-right {
+  /* 右栏只放消息，撑满整个 dialog 高度 */
+  height: 100%;
+}
+.detail-section {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--el-fill-color-blank);
+}
+.detail-section-grow {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.detail-section-title {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+  border-bottom: 1px dashed var(--el-border-color-lighter);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+.detail-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+  font-size: 13px;
+}
+.detail-label {
+  width: 84px;
+  flex-shrink: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.detail-value {
+  flex: 1;
+  word-break: break-all;
+  color: var(--el-text-color-primary);
+}
+.detail-block {
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-primary);
+  padding: 4px 0;
+}
+.detail-empty {
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
+  padding: 8px 0;
+  text-align: center;
+}
+.detail-empty-hint {
+  color: var(--el-text-color-placeholder);
+  font-size: 11px;
+  margin-top: 6px;
+}
+.detail-photo-wrap {
+  margin-top: 8px;
+}
+.detail-photo {
+  width: 100%;
+  max-width: 200px;
+  height: auto;
+  border-radius: 6px;
+}
+.detail-buyer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.detail-buyer-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+.detail-buyer-id {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.detail-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.detail-msg {
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+.detail-msg-buyer {
+  background: var(--el-fill-color);
+}
+.detail-msg-self {
+  background: var(--el-color-primary-light-9);
+}
+.detail-msg-tag-self {
+  color: var(--el-color-primary);
+  font-size: 11px;
+  margin-left: 4px;
+}
+.detail-reply {
+  margin-top: 12px;
+  border-top: 1px dashed var(--el-border-color-lighter);
+  padding-top: 10px;
+  flex-shrink: 0;
+}
+.detail-reply-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.detail-msg-from {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 4px;
+}
+.detail-msg-text {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.detail-msg-at {
+  font-size: 10px;
+  color: var(--el-text-color-placeholder);
+}
+.detail-msg-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+  min-height: 18px;
+}
+.detail-msg-reaction {
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  background: var(--el-fill-color-blank);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 999px;
+}
+.reaction-add-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.reaction-add-btn:hover:not(:disabled) {
+  background: var(--el-fill-color);
+  border-color: var(--el-border-color);
+  color: var(--el-color-primary);
+}
+.reaction-add-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.reaction-add-btn-icon-smile,
+.reaction-add-btn-icon-plus {
+  fill: currentColor;
+}
+/* 默认显示笑脸,hover 时切换为「+」（参考煤炉原生交互） */
+.reaction-add-btn-icon-plus {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  opacity: 0;
+}
+.reaction-add-btn:hover .reaction-add-btn-icon-smile {
+  opacity: 0;
+}
+.reaction-add-btn:hover .reaction-add-btn-icon-plus {
+  opacity: 1;
+}
+.reaction-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.reaction-grid-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s, border-color 0.15s;
+}
+.reaction-grid-item:hover:not(:disabled) {
+  background: var(--el-fill-color);
+  border-color: var(--el-color-primary);
+  transform: scale(1.06);
+}
+.reaction-grid-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.reaction-grid-emoji {
+  font-size: 22px;
+  line-height: 1;
+}
+.detail-shipping-status {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0 10px;
+  font-size: 13px;
+}
+.detail-shipping-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ─── 选择尺寸 dialog ─── */
+.shipping-dialog-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: var(--el-fill-color);
+  border-radius: 4px;
+}
+.ship-radio-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+.ship-card {
+  border: 1px solid var(--el-border-color);
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.ship-card:hover {
+  border-color: var(--el-color-primary);
+}
+.ship-card-active {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+.ship-card-radio {
+  margin-right: 0;
+  margin-bottom: 6px;
+}
+.ship-card-radio-label {
+  font-weight: 600;
+  font-size: 14px;
+}
+.ship-card-body {
+  padding-left: 22px;
+}
+.ship-card-row {
+  display: flex;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ship-card-label {
+  color: var(--el-text-color-secondary);
+  width: 48px;
+  flex-shrink: 0;
+}
+.ship-card-value {
+  color: var(--el-text-color-primary);
+}
+.ship-card-fee {
+  color: var(--el-color-success);
+  font-weight: 600;
+}
+.ship-card-caveat {
+  margin-top: 4px;
+  color: var(--el-color-warning);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.ship-card-note {
+  margin-top: 4px;
+  color: var(--el-color-success);
+  font-size: 11px;
+}
+.ship-facility-section {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color);
+}
+.ship-facility-title {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.ship-facility-radio {
+  display: flex;
+  gap: 12px;
+}

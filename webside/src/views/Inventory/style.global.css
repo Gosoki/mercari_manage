@@ -1,0 +1,214 @@
+/* 无 scoped：须覆盖 App.vue 全局 `.el-input { width: 180px !important }`，否则标题与商品说明不同宽 */
+.product-dialog .listing-field-fullwidth.el-input {
+  width: 100% !important;
+  max-width: 100%;
+}
+
+.product-dialog .product-price-input {
+  width: 100% !important;
+  max-width: 100%;
+}
+
+.inventory-inline-select {
+  width: 100% !important;
+}
+
+.inventory-inline-select-popper {
+  min-width: 120px !important;
+}
+
+.product-type-cascader-popper .el-cascader-menu {
+  height: 300px !important;
+}
+
+.product-type-cascader-popper .el-cascader-menu__wrap {
+  height: 300px !important;
+  max-height: 300px !important;
+}
+
+.product-type-cascader-popper .el-scrollbar__wrap {
+  height: 300px !important;
+  max-height: 300px !important;
+}
+
+.product-type-cascader-popper .el-cascader-menu__list {
+  min-height: 300px !important;
+}
+
+.listing-pick-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.listing-pick-count {
+  font-size: 13px;
+  color: #67C23A;
+  font-weight: 600;
+  margin-right: 4px;
+}
+/* 选择模式下：选中行整行浅绿色覆盖（含固定列），80% 透明（alpha 0.2） */
+.el-table tr.listing-pick-row-selected > td.el-table__cell {
+  background-color: rgba(103, 194, 58, 0.2) !important;
+  cursor: pointer;
+}
+.el-table tr.listing-pick-row-selected:hover > td.el-table__cell,
+.el-table tr.listing-pick-row-selected.hover-row > td.el-table__cell {
+  background-color: rgba(103, 194, 58, 0.32) !important;
+}
+.el-table tbody tr.listing-pick-row-disabled {
+  cursor: not-allowed !important;
+  opacity: 0.55;
+}
+/* 选择模式下，整张表行的鼠标指针变为可点击 */
+.listing-pick-mode-active .el-table tbody tr {
+  cursor: pointer;
+}
+
+/* 告警行：零库存仍在售 / 无归属 / 归属系统管理员（顶置由 sortedInventoryList 排序保证） */
+.el-table tr.on-sale-stock-alert-row {
+  --el-table-tr-bg-color: #3a1517;
+}
+.el-table tr.on-sale-stock-alert-row > td.el-table__cell {
+  background-color: #3a1517 !important;
+}
+.el-table tr.on-sale-stock-alert-row:hover > td.el-table__cell {
+  background-color: #4a1a1d !important;
+}
+.el-table tr.on-sale-stock-alert-row td.el-table__cell .cell {
+  color: #ffd6d9;
+  font-weight: 600;
+}
+
+/* 组合商品弹窗：与全局暗色对话框一致，组成行内展示正面缩略图 */
+.combined-product-dialog .combined-product-items {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.combined-product-dialog .combined-product-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #28354a;
+  border-radius: 8px;
+  background: #18233a;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2) inset;
+}
+.combined-product-dialog .combined-product-item__thumb {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+}
+.combined-product-dialog .combined-product-item__img {
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  border: 1px solid #28354a;
+  overflow: hidden;
+  display: block;
+}
+.combined-product-dialog .combined-product-item__img :deep(.el-image__inner) {
+  object-fit: cover;
+}
+.combined-product-dialog .combined-product-item__thumb-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  font-size: 12px;
+  color: #64748b;
+  background: #131c2f;
+}
+.combined-product-dialog .combined-product-item__thumb-placeholder {
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  border: 1px dashed #3d4d66;
+  background: #131c2f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #64748b;
+  text-align: center;
+  line-height: 1.25;
+  padding: 2px;
+  box-sizing: border-box;
+}
+.combined-product-dialog .combined-product-item__main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.combined-product-dialog .combined-product-item__name {
+  font-weight: 600;
+  color: #e6edf7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.combined-product-dialog .combined-product-item__meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.combined-product-dialog .combined-product-item__qty {
+  width: 96px;
+  flex: 0 0 auto;
+}
+
+.split-product-form .split-quantity-hint {
+  margin-left: 10px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+/* 出品自动化全屏等待（teleport 到 body，须无 scoped；黑色主题） */
+.listing-post-overlay.listing-post-overlay--dark {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+}
+.listing-post-overlay--dark .listing-post-overlay__box {
+  min-width: 280px;
+  max-width: min(440px, 92vw);
+  padding: 28px 32px;
+  background: linear-gradient(165deg, #1c1c1f 0%, #121214 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  text-align: center;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 20px 50px rgba(0, 0, 0, 0.65);
+}
+.listing-post-overlay--dark .listing-post-overlay__icon {
+  color: #94a3b8;
+}
+.listing-post-overlay--dark .listing-post-overlay__title {
+  margin-top: 14px;
+  font-size: 17px;
+  font-weight: 600;
+  color: #f1f5f9;
+  letter-spacing: 0.02em;
+}
+.listing-post-overlay--dark.listing-post-overlay--failed .listing-post-overlay__title {
+  color: #f87171;
+}
+.listing-post-overlay--dark.listing-post-overlay--failed .listing-post-overlay__step {
+  color: #cbd5e1;
+}
+.listing-post-overlay--dark .listing-post-overlay__step {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #94a3b8;
+  line-height: 1.55;
+  word-break: break-word;
+}

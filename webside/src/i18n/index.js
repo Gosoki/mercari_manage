@@ -30,6 +30,41 @@ function detectInitialLocale() {
   return 'zh-CN'
 }
 
+function isPlainObject(v) {
+  return v !== null && typeof v === 'object' && !Array.isArray(v)
+}
+
+function deepMerge(target, source) {
+  for (const key in source) {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) continue
+    const sv = source[key]
+    if (isPlainObject(sv)) {
+      target[key] = isPlainObject(target[key]) ? target[key] : {}
+      deepMerge(target[key], sv)
+    } else {
+      target[key] = sv
+    }
+  }
+  return target
+}
+
+const messages = {
+  'zh-CN': { ...zhCN },
+  ja: { ...ja },
+  en: { ...en },
+}
+
+// 自动合并各视图目录下的 i18n.js
+// 约定: views/**/i18n.js 默认导出 { 'zh-CN': {...}, ja: {...}, en: {...} }
+const viewLocaleModules = import.meta.glob('../views/**/i18n.js', { eager: true })
+for (const path in viewLocaleModules) {
+  const mod = viewLocaleModules[path]?.default || viewLocaleModules[path]
+  if (!mod || typeof mod !== 'object') continue
+  for (const locale of SUPPORTED_LOCALES) {
+    if (mod[locale]) deepMerge(messages[locale], mod[locale])
+  }
+}
+
 const initialLocale = detectInitialLocale()
 
 const i18n = createI18n({
@@ -37,11 +72,7 @@ const i18n = createI18n({
   globalInjection: true,
   locale: initialLocale,
   fallbackLocale: 'zh-CN',
-  messages: {
-    'zh-CN': zhCN,
-    ja,
-    en,
-  },
+  messages,
   missingWarn: false,
   fallbackWarn: false,
 })

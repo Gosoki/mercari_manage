@@ -1,0 +1,43 @@
+.dashboard { max-width: none; width: auto; }
+.stat-row { margin-bottom: 20px; }
+.stat-row .el-col { margin-bottom: 16px; }
+.stat-card {
+  background: #131c2f;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-top: 3px solid;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  border: 1px solid #2a3446;
+}
+.stat-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.stat-value-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px;
+  line-height: 1.25;
+}
+.stat-value { font-size: 22px; font-weight: 700; color: #ecf2ff; }
+.stat-today {
+  font-size: 13px;
+  color: #7dd87a;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.stat-label { font-size: 12px; color: #9ba8bf; margin-top: 4px; }
+.section-card { margin-bottom: 20px; border-radius: 8px; }
+.inventory-stats-wrap,
+.order-stats-wrap { margin-bottom: 20px; }
+.inventory-stat-row { margin-bottom: 0; }
+.card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; }

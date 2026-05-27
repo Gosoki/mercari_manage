@@ -1,0 +1,1029 @@
+<template>
+  <div>
+    <el-card shadow="never" class="search-card">
+      <el-row :gutter="0" align="middle" class="search-row">
+        <el-col :xs="24" :md="16" class="search-left-group">
+          <el-input
+            v-model="filters.keyword"
+            :placeholder="t('orders.searchKeywordPlaceholder')"
+            clearable
+            @change="onFilterChange"
+          />
+          <el-select
+            v-model="filters.status"
+            :placeholder="t('orders.statusFilterPlaceholder')"
+            clearable
+            filterable
+            style="width: 100%"
+            @change="onFilterChange"
+          >
+            <el-option v-for="item in orderListStatusFilterOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            :range-separator="t('common.to')"
+            :start-placeholder="t('orders.lastTimeStart')"
+            :end-placeholder="t('orders.lastTimeEnd')"
+            value-format="YYYY-MM-DD"
+            style="width: 100%"
+            @change="onFilterChange"
+          />
+          <el-select
+            v-model="filters.owner_user_id"
+            :placeholder="t('orders.ownerFilterPlaceholder')"
+            clearable
+            filterable
+            style="width: 100%"
+            @change="onFilterChange"
+          >
+            <el-option
+              v-for="u in ownerUsers"
+              :key="u.id"
+              :label="u.display_name || u.username"
+              :value="u.id"
+            />
+          </el-select>
+        </el-col>
+        <el-col :xs="24" :md="8" class="search-actions">
+          <el-select
+            v-model="globalAccountId"
+            :placeholder="t('orders.selectMercariAccount')"
+            filterable
+            class="sync-account-select"
+            :loading="mercariAccountStore.loading"
+          >
+            <el-option
+              v-for="acc in mercariAccountStore.activeAccounts"
+              :key="acc.id"
+              :label="acc.account_name"
+              :value="acc.id"
+            />
+          </el-select>
+          <el-button type="success" :icon="RefreshRight" :loading="syncLoading && syncMode === 'newData'" @click="runSync('newData')">{{ t('orders.updateList') }}</el-button>
+          <el-button type="primary" :icon="Refresh" :loading="syncLoading && syncMode === 'statusRefresh'" @click="runSync('statusRefresh')">{{ t('orders.updateStatus') }}</el-button>
+        </el-col>
+      </el-row>
+    </el-card>
+
+    <!-- 数据分析统计卡片：手机端不展示（与库存管理一致） -->
+    <el-card v-if="!isMobile" class="section-card order-stats-wrap" shadow="never" v-loading="statsLoading">
+      <el-row :gutter="16" class="stat-row order-stat-row">
+        <el-col :xs="12" :sm="12" :md="8" :lg="4" v-for="card in orderStatCards" :key="card.label">
+          <div
+            class="stat-card order-stat-card"
+            :class="card.cardClass"
+            :style="{ borderTopColor: card.color }"
+          >
+            <div class="stat-icon" :style="{ background: card.color + '20', color: card.color }">
+              <el-icon size="22"><component :is="card.icon" /></el-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value-row">
+                <span class="stat-value" :class="card.valueClass">{{ card.display }}</span>
+                <span class="stat-today">{{ t('orders.todayAddedSuffix', { count: card.todayDisplay }) }}</span>
+              </div>
+              <div class="stat-label">{{ card.label }}</div>
+            </div>
+          </div>
+        </el-col>
+      </el-row>
+    </el-card>
+
+    <el-card shadow="never" class="table-card">
+      <el-table
+        ref="orderTableRef"
+        :data="displayList"
+        v-loading="loading"
+        stripe
+        row-key="id"
+        :row-class-name="orderRowClassName"
+        @expand-change="onOrderExpandChange"
+      >
+        <el-table-column type="expand" width="44">
+          <template #default="{ row }">
+            <div class="order-expand-wrap" v-loading="expandState[row.order_no]?.loading">
+              <template v-if="expandState[row.order_no]?.loaded">
+                <el-table
+                  v-if="(expandState[row.order_no]?.rows || []).length"
+                  :data="outboundLinesForExpand(row.order_no)"
+                  size="small"
+                  border
+                  class="order-expand-inner-table"
+                  :row-class-name="outboundLineRowClassName"
+                >
+                  <el-table-column :label="t('common.type')" width="80" align="center">
+                    <template #default="{ row: line }">
+                      {{ outboundLineKindLabel(line) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('orders.identifier')" min-width="120" align="center" show-overflow-tooltip>
+                    <template #default="{ row: line }">
+                      {{ formatOutboundManagementId(line) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('orders.inventoryId')" width="88" align="center">
+                    <template #default="{ row: line }">
+                      {{ line.inventory_id != null ? line.inventory_id : '—' }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('orders.inventoryName')" prop="inventory_name" min-width="140" show-overflow-tooltip />
+                  <el-table-column :label="t('orders.ownership')" width="110" align="center" show-overflow-tooltip>
+                    <template #default="{ row: line }">
+                      <span :class="{ 'order-owner-unmatched-text': isOutboundLineOwnerUnmatched(line) }">
+                        {{ line.inventory_owner_name || '—' }}
+                      </span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('orders.warehouse')" width="110" show-overflow-tooltip>
+                    <template #default="{ row: line }">
+                      {{ line.warehouse_name || '—' }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('orders.shelf')" width="110" show-overflow-tooltip>
+                    <template #default="{ row: line }">
+                      {{ line.shelf_name || '—' }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('orders.shelfCode')" width="100" show-overflow-tooltip>
+                    <template #default="{ row: line }">
+                      {{ line.shelf_code || '—' }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('orders.currentStock')" width="96" align="center">
+                    <template #default="{ row: line }">
+                      {{ line.stock_quantity != null ? line.stock_quantity : '—' }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('orders.orderQty')" prop="quantity" width="96" align="center" />
+                  <el-table-column :label="t('orders.originalPrice')" width="120" align="center">
+                    <template #default="{ row: line }">
+                      <span v-if="outboundLineShowsRatioPricing(line)">{{ orderMoneyField(line.original_price) ?? '-' }}</span>
+                      <span v-else class="cell-dash">-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('orders.goodsRatio')" width="120" align="center">
+                    <template #default="{ row: line }">
+                      <span v-if="outboundLineShowsRatioPricing(line) && line.goods_ratio != null">{{ formatGoodsRatio(line.goods_ratio) }}</span>
+                      <span v-else class="cell-dash">-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('orders.ratioPrice')" width="120" align="center">
+                    <template #default="{ row: line }">
+                      <span v-if="outboundLineShowsRatioPricing(line)">{{ orderMoneyField(line.ratio_price) ?? '-' }}</span>
+                      <span v-else class="cell-dash">-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('orders.pendingOutbound')" width="88" align="center">
+                    <template #default="{ row: line }">
+                      <el-tag
+                        v-if="Number(outboundPendingQty(line)) > 0"
+                        type="warning"
+                        size="small"
+                      >
+                        {{ outboundPendingQty(line) }}
+                      </el-tag>
+                      <span v-else class="cell-dash">0</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('common.status')" width="90" align="center">
+                    <template #default="{ row: line }">
+                      <el-tag
+                        :type="Number(line?.is_stocked_out || 0) === 1 ? 'success' : 'info'"
+                        size="small"
+                      >
+                        {{ Number(line?.is_stocked_out || 0) === 1 ? t('orders.stockedOut') : t('orders.pendingStockOut') }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('common.operate')" :width="isAdminUser ? 232 : 168" align="center">
+                    <template #default="{ row: line }">
+                      <div class="order-outbound-actions">
+                        <el-button
+                          size="small"
+                          type="warning"
+                          plain
+                          @click="openBindOutboundInventoryDialog(row, line)"
+                        >
+                          {{ t('common.edit') }}
+                        </el-button>
+                        <el-button
+                          v-if="isAdminUser"
+                          size="small"
+                          type="primary"
+                          plain
+                          :disabled="!outboundLineHasBoundInventory(line)"
+                          @click="openConvertOwnerDialog(row, line)"
+                        >
+                          {{ t('orders.convertOwner') }}
+                        </el-button>
+                        <el-popconfirm
+                          :title="t('orders.confirmStockOut')"
+                          :confirm-button-text="t('common.confirm')"
+                          :cancel-button-text="t('common.cancel')"
+                          @confirm="stockOutLine(row, line)"
+                        >
+                          <template #reference>
+                            <el-button
+                              size="small"
+                              type="primary"
+                              :loading="lineStockingKey === outboundLineKey(row.order_no, line.id)"
+                              :disabled="!canStockOutLine(line)"
+                            >
+                              {{ t('orders.stockOut') }}
+                            </el-button>
+                          </template>
+                        </el-popconfirm>
+                      </div>
+                    </template>
+                  </el-table-column>
+                </el-table>
+                <el-empty
+                  v-else
+                  description=" "
+                  class="order-empty-compact"
+                >
+                  <template #image></template>
+                  <template #default>
+                    <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+                      <el-button size="small" type="primary" @click="openManualOutboundDialog(row)">
+                        {{ t('orders.manualAddOutbound') }}
+                      </el-button>
+                    </div>
+                  </template>
+                </el-empty>
+                <div class="order-packaging-wrap" v-loading="packagingState[row.order_no]?.loading">
+                  <el-table
+                    :data="packagingDisplayRows(row.order_no)"
+                    size="small"
+                    border
+                  >
+                    <el-table-column :label="t('orders.itemName')" min-width="180" show-overflow-tooltip>
+                      <template #default="{ row: expense }">
+                        {{ expense.__placeholder ? '-' : (expense.item_name || '-') }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column :label="t('orders.bearer')" min-width="110" align="center">
+                      <template #default="{ row: expense }">
+                        {{ expense.__placeholder ? '-' : (expense.owner || t('orders.unassigned')) }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column :label="t('common.quantity')" width="90" align="center">
+                      <template #default="{ row: expense }">
+                        {{ expense.__placeholder ? '-' : (expense.quantity ?? '-') }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column :label="t('orders.unitPrice')" width="100" align="center">
+                      <template #default="{ row: expense }">
+                        {{ expense.__placeholder ? '-' : Math.round(Number(expense.unit_price || 0)) }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column :label="t('common.amount')" width="100" align="center">
+                      <template #default="{ row: expense }">
+                        {{ expense.__placeholder ? '-' : Math.round(expenseAmount(expense)) }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column :label="t('orders.recordTime')" width="168" align="center">
+                      <template #default="{ row: expense }">
+                        {{ expense.__placeholder ? '-' : formatExpenseTs(expense.record_time) }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column :label="t('common.operate')" width="120" align="center">
+                      <template #default="{ row: expense }">
+                        <el-button
+                          v-if="expense.__placeholder"
+                          size="small"
+                          type="primary"
+                          @click="openPackagingDialog(row)"
+                        >
+                          {{ t('orders.addPackaging') }}
+                        </el-button>
+                        <span v-else class="cell-dash">-</span>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                  <div
+                    v-if="packagingState[row.order_no]?.loaded"
+                    class="order-packaging-total-line"
+                  >
+                    {{ t('orders.packagingTotal') }}
+                    <span class="order-packaging-total-value">
+                      {{ Math.round(Number(packagingState[row.order_no]?.total_amount || 0)) }}
+                    </span>
+                    {{ t('orders.jpy') }}
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('common.image')" width="76" align="center" header-align="center">
+          <template #default="{ row }">
+            <el-image
+              v-if="firstThumbUrl(row)"
+              class="order-thumb"
+              :src="firstThumbUrl(row)"
+              :preview-src-list="thumbnailPreviewList(row)"
+              preview-teleported
+              hide-on-click-modal
+              fit="cover"
+              referrerpolicy="no-referrer"
+              lazy
+            >
+              <template #error>
+                <span class="thumb-fallback">-</span>
+              </template>
+            </el-image>
+            <span v-else class="thumb-fallback">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('orders.orderNumber')" prop="order_no" width="150" align="center" header-align="center" />
+        <el-table-column :label="t('orders.itemNameCol')" prop="remark" min-width="160" show-overflow-tooltip align="left" header-align="center" />
+        <el-table-column :label="t('orders.updateTime')" width="176" show-overflow-tooltip align="center" header-align="center">
+          <template #default="{ row }">{{ displayTsLocal(row.order_updated_at) }}</template>
+        </el-table-column>
+        <el-table-column :label="t('orders.purchaseTime')" width="176" show-overflow-tooltip align="center" header-align="center">
+          <template #default="{ row }">{{ displayTsLocal(row.purchase_time) }}</template>
+        </el-table-column>
+        <el-table-column :label="t('common.status')" width="110" align="center" header-align="center">
+          <template #default="{ row }">
+            <el-tag :type="statusMap[row.status]?.tag || 'info'" size="small" effect="light">
+              {{ statusMap[row.status]?.label || row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('common.amount')" width="120" align="center" header-align="center">
+          <template #default="{ row }">
+            <span class="amount">{{ Math.round(Number(row.amount || 0)) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('orders.feeShipping')" width="128" align="center" header-align="center">
+          <template #default="{ row }">
+            <span class="col-fee-ship">{{ formatFeeShippingCell(row) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('orders.netIncome')" width="112" align="center" header-align="center">
+          <template #default="{ row }">
+            <span v-if="orderMoneyField(row.net_income) != null" class="col-net">
+              {{ orderMoneyField(row.net_income) }}
+            </span>
+            <span v-else class="cell-dash">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('common.operate')" width="156" fixed="right" align="center" header-align="center">
+          <template #default="{ row }">
+            <div class="order-row-actions">
+              <el-button size="small" @click="openEdit(row)">{{ t('common.edit') }}</el-button>
+              <el-button
+                size="small"
+                :loading="refreshingId === row.id"
+                @click="refreshOrder(row)"
+              >{{ t('common.refresh') }}</el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="pagination">
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :total="total"
+          :page-sizes="[20, 50, 100]"
+          layout="total, sizes, prev, pager, next"
+          @change="load"
+          background
+          size="small"
+        />
+      </div>
+    </el-card>
+
+    <el-dialog
+      v-model="dialogVisible"
+      :title="t('orders.editOrder')"
+      width="720px"
+      destroy-on-close
+      class="order-edit-dialog"
+    >
+      <el-form :model="form" :rules="rules" ref="formRef" label-width="140px" class="order-edit-form">
+        <el-form-item v-if="form.id != null" :label="t('orders.dbId')">
+          <el-input :model-value="String(form.id)" disabled />
+        </el-form-item>
+        <el-form-item :label="t('orders.orderNumber')" prop="order_no">
+          <el-input v-model="form.order_no" :placeholder="t('orders.orderNumberPlaceholder')" maxlength="60" clearable />
+        </el-form-item>
+        <el-form-item :label="t('orders.orderTime')" prop="order_date">
+          <el-date-picker
+            v-model="form.order_date"
+            type="datetime"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            style="width: 100%"
+            :placeholder="t('orders.orderDatePlaceholder')"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item :label="t('orders.updateTime')">
+          <el-date-picker
+            v-model="form.order_updated_at"
+            type="datetime"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            style="width: 100%"
+            :placeholder="t('common.optional')"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item :label="t('orders.purchaseTime')">
+          <el-date-picker
+            v-model="form.purchase_time"
+            type="datetime"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            style="width: 100%"
+            :placeholder="t('common.optional')"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item :label="t('orders.sellerId')">
+          <el-input v-model="form.data_user" placeholder="data_user（Mercari seller.id）" maxlength="64" clearable />
+        </el-form-item>
+        <el-form-item :label="t('orders.buyerId')">
+          <el-input v-model="form.customer_name" :placeholder="t('orders.buyerIdPlaceholder')" maxlength="30" clearable />
+        </el-form-item>
+        <el-form-item :label="t('orders.orderStatus')" prop="status">
+          <el-select v-model="form.status" filterable style="width: 100%">
+            <el-option v-for="item in formOrderStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('orders.amountJpy')" prop="amount">
+          <el-input-number v-model="form.amount" :min="1" :precision="0" :controls="false" style="width: 100%" />
+        </el-form-item>
+        <el-form-item :label="t('orders.serviceFeeJpy')">
+          <el-input-number
+            v-model="form.service_fee"
+            :precision="0"
+            :controls="false"
+            style="width: 100%"
+            :placeholder="t('orders.optionalInteger')"
+          />
+        </el-form-item>
+        <el-form-item :label="t('orders.netIncomeJpy')">
+          <el-input-number
+            v-model="form.net_income"
+            :precision="0"
+            :controls="false"
+            style="width: 100%"
+            :placeholder="t('orders.optionalInteger')"
+          />
+        </el-form-item>
+        <el-form-item :label="t('orders.carrier')">
+          <el-input v-model="form.carrier_display_name" clearable placeholder="carrier_display_name" />
+        </el-form-item>
+        <el-form-item :label="t('orders.shippingMethod')">
+          <el-input v-model="form.request_class_display_name" clearable placeholder="request_class_display_name" />
+        </el-form-item>
+        <el-form-item :label="t('orders.shippingFeeJpy')">
+          <el-input-number
+            v-model="form.shipping_fee"
+            :precision="0"
+            :controls="false"
+            style="width: 100%"
+            :placeholder="t('orders.optionalInteger')"
+          />
+        </el-form-item>
+        <el-form-item :label="t('orders.trackingNo')">
+          <el-input v-model="form.tracking_no" clearable placeholder="tracking_no" />
+        </el-form-item>
+        <el-form-item :label="t('orders.transactionEvidenceId')">
+          <el-input-number
+            v-model="form.transaction_evidence_id"
+            :precision="0"
+            :controls="false"
+            style="width: 100%"
+            :placeholder="t('orders.transactionEvidenceIdPlaceholder')"
+          />
+        </el-form-item>
+        <el-form-item :label="t('orders.itemNameCol')">
+          <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="2000" show-word-limit placeholder="remark" />
+        </el-form-item>
+        <el-form-item :label="t('orders.itemDescription')">
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="3"
+            maxlength="4000"
+            show-word-limit
+            placeholder="description（transaction_evidences/get）"
+          />
+          <div v-if="orderDescriptionMgmtHint" class="form-hint">{{ orderDescriptionMgmtHint }}</div>
+        </el-form-item>
+        <el-form-item :label="t('orders.thumbnailsJson')">
+          <el-input
+            v-model="form.thumbnails_text"
+            type="textarea"
+            :rows="4"
+            :placeholder="t('orders.thumbnailsJsonPlaceholder')"
+          />
+          <div class="form-hint">{{ t('orders.thumbnailsJsonHint') }}</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="order-dialog-footer">
+          <el-popconfirm
+            v-if="form.id"
+            :title="t('orders.deleteConfirm')"
+            @confirm="removeFromDialog"
+          >
+            <template #reference>
+              <el-button type="danger">{{ t('common.delete') }}</el-button>
+            </template>
+          </el-popconfirm>
+          <div class="order-dialog-footer-right">
+            <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+            <el-button type="primary" :loading="submitting" @click="submit">{{ t('common.save') }}</el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="manualOutboundDialogVisible"
+      :title="t('orders.manualAddOutbound')"
+      width="760px"
+      destroy-on-close
+    >
+      <el-form label-width="90px">
+        <el-form-item :label="t('orders.orderNumber')">
+          <el-input :model-value="manualOutboundForm.order_no" disabled />
+        </el-form-item>
+        <el-form-item :label="t('orders.itemFilter')" class="manual-outbound-inv-filter-item">
+          <div class="manual-ob-filter-grid">
+            <div class="manual-ob-filter-cell">
+              <el-input
+                v-model="manualInvFilters.keyword"
+                :placeholder="t('orders.searchProductPlaceholder')"
+                clearable
+                prefix-icon="Search"
+                @change="reloadManualInventoryList"
+              />
+            </div>
+            <div class="manual-ob-filter-cell">
+              <el-select
+                v-model="manualInvFilters.filterCat"
+                :placeholder="t('orders.allGameCategories')"
+                clearable
+                filterable
+                style="width: 100%"
+                @change="reloadManualInventoryList"
+              >
+                <el-option v-for="c in manualInvFilters.categories" :key="c.id" :label="c.name" :value="c.id" />
+              </el-select>
+            </div>
+            <div class="manual-ob-filter-cell">
+              <el-cascader
+                v-model="manualInvFilters.filterWarehousePath"
+                :options="manualInvFilters.warehouseCascaderOptions"
+                :props="manualInvWarehouseCascaderProps"
+                :show-all-levels="false"
+                style="width: 100%"
+                :placeholder="t('orders.warehouseShelfPlaceholder')"
+                popper-class="product-type-cascader-popper"
+                clearable
+                filterable
+                @change="manualInvFilters.handleFilterWarehouseChange"
+              />
+            </div>
+            <div class="manual-ob-filter-cell">
+              <el-cascader
+                v-model="manualInvFilters.filterProductTypePath"
+                :options="manualInvFilters.productTypeCascaderOptions"
+                :props="manualInvProductTypeCascaderProps"
+                :show-all-levels="false"
+                style="width: 100%"
+                :placeholder="t('orders.productType')"
+                popper-class="product-type-cascader-popper"
+                clearable
+                filterable
+                @change="manualInvFilters.handleFilterProductTypeChange"
+              />
+            </div>
+            <div class="manual-ob-filter-cell">
+              <el-select
+                v-model="manualInvFilters.filterOwnerUserId"
+                :placeholder="t('orders.allOwners')"
+                clearable
+                filterable
+                style="width: 100%"
+                @change="reloadManualInventoryList"
+              >
+                <el-option
+                  v-for="u in manualInvFilters.ownerUsers"
+                  :key="u.id"
+                  :label="u.display_name || u.username"
+                  :value="u.id"
+                />
+              </el-select>
+            </div>
+            <div class="manual-ob-filter-cell manual-ob-filter-cell--checkbox">
+              <el-checkbox v-model="manualInvFilters.hideNoWarehouseSlot" class="manual-ob-filter-checkbox">
+                {{ t('orders.hideNoStock') }}
+              </el-checkbox>
+            </div>
+          </div>
+        </el-form-item>
+        <el-form-item :label="t('orders.inventoryItem')">
+          <div class="manual-ob-line-list" v-loading="manualInventoryLoading">
+            <div
+              v-for="row in manualOutboundForm.rows"
+              :key="row.key"
+              class="manual-ob-line-row"
+            >
+              <el-select
+                v-model="row.inventory_id"
+                filterable
+                clearable
+                class="manual-inventory-select"
+                style="width: 100%"
+                :placeholder="t('orders.selectInventoryProduct')"
+                popper-class="manual-inventory-select-popper"
+                @change="onManualOutboundRowInventoryChange(row)"
+              >
+                <el-option
+                  v-for="it in rowInventoryOptions(row.key)"
+                  :key="it.id"
+                  :label="`${it.name || '-'}（${t('orders.ownerLabel')}:${it.owner_user_name || '-'}，${t('orders.stockLabel')}:${Number(it.quantity || 0)}）`"
+                  :value="it.id"
+                >
+                  <div class="manual-option-row">
+                    <div
+                      v-if="inventoryThumbUrl(it)"
+                      class="manual-option-thumb-click"
+                      @click.stop
+                    >
+                      <el-image
+                        class="manual-option-thumb"
+                        :src="inventoryThumbUrl(it)"
+                        :preview-src-list="inventoryPreviewSrcList(it)"
+                        :initial-index="0"
+                        fit="contain"
+                        lazy
+                        preview-teleported
+                        hide-on-click-modal
+                        :z-index="4000"
+                        referrerpolicy="no-referrer"
+                      />
+                    </div>
+                    <span v-else class="manual-option-thumb-fallback">-</span>
+                    <div class="manual-option-meta">
+                      <div class="manual-option-name">{{ it.name || '-' }}</div>
+                      <div class="manual-option-sub">{{ t('orders.ownerLabel') }}: {{ it.owner_user_name || '-' }} ｜ {{ t('orders.stockLabel') }}: {{ Number(it.quantity || 0) }}</div>
+                    </div>
+                  </div>
+                </el-option>
+              </el-select>
+              <el-input-number
+                v-model="row.quantity"
+                :min="1"
+                :max="maxStockForManualRow(row.inventory_id)"
+                :precision="0"
+                :controls="false"
+                class="manual-ob-line-qty"
+                :disabled="!row.inventory_id"
+              />
+              <el-button
+                type="danger"
+                plain
+                circle
+                :icon="Minus"
+                :title="t('orders.deleteRow')"
+                @click="removeManualOutboundRow(row.key)"
+              />
+            </div>
+            <div v-if="!manualOutboundForm.rows.length" class="cell-dash manual-ob-line-empty">
+              {{ t('orders.clickAddOutboundHint') }}
+            </div>
+            <div class="manual-ob-line-add">
+              <el-button type="primary" plain :icon="Plus" @click="addManualOutboundRow">
+                {{ t('common.add') }}
+              </el-button>
+            </div>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="manualOutboundDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="manualOutboundSaving" @click="submitManualOutbound">
+          {{ t('orders.confirmAdd') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="bindOutboundDialogVisible"
+      :title="bindOutboundContext.is_stocked_out ? t('orders.bindInventoryEditStockedOut') : t('orders.bindInventory')"
+      width="760px"
+      destroy-on-close
+    >
+      <el-alert
+        v-if="bindOutboundContext.is_stocked_out"
+        type="warning"
+        :title="t('orders.bindStockedOutAlert')"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      />
+      <el-form label-width="90px">
+        <el-form-item :label="t('orders.orderNumber')">
+          <el-input :model-value="bindOutboundContext.order_no" disabled />
+        </el-form-item>
+        <el-form-item :label="t('orders.itemFilter')" class="manual-outbound-inv-filter-item">
+          <div class="manual-ob-filter-grid">
+            <div class="manual-ob-filter-cell">
+              <el-input
+                v-model="bindInvFilters.keyword"
+                :placeholder="t('orders.searchProductPlaceholder')"
+                clearable
+                prefix-icon="Search"
+                @change="reloadBindInventoryList"
+              />
+            </div>
+            <div class="manual-ob-filter-cell">
+              <el-select
+                v-model="bindInvFilters.filterCat"
+                :placeholder="t('orders.allGameCategories')"
+                clearable
+                filterable
+                style="width: 100%"
+                @change="reloadBindInventoryList"
+              >
+                <el-option v-for="c in bindInvFilters.categories" :key="c.id" :label="c.name" :value="c.id" />
+              </el-select>
+            </div>
+            <div class="manual-ob-filter-cell">
+              <el-cascader
+                v-model="bindInvFilters.filterWarehousePath"
+                :options="bindInvFilters.warehouseCascaderOptions"
+                :props="bindInvWarehouseCascaderProps"
+                :show-all-levels="false"
+                style="width: 100%"
+                :placeholder="t('orders.warehouseShelfPlaceholder')"
+                popper-class="product-type-cascader-popper"
+                clearable
+                filterable
+                @change="bindInvFilters.handleFilterWarehouseChange"
+              />
+            </div>
+            <div class="manual-ob-filter-cell">
+              <el-cascader
+                v-model="bindInvFilters.filterProductTypePath"
+                :options="bindInvFilters.productTypeCascaderOptions"
+                :props="bindInvProductTypeCascaderProps"
+                :show-all-levels="false"
+                style="width: 100%"
+                :placeholder="t('orders.productType')"
+                popper-class="product-type-cascader-popper"
+                clearable
+                filterable
+                @change="bindInvFilters.handleFilterProductTypeChange"
+              />
+            </div>
+            <div class="manual-ob-filter-cell">
+              <el-select
+                v-model="bindInvFilters.filterOwnerUserId"
+                :placeholder="t('orders.allOwners')"
+                clearable
+                filterable
+                style="width: 100%"
+                @change="reloadBindInventoryList"
+              >
+                <el-option
+                  v-for="u in bindInvFilters.ownerUsers"
+                  :key="u.id"
+                  :label="u.display_name || u.username"
+                  :value="u.id"
+                />
+              </el-select>
+            </div>
+            <div class="manual-ob-filter-cell manual-ob-filter-cell--checkbox">
+              <el-checkbox v-model="bindInvFilters.hideNoWarehouseSlot" class="manual-ob-filter-checkbox">
+                {{ t('orders.hideNoStock') }}
+              </el-checkbox>
+            </div>
+          </div>
+        </el-form-item>
+        <el-form-item :label="t('orders.inventoryItem')">
+          <div class="manual-ob-line-list" v-loading="bindInventoryLoading">
+            <div class="manual-ob-line-row">
+              <el-select
+                v-model="bindOutboundForm.inventory_id"
+                filterable
+                clearable
+                class="manual-inventory-select"
+                style="width: 100%"
+                :placeholder="t('orders.selectInventoryProduct')"
+                popper-class="manual-inventory-select-popper"
+                @change="onBindOutboundInventoryChange"
+              >
+                <el-option
+                  v-for="it in bindInventoryOptions"
+                  :key="it.id"
+                  :label="`${it.name || '-'}（${t('orders.ownerLabel')}:${it.owner_user_name || '-'}，${t('orders.stockLabel')}:${Number(it.quantity || 0)}）`"
+                  :value="it.id"
+                >
+                  <div class="manual-option-row">
+                <div
+                  v-if="inventoryThumbUrl(it)"
+                  class="manual-option-thumb-click"
+                  @click.stop
+                >
+                  <el-image
+                    class="manual-option-thumb"
+                    :src="inventoryThumbUrl(it)"
+                    :preview-src-list="inventoryPreviewSrcList(it)"
+                    :initial-index="0"
+                    fit="contain"
+                    lazy
+                    preview-teleported
+                    hide-on-click-modal
+                    :z-index="4000"
+                    referrerpolicy="no-referrer"
+                  />
+                </div>
+                <span v-else class="manual-option-thumb-fallback">-</span>
+                <div class="manual-option-meta">
+                  <div class="manual-option-name">{{ it.name || '-' }}</div>
+                  <div class="manual-option-sub">{{ t('orders.ownerLabel') }}: {{ it.owner_user_name || '-' }} ｜ {{ t('orders.stockLabel') }}: {{ Number(it.quantity || 0) }}</div>
+                </div>
+              </div>
+                </el-option>
+              </el-select>
+              <el-input-number
+                v-model="bindOutboundForm.quantity"
+                :min="1"
+                :max="maxStockForBindRow(bindOutboundForm.inventory_id)"
+                :precision="0"
+                :controls="false"
+                class="manual-ob-line-qty"
+                :disabled="!bindOutboundForm.inventory_id"
+              />
+            </div>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="bindOutboundDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="bindOutboundSaving" @click="submitBindOutboundInventory">
+          {{ t('orders.confirmBind') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="convertOwnerDialogVisible"
+      :title="t('orders.convertOwnerDialogTitle')"
+      width="480px"
+      destroy-on-close
+      append-to-body
+    >
+      <el-alert
+        v-if="convertOwnerContext.is_stocked_out"
+        type="info"
+        :title="t('orders.convertOwnerStockedOutHint')"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      />
+      <el-form label-width="120px">
+        <el-form-item :label="t('orders.orderNumber')">
+          <el-input :model-value="convertOwnerContext.order_no" disabled />
+        </el-form-item>
+        <el-form-item :label="t('orders.currentInventory')">
+          <el-input
+            :model-value="convertOwnerContext.inventory_label || ''"
+            disabled
+            readonly
+          />
+        </el-form-item>
+        <el-form-item :label="t('orders.currentOwner')">
+          <el-input
+            :model-value="convertOwnerContext.current_owner_name || '—'"
+            disabled
+            readonly
+          />
+        </el-form-item>
+        <el-form-item :label="t('inventory.splitQuantity')">
+          <el-input :model-value="String(convertOwnerContext.quantity)" disabled />
+        </el-form-item>
+        <el-form-item :label="t('orders.targetOwner')" required>
+          <el-select
+            v-model="convertOwnerForm.owner_user_id"
+            :placeholder="t('inventory.pleaseSelectOwner')"
+            clearable
+            filterable
+            style="width: 100%"
+          >
+            <el-option
+              v-for="u in ownerUsers"
+              :key="u.id"
+              :label="u.display_name || u.username"
+              :value="u.id"
+              :disabled="u.id === convertOwnerContext.current_owner_user_id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="convertOwnerDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button
+          type="primary"
+          :loading="convertOwnerSubmitting"
+          :disabled="!convertOwnerCanSubmit"
+          @click="submitConvertOwner"
+        >{{ t('orders.confirmConvertOwner') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="packagingDialogVisible"
+      :title="t('orders.addPackagingMaterial')"
+      width="520px"
+      destroy-on-close
+    >
+      <el-form label-width="96px">
+        <el-form-item :label="t('orders.orderNumber')">
+          <el-input :model-value="packagingForm.order_no" disabled />
+        </el-form-item>
+        <el-form-item :label="t('orders.packagingName')" required>
+          <el-select
+            v-model="packagingForm.item_name"
+            filterable
+            clearable
+            style="width: 100%"
+            :placeholder="t('orders.packagingItemPlaceholder')"
+            @change="onPackagingItemChange"
+          >
+            <el-option :label="t('orders.noPackaging')" :value="PACKAGING_ITEM_NONE" />
+            <el-option
+              v-for="item in packagingItemsOptions"
+              :key="item.item_name"
+              :label="`${item.item_name}（${t('orders.stockLabel')}:${Number(item.quantity || 0)}）`"
+              :value="item.item_name"
+            />
+          </el-select>
+        </el-form-item>
+        <el-row v-show="isPackagingConcreteItemSelected" :gutter="12">
+          <el-col :span="12">
+            <el-form-item :label="t('common.quantity')" required>
+              <el-input-number
+                v-model="packagingForm.quantity"
+                :min="1"
+                :precision="0"
+                :controls="false"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item :label="t('orders.unitPrice')" required>
+              <el-input-number
+                v-model="packagingForm.unit_price"
+                :min="1"
+                :precision="0"
+                :controls="false"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item v-show="isPackagingConcreteItemSelected" :label="t('orders.costAmount')">
+          <el-input :model-value="String(Math.round(expenseAmount(packagingForm)))" disabled />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="packagingDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="packagingSubmitting" @click="submitPackagingExpense">
+          {{ t('orders.confirmAdd') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <teleport to="body">
+      <div
+        v-show="syncOverlayVisible"
+        class="orders-sync-overlay orders-sync-overlay--dark"
+        :class="{ 'orders-sync-overlay--failed': syncOverlayFailed }"
+        role="status"
+        aria-live="polite"
+      >
+        <div class="orders-sync-overlay__box">
+          <el-icon class="is-loading orders-sync-overlay__icon" :size="40"><Loading /></el-icon>
+          <div class="orders-sync-overlay__title">{{ syncOverlayTitle }}</div>
+          <div class="orders-sync-overlay__step">{{ syncProgressLabel || t('orders.pleaseWait') }}</div>
+        </div>
+      </div>
+    </teleport>
+  </div>
+</template>
+
+<script src="./script.js"></script>
+<style scoped src="./style.css"></style>
+<!-- 「更新列表 / 更新状态」全屏等待（teleport 到 body，须无 scoped；黑色主题） -->
+<style src="./style.global.css"></style>

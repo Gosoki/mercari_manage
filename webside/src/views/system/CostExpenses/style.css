@@ -1,0 +1,5 @@
+.search-card { margin-bottom: 16px; border-radius: 8px; }
+.search-left-group { display: flex; gap: 12px; }
+.search-actions { display: flex; justify-content: flex-end; }
+.table-card { border-radius: 8px; }
+.pagination { margin-top: 16px; display: flex; justify-content: flex-end; }

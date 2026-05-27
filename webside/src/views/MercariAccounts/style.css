@@ -1,0 +1,155 @@
+.list-card {
+  border-radius: 8px;
+}
+.card-col {
+  margin-bottom: 16px;
+}
+.add-card {
+  height: 100%;
+  min-height: 220px;
+  border: 1px dashed #3a4a65;
+  border-radius: 8px;
+  background: rgba(19, 28, 47, 0.85);
+  color: #a8b4c8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+.add-card:hover {
+  border-color: #409eff;
+  background: #1b2942;
+}
+.add-card-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  width: 100%;
+  min-height: 120px;
+  color: #a8b4c8;
+  transition: color 0.2s ease;
+}
+.add-card:hover .add-card-main {
+  color: #69b1ff;
+}
+.add-card-icon {
+  font-size: 24px;
+}
+.account-card {
+  border-radius: 8px;
+  height: 100%;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e6edf7;
+}
+.card-item {
+  margin-bottom: 8px;
+  color: #a8b4c8;
+  word-break: break-all;
+  font-size: 13px;
+}
+.card-item span {
+  color: #7d8da6;
+}
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.pagination {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+.mercari-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+.mercari-dialog-footer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+.form-intro-tip {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #7d8da6;
+}
+.form-section-hint {
+  margin: -4px 0 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #7d8da6;
+}
+.seller-id-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #7d8da6;
+}
+.seller-id-hint a {
+  color: #69b1ff;
+}
+.seller-id-hint code {
+  font-size: 11px;
+  color: #a8b4c8;
+}
+.af-task-checks {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.af-task-checks .el-checkbox {
+  margin-right: 0;
+  height: auto;
+  white-space: normal;
+}
+.af-pause-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.af-pause-picker {
+  flex: 1;
+  min-width: 0;
+}
+.af-pause-sep {
+  color: #7d8da6;
+  font-size: 13px;
+}
+.af-pause-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #7d8da6;
+}
+.mercari-form {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}

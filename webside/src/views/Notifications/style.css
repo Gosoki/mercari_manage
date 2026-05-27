@@ -1,0 +1,92 @@
+.search-card {
+  margin-bottom: 16px;
+  border-radius: 8px;
+}
+.search-row {
+  justify-content: space-between;
+  row-gap: 10px;
+}
+.search-left-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.search-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sync-account-select {
+  width: 180px;
+}
+.table-card {
+  border-radius: 8px;
+}
+.ntf-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  display: block;
+}
+.thumb-fallback {
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
+}
+.cell-message {
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.cell-message-unread {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+.cell-itemid {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.cell-itemname {
+  color: var(--el-text-color-secondary);
+}
+.cell-extra {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-color-warning);
+}
+.cell-buyer {
+  font-weight: 500;
+}
+.cell-sender-id {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.cell-muted {
+  color: var(--el-text-color-placeholder);
+}
+.cell-muted-sm {
+  color: var(--el-text-color-placeholder);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.row-tag-unread {
+  margin-top: 4px;
+  color: var(--el-color-danger);
+  font-size: 11px;
+}
+.pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
+  display: flex;
+}
+

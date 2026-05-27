@@ -1,0 +1,106 @@
+.search-card {
+  margin-bottom: 16px;
+  border-radius: 8px;
+}
+.search-row {
+  justify-content: space-between;
+}
+.search-left-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.search-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.sync-account-select {
+  width: 180px;
+}
+.table-card {
+  border-radius: 8px;
+}
+.os-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  display: block;
+  cursor: zoom-in;
+}
+.thumb-fallback {
+  color: #909399;
+  font-size: 12px;
+}
+.cell-muted {
+  color: #909399;
+}
+.pagination {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+.auction-pre {
+  margin: 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 240px;
+  overflow: auto;
+}
+.os-expand-wrap {
+  padding: 8px 12px 12px 36px;
+  max-width: 100%;
+}
+.os-expand-table {
+  width: 100%;
+}
+.multi-line-cell {
+  display: flex;
+  flex-direction: column;
+}
+.multi-line-cell > div {
+  min-height: 38px;
+  line-height: 38px;
+  box-sizing: border-box;
+}
+:deep(.on-sale-stock-alert-row) {
+  --el-table-tr-bg-color: #3a1517;
+}
+:deep(.on-sale-stock-alert-row td) {
+  background-color: #3a1517 !important;
+}
+:deep(.on-sale-stock-alert-row:hover > td) {
+  background-color: #4a1a1d !important;
+}
+:deep(.on-sale-stock-alert-row td .cell) {
+  color: #ffd6d9;
+  font-weight: 600;
+}
+
+.detail-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 16px 0 10px;
+  color: var(--el-text-color-primary);
+}
+.detail-section-title:first-of-type {
+  margin-top: 0;
+}
+.detail-view-body {
+  min-height: 80px;
+}
+.detail-desc {
+  width: 100%;
+}
+.detail-inv-table {
+  width: 100%;
+}
+.detail-listing-body-wrap :deep(.el-textarea__inner) {
+  font-family: inherit;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
