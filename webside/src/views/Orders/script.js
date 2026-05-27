@@ -1665,7 +1665,6 @@ export default defineComponent({
       packagingDialogVisible,
       packagingSubmitting,
       packagingItemsOptions,
-      _manualObRowKeySeq,
       newManualOutboundRowKey,
       manualOutboundForm,
       scheduleManualInvReload,

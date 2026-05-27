@@ -80,6 +80,61 @@
   font-weight: 600;
 }
 
+/* 标红行管理番号单元格内的警告图标（鼠标悬停时弹出 tooltip 说明原因） */
+.inventory-alert-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: help;
+}
+.inventory-alert-icon {
+  color: #ff6b6b;
+  font-size: 16px;
+  vertical-align: middle;
+}
+
+/* 标红行说明 tooltip（teleport 到 body，必须无 scoped）：与项目深蓝暗色主题保持一致 */
+.el-popper.is-dark.inventory-alert-tooltip-popper {
+  background: #18233a !important;
+  border: 1px solid #3a1f24 !important;
+  color: #e6e8ef !important;
+  padding: 10px 12px !important;
+  max-width: 320px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+.el-popper.is-dark.inventory-alert-tooltip-popper .el-popper__arrow::before {
+  background: #18233a !important;
+  border-color: #3a1f24 !important;
+}
+.inventory-alert-tooltip-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #ff8a92;
+  font-size: 13px;
+}
+.inventory-alert-tooltip-list {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.6;
+  color: #e6e8ef;
+  font-size: 12.5px;
+}
+.inventory-alert-tooltip-list li {
+  list-style: disc;
+}
+.inventory-alert-tooltip-list li::marker {
+  color: #ff8a92;
+}
+
+/* 标红行的「出品」按钮被禁用，外层包一层捕获鼠标悬停以触发 tooltip */
+.row-action-disabled-wrap {
+  display: inline-flex;
+  cursor: not-allowed;
+}
+.row-action-disabled-wrap > .el-button.is-disabled {
+  pointer-events: none;
+}
+
 /* 组合商品弹窗：与全局暗色对话框一致，组成行内展示正面缩略图 */
 .combined-product-dialog .combined-product-items {
   width: 100%;

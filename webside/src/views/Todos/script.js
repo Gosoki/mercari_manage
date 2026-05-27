@@ -9,6 +9,10 @@ import SyncOverlay from '@/components/SyncOverlay.vue'
 import { mercariImageUrl } from '@/utils/mercariImage.js'
 
 export default defineComponent({
+  components: {
+    SyncOverlay,
+    Loading,
+  },
   setup() {
     const { t } = useI18n()
 

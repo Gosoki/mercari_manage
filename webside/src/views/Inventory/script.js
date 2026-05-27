@@ -1,6 +1,6 @@
 import { defineComponent, ref, computed, watch, onMounted, onBeforeUnmount, nextTick, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Loading } from '@element-plus/icons-vue'
+import { Loading, WarningFilled } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import {
   inventoryApi,
@@ -20,6 +20,11 @@ import { encodeMgmtId } from '@/utils/mgmtIdCipher.js'
 import { warehouseShelfLeafLabel } from '@/utils/warehouseLabel.js'
 
 export default defineComponent({
+  components: {
+    SingleListingFormDialog,
+    Loading,
+    WarningFilled,
+  },
   setup() {
     const { t } = useI18n()
 
@@ -1401,6 +1406,20 @@ export default defineComponent({
       return isInventoryZeroStockOnSaleAlert(row) || isInventoryOwnerNeedsAlert(row)
     }
 
+    /** 标红行原因列表（已本地化），供 tooltip 悬停展示 */
+    function inventoryAlertReasons(row) {
+      const reasons = []
+      if (isInventoryZeroStockOnSaleAlert(row)) {
+        reasons.push(t('inventory.alertReasonZeroStockOnSale'))
+      }
+      if (isInventoryNoOwner(row)) {
+        reasons.push(t('inventory.alertReasonNoOwner'))
+      } else if (isInventorySystemAdminOwner(row)) {
+        reasons.push(t('inventory.alertReasonSystemAdminOwner'))
+      }
+      return reasons
+    }
+
     const sortedInventoryList = computed(() => {
       const arr = [...list.value]
       const prop = inventorySortProp.value
@@ -2438,9 +2457,10 @@ export default defineComponent({
       loadInventoryStats()
     }
 
-    /** 组合商品可选：库存大于 0，且不能是已有组合 SKU（禁止二次组合） */
+    /** 组合商品可选：库存大于 0，且不能是已有组合 SKU（禁止二次组合）；标红行也不可选 */
     function isListingPickSelectable(row) {
       if (Number(row?.is_combined || 0) === 1) return false
+      if (isInventoryAlertRow(row)) return false
       return Number(row?.quantity ?? 0) > 0
     }
 
@@ -2457,6 +2477,11 @@ export default defineComponent({
       if (!row || row.id == null) return
       if (Number(row?.quantity ?? 0) <= 0) {
         ElMessage.warning(t('inventory.cannotListZeroStock'))
+        return
+      }
+      if (isInventoryAlertRow(row)) {
+        const reasons = inventoryAlertReasons(row).join('；')
+        ElMessage.warning(t('inventory.cannotListAlertRow', { reasons }))
         return
       }
       listingSeedData.value = buildListingSeedFromInventoryRows([row])
@@ -3350,10 +3375,6 @@ export default defineComponent({
       ocrCanvasRef,
       ocrWrapRef,
       ocrLoading,
-      _ocrDrawing,
-      _ocrStart,
-      _ocrRect,
-      _ocrNativeImg,
       mediaStream,
       scanTimer,
       contScanVisible,
@@ -3406,14 +3427,10 @@ export default defineComponent({
       openOcr,
       openOcrForRow,
       switchOcrImage,
-      _ocrReset,
       initOcrCanvas,
-      _ocrGetPos,
-      _ocrRedraw,
       ocrDragStart,
       ocrDragMove,
       ocrDragEnd,
-      _ocrSendRegion,
       getCellKey,
       isEditing,
       startInlineEdit,
@@ -3459,6 +3476,7 @@ export default defineComponent({
       isInventorySystemAdminOwner,
       isInventoryOwnerNeedsAlert,
       isInventoryAlertRow,
+      inventoryAlertReasons,
       sortedInventoryList,
       onInventorySortChange,
       quantityTagType,

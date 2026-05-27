@@ -101,7 +101,7 @@
             <div v-if="row.title" class="cell-title">{{ row.title }}</div>
             <div class="cell-message">{{ row.message || '-' }}</div>
             <div v-if="row.item_id" class="cell-itemid">
-              <el-link :href="mercariItemUrl(row.item_id)" target="_blank" type="primary" :underline="false">
+              <el-link :href="mercariItemUrl(row.item_id)" target="_blank" type="primary" underline="never">
                 {{ row.item_id }}
               </el-link>
               <span v-if="row.item_name" class="cell-itemname">{{ row.item_name }}</span>
@@ -188,7 +188,7 @@
             <div class="detail-row">
               <div class="detail-label">{{ t('todos.productId') }}</div>
               <div class="detail-value">
-                <el-link :href="mercariItemUrl(detail.item_id)" target="_blank" type="primary" :underline="false">
+                <el-link :href="mercariItemUrl(detail.item_id)" target="_blank" type="primary" underline="never">
                   {{ detail.item_id || dash }}
                 </el-link>
               </div>

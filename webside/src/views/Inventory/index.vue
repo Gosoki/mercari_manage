@@ -174,7 +174,29 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column :label="t('inventory.managementId')" prop="id" width="100" align="center" header-align="center" />
+        <el-table-column :label="t('inventory.managementId')" prop="id" width="100" align="center" header-align="center">
+          <template #default="{ row }">
+            <el-tooltip
+              v-if="isInventoryAlertRow(row)"
+              effect="dark"
+              placement="top"
+              :show-after="100"
+              popper-class="inventory-alert-tooltip-popper"
+            >
+              <template #content>
+                <div class="inventory-alert-tooltip-title">{{ t('inventory.alertReasonTitle') }}</div>
+                <ul class="inventory-alert-tooltip-list">
+                  <li v-for="(reason, i) in inventoryAlertReasons(row)" :key="i">{{ reason }}</li>
+                </ul>
+              </template>
+              <span class="inventory-alert-id">
+                <el-icon class="inventory-alert-icon"><WarningFilled /></el-icon>
+                {{ row.id }}
+              </span>
+            </el-tooltip>
+            <span v-else>{{ row.id }}</span>
+          </template>
+        </el-table-column>
         <el-table-column :label="t('inventory.productImage')" width="76" align="center" header-align="center">
           <template #default="{ row }">
             <el-image
@@ -297,7 +319,25 @@
         <el-table-column v-if="!listingPickMode" :label="t('common.operate')" :width="isMobile ? 140 : 160" align="center" header-align="center" :fixed="isMobile ? false : 'right'">
           <template #default="{ row }">
             <div class="row-actions">
+              <el-tooltip
+                v-if="isInventoryAlertRow(row)"
+                effect="dark"
+                placement="top"
+                :show-after="100"
+                popper-class="inventory-alert-tooltip-popper"
+              >
+                <template #content>
+                  <div class="inventory-alert-tooltip-title">{{ t('inventory.cannotListAlertRowTitle') }}</div>
+                  <ul class="inventory-alert-tooltip-list">
+                    <li v-for="(reason, i) in inventoryAlertReasons(row)" :key="i">{{ reason }}</li>
+                  </ul>
+                </template>
+                <span class="row-action-disabled-wrap">
+                  <el-button size="small" type="warning" disabled>{{ t('inventory.list') }}</el-button>
+                </span>
+              </el-tooltip>
               <el-button
+                v-else
                 size="small"
                 type="warning"
                 :disabled="Number(row.quantity ?? 0) <= 0"

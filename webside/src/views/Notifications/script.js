@@ -9,6 +9,12 @@ import ItemCommentDialog from '@/components/ItemCommentDialog.vue'
 import DesiredPriceDialog from '@/components/DesiredPriceDialog.vue'
 
 export default defineComponent({
+  components: {
+    BundlePurchaseDialog,
+    ItemCommentDialog,
+    DesiredPriceDialog,
+    Loading,
+  },
   setup() {
     const { t } = useI18n()
     const mercariAccountStore = useMercariAccountStore()
