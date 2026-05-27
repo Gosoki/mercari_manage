@@ -85,7 +85,7 @@
           label-position="right"
           class="bundle-form"
         >
-          <el-form-item label="配送料の負担" prop="shipping_payer" required>
+          <el-form-item :label="t('dialogs.bundlePurchase.shippingPayer')" prop="shipping_payer" required>
             <el-select
               v-model="form.shipping_payer"
               :placeholder="t('common.selectPlaceholder')"
@@ -99,7 +99,7 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="配送の方法" prop="shipping_method" required>
+          <el-form-item :label="t('dialogs.bundlePurchase.shippingMethod')" prop="shipping_method" required>
             <el-select
               v-model="form.shipping_method"
               :placeholder="t('common.selectPlaceholder')"
@@ -113,7 +113,7 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="発送元の地域" prop="shipping_from" required>
+          <el-form-item :label="t('dialogs.bundlePurchase.shippingFromLabel')" prop="shipping_from" required>
             <el-cascader
               v-model="shippingFromPath"
               :options="shippingFromCascaderOptions"
@@ -125,7 +125,7 @@
               @change="handleShippingFromChange"
             />
           </el-form-item>
-          <el-form-item label="発送までの日数" prop="shipping_days" required>
+          <el-form-item :label="t('dialogs.bundlePurchase.shippingDays')" prop="shipping_days" required>
             <el-select
               v-model="form.shipping_days"
               :placeholder="t('common.selectPlaceholder')"
@@ -165,7 +165,7 @@
           :disabled="rejecting || isDecided"
           @click="onAccept"
         >
-          依頼を承諾する
+          {{ t('dialogs.bundlePurchase.acceptRequest') }}
         </el-button>
       </div>
     </template>

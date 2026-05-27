@@ -215,7 +215,7 @@
             <div class="detail-section-title">{{ t('orders.buyer') }}</div>
             <div class="detail-buyer">
               <div class="detail-buyer-name">{{ detail.buyer_name || dash }}</div>
-              <el-tag v-if="detail.buyer_verified" type="success" size="small" effect="light">本人確認済</el-tag>
+              <el-tag v-if="detail.buyer_verified" type="success" size="small" effect="light">{{ t('todos.buyerVerified') }}</el-tag>
               <span v-if="detail.sender_id" class="detail-buyer-id">ID: {{ detail.sender_id }}</span>
             </div>
           </section>
@@ -250,7 +250,7 @@
         <div class="detail-col detail-col-right">
           <!-- 取引評価（仅 ReviewedSeller） -->
           <section v-if="isReviewedSeller" class="detail-section detail-section-grow">
-            <div class="detail-section-title">取引評価</div>
+            <div class="detail-section-title">{{ t('todos.reviewTitle') }}</div>
             <div class="detail-empty-hint" style="margin-bottom: 10px">
               {{ t('todos.reviewHint') }}
             </div>
@@ -258,7 +258,7 @@
               v-model="detail.review_draft"
               type="textarea"
               :autosize="{ minRows: 6, maxRows: 12 }"
-              placeholder="例) このたびはお取引ありがとうございました。"
+              :placeholder="t('todos.reviewPlaceholder')"
               maxlength="140"
               show-word-limit
             />
@@ -302,8 +302,8 @@
                       <button
                         type="button"
                         class="reaction-add-btn"
-                        :title="'反応を追加'"
-                        :aria-label="'反応を追加'"
+                        :title="t('todos.addReaction')"
+                        :aria-label="t('todos.addReaction')"
                         :disabled="reactionLoading"
                       >
                         <svg viewBox="0 0 24 24" width="18" height="18" class="reaction-add-btn-icon-smile">
@@ -341,7 +341,7 @@
                 v-model="detail.reply_draft"
                 type="textarea"
                 :autosize="{ minRows: 4, maxRows: 8 }"
-                placeholder="なにか分からないことがあれば質問してみましょう。"
+                :placeholder="t('todos.replyPlaceholder')"
               />
               <div class="detail-reply-actions">
                 <el-button size="small" @click="onResetReplyDefault">{{ t('todos.defaultReply') }}</el-button>
@@ -409,10 +409,10 @@
       <div v-else class="detail-empty">{{ t('todos.noSizeList') }}</div>
 
       <div v-if="shippingNeedsFacility" class="ship-facility-section">
-        <div class="ship-facility-title">発送地</div>
+        <div class="ship-facility-title">{{ t('todos.pickupLocation') }}</div>
         <el-radio-group v-model="shippingFacility" class="ship-facility-radio">
-          <el-radio value="post_office" border>郵便局</el-radio>
-          <el-radio value="lawson" border>ローソン</el-radio>
+          <el-radio value="post_office" border>{{ t('todos.postOffice') }}</el-radio>
+          <el-radio value="lawson" border>{{ t('todos.lawson') }}</el-radio>
         </el-radio-group>
       </div>
       <template #footer>
