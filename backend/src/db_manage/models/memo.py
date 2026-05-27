@@ -44,6 +44,11 @@ class MemoModel(BaseModel):
                 'not_null': True,
                 'default': None,
             },
+            'images_json': {
+                'type': 'TEXT',
+                'not_null': False,
+                'default': None,
+            },
             'is_read': {
                 'type': 'INTEGER',
                 'not_null': True,

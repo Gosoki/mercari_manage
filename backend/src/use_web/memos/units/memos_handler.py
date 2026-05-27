@@ -1,23 +1,33 @@
 # -*- coding: utf-8 -*-
-"""备忘录 / 站内信处理器：用户互发留言 + 已读状态。"""
+"""备忘录 / 站内信处理器：用户互发留言 + 已读状态 + 附图。"""
 
+import json
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel as PydanticModel
 
 from ....auth import require_auth
 from ....db_manage.database import DatabaseManager
 from ....db_manage.models.memo import MemoModel
+from ...image_storage import (
+    delete_image_file,
+    is_base64_image,
+    save_base64_image,
+    save_upload_image,
+)
 
 db = DatabaseManager()
+
+MAX_MEMO_IMAGES = 9
 
 
 class MemoCreate(PydanticModel):
     receiver_id: int
     title: Optional[str] = None
     content: str
+    images: Optional[List[str]] = None  # 每项为 /imges/... 路径或 data:image/...;base64,... 数据 URL
 
 
 class MarkReadBody(PydanticModel):
@@ -46,11 +56,53 @@ def _user_name_map(user_ids: List[int]) -> dict:
     }
 
 
+def _parse_images_json(raw: Optional[str]) -> List[str]:
+    if not raw:
+        return []
+    try:
+        v = json.loads(raw)
+        if isinstance(v, list):
+            return [str(x) for x in v if x]
+    except Exception:
+        pass
+    return []
+
+
+def _normalize_image_inputs(items: Optional[List[str]]) -> List[str]:
+    if not items:
+        return []
+    if len(items) > MAX_MEMO_IMAGES:
+        raise HTTPException(
+            status_code=400, detail=f"最多附 {MAX_MEMO_IMAGES} 张图片"
+        )
+    out: List[str] = []
+    for it in items:
+        if not it:
+            continue
+        s = str(it).strip()
+        if not s:
+            continue
+        if is_base64_image(s):
+            try:
+                out.append(save_base64_image(s, prefix="memo"))
+            except Exception:
+                raise HTTPException(
+                    status_code=400, detail="图片格式无效或保存失败"
+                )
+        elif s.startswith("/imges/"):
+            out.append(s)
+        else:
+            raise HTTPException(status_code=400, detail="图片路径无效")
+    return out
+
+
 def _serialize(memo: MemoModel, name_map: dict) -> dict:
     d = memo.to_dict()
     d["sender"] = name_map.get(memo.sender_id)
     d["receiver"] = name_map.get(memo.receiver_id)
     d["is_read"] = bool(memo.is_read)
+    d["images"] = _parse_images_json(memo.images_json)
+    d.pop("images_json", None)
     return d
 
 
@@ -168,18 +220,37 @@ def create_memo(data: MemoCreate, claims: dict = Depends(require_auth)):
     if not exists:
         raise HTTPException(status_code=404, detail="接收用户不存在或已禁用")
 
+    image_paths = _normalize_image_inputs(data.images)
     title = (data.title or "").strip() or None
+    images_json = (
+        json.dumps(image_paths, ensure_ascii=False, separators=(",", ":"))
+        if image_paths
+        else None
+    )
     memo = MemoModel(
         sender_id=me,
         receiver_id=receiver_id,
         title=title,
         content=content,
+        images_json=images_json,
         is_read=0,
     )
     if not memo.save():
+        # 保存失败时清理已落盘的图片，避免孤儿文件
+        for p in image_paths:
+            delete_image_file(p)
         raise HTTPException(status_code=500, detail="发送失败")
     name_map = _user_name_map([me, receiver_id])
     return _serialize(memo, name_map)
+
+
+async def upload_memo_image(
+    file: UploadFile = File(...),
+    _claims: dict = Depends(require_auth),
+):
+    """先 multipart 上传落盘，返回 /imges/ 路径，提交备忘录时只传路径。"""
+    path = await save_upload_image(file, prefix="memo")
+    return {"path": path}
 
 
 def mark_read(data: MarkReadBody, claims: dict = Depends(require_auth)):
@@ -222,6 +293,9 @@ def delete_memo(mid: int, claims: dict = Depends(require_auth)):
         raise HTTPException(status_code=404, detail="留言不存在")
     if memo.sender_id != me and memo.receiver_id != me:
         raise HTTPException(status_code=403, detail="无权删除该留言")
+    image_paths = _parse_images_json(memo.images_json)
     if not memo.delete():
         raise HTTPException(status_code=500, detail="删除失败")
+    for p in image_paths:
+        delete_image_file(p)
     return {"message": "删除成功"}

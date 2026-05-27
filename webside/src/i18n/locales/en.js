@@ -416,5 +416,11 @@ export default {
     view: "View",
     markUnread: "Mark as unread",
     deleteConfirm: "Delete this memo?",
+    attachments: "Images",
+    attachmentsHint: "Up to 9 images, 25MB each",
+    colImages: "Images",
+    imageCount: "{n} image(s)",
+    invalidImage: "Please select an image file",
+    waitImageUpload: "Images are still uploading, please wait",
   },
 }

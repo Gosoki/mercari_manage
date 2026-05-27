@@ -101,6 +101,22 @@
             <span>{{ row.content }}</span>
           </template>
         </el-table-column>
+        <el-table-column :label="t('memos.colImages')" width="90" align="center">
+          <template #default="{ row }">
+            <el-tooltip
+              v-if="row.images && row.images.length"
+              effect="dark"
+              placement="top"
+              :content="t('memos.imageCount', { n: row.images.length })"
+            >
+              <span class="memos-image-count">
+                <el-icon><Picture /></el-icon>
+                {{ row.images.length }}
+              </span>
+            </el-tooltip>
+            <span v-else class="memos-image-none">-</span>
+          </template>
+        </el-table-column>
         <el-table-column :label="t('memos.colCreatedAt')" prop="created_at" width="170" />
         <el-table-column
           v-if="tab === 'inbox'"
@@ -181,6 +197,24 @@
             show-word-limit
           />
         </el-form-item>
+        <el-form-item :label="t('memos.attachments')">
+          <el-upload
+            list-type="picture-card"
+            :file-list="composeFileList"
+            :auto-upload="false"
+            :on-change="onPickImage"
+            :on-remove="onRemoveImage"
+            :on-preview="onPreviewImage"
+            :limit="9"
+            accept="image/*"
+            multiple
+          >
+            <el-icon><Plus /></el-icon>
+          </el-upload>
+          <div class="memos-attach-hint">
+            {{ t('memos.attachmentsHint') }}
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="composeVisible = false">{{ t('common.cancel') }}</el-button>
@@ -218,6 +252,21 @@
         </div>
         <el-divider />
         <pre class="memos-detail-content">{{ detailMemo.content }}</pre>
+        <div
+          v-if="detailMemo.images && detailMemo.images.length"
+          class="memos-detail-images"
+        >
+          <el-image
+            v-for="(src, i) in detailMemo.images"
+            :key="src + i"
+            class="memos-detail-image"
+            :src="src"
+            :preview-src-list="detailMemo.images"
+            :initial-index="i"
+            fit="cover"
+            preview-teleported
+          />
+        </div>
       </div>
       <template #footer>
         <el-button

@@ -82,3 +82,38 @@
   max-height: 360px;
   overflow-y: auto;
 }
+
+.memos-detail-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.memos-detail-image {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color-lighter);
+  cursor: zoom-in;
+  background: #fafafa;
+}
+
+.memos-image-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--el-color-primary);
+  font-size: 13px;
+}
+
+.memos-image-none {
+  color: #c0c4cc;
+}
+
+.memos-attach-hint {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+  margin-top: 4px;
+}

@@ -12,6 +12,15 @@ export const memosApi = {
   unreadCount: () => http.get('/use_web/memos/unread-count'),
   /** 发送新备忘录 */
   create: (data) => http.post('/use_web/memos', data),
+  /** 上传单张图片：返回 { path: '/imges/memo_xxx.jpg' } */
+  uploadImage: (file) => {
+    const fd = new FormData()
+    fd.append('file', file, file?.name || 'memo.jpg')
+    return http.post('/use_web/memos/upload-image', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    })
+  },
   /** 标记已读 / 未读（ids + is_read） */
   markRead: (ids, is_read = true) =>
     http.post('/use_web/memos/mark-read', { ids, is_read }),

@@ -1,11 +1,11 @@
-import { defineComponent, ref, computed, onMounted } from 'vue'
+import { defineComponent, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, EditPen, Check } from '@element-plus/icons-vue'
+import { Search, EditPen, Check, Plus, Picture } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { memosApi } from '@/api/index.js'
 
 export default defineComponent({
-  components: { Search, EditPen, Check },
+  components: { Search, EditPen, Check, Plus, Picture },
   setup() {
     const { t } = useI18n()
 
@@ -25,6 +25,7 @@ export default defineComponent({
     const composeFormRef = ref()
     const users = ref([])
     const composeForm = ref({ receiver_id: null, title: '', content: '' })
+    const composeFileList = ref([])
     const composeRules = {
       receiver_id: [{ required: true, message: t('memos.receiverRequired'), trigger: 'change' }],
       content: [{ required: true, message: t('memos.contentRequired'), trigger: 'blur' }],
@@ -131,17 +132,62 @@ export default defineComponent({
         }
       }
       composeForm.value = { receiver_id: null, title: '', content: '' }
+      composeFileList.value = []
       composeVisible.value = true
+    }
+
+    /** el-upload :on-change：选了新文件时立即上传到 /memos/upload-image，拿到 /imges/ 路径 */
+    async function onPickImage(uploadFile, fileList) {
+      if (uploadFile?.status !== 'ready') return
+      const raw = uploadFile.raw
+      if (!raw) return
+      if (!/^image\//i.test(raw.type || '')) {
+        ElMessage.error(t('memos.invalidImage'))
+        composeFileList.value = fileList.filter((f) => f.uid !== uploadFile.uid)
+        return
+      }
+      try {
+        uploadFile.status = 'uploading'
+        const r = await memosApi.uploadImage(raw)
+        uploadFile.status = 'success'
+        uploadFile.url = r?.path
+        uploadFile.serverPath = r?.path
+        // 同步到 reactive 列表（el-upload 内部已维护 file-list）
+        composeFileList.value = fileList.map((f) =>
+          f.uid === uploadFile.uid ? uploadFile : f
+        )
+      } catch {
+        // 错误已弹提示；从列表里移除
+        composeFileList.value = fileList.filter((f) => f.uid !== uploadFile.uid)
+      }
+    }
+
+    function onRemoveImage(uploadFile, fileList) {
+      composeFileList.value = fileList
+    }
+
+    function onPreviewImage(uploadFile) {
+      const src = uploadFile?.url || uploadFile?.serverPath
+      if (src) window.open(src, '_blank')
     }
 
     async function submitCompose() {
       await composeFormRef.value.validate()
+      const uploading = composeFileList.value.some((f) => f.status === 'uploading')
+      if (uploading) {
+        ElMessage.warning(t('memos.waitImageUpload'))
+        return
+      }
+      const images = composeFileList.value
+        .map((f) => f.serverPath || f.url)
+        .filter((p) => typeof p === 'string' && p.startsWith('/imges/'))
       submitting.value = true
       try {
         await memosApi.create({
           receiver_id: composeForm.value.receiver_id,
           title: composeForm.value.title?.trim() || null,
           content: composeForm.value.content,
+          images: images.length ? images : undefined,
         })
         ElMessage.success(t('memos.sentSuccess'))
         composeVisible.value = false
@@ -172,6 +218,7 @@ export default defineComponent({
       composeFormRef,
       users,
       composeForm,
+      composeFileList,
       composeRules,
       detailVisible,
       detailMemo,
@@ -185,6 +232,9 @@ export default defineComponent({
       remove,
       openComposeDialog,
       submitCompose,
+      onPickImage,
+      onRemoveImage,
+      onPreviewImage,
     }
   },
 })

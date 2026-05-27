@@ -416,5 +416,11 @@ export default {
     view: "查看",
     markUnread: "标记为未读",
     deleteConfirm: "确认删除这条留言？",
+    attachments: "附图",
+    attachmentsHint: "最多 9 张，单张不超过 25MB",
+    colImages: "附图",
+    imageCount: "{n} 张图",
+    invalidImage: "请选择图片文件",
+    waitImageUpload: "图片仍在上传，请稍候",
   },
 }

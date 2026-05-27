@@ -416,5 +416,11 @@ export default {
     view: "表示",
     markUnread: "未読にする",
     deleteConfirm: "このメモを削除しますか？",
+    attachments: "添付画像",
+    attachmentsHint: "最大9枚、1枚あたり25MBまで",
+    colImages: "添付",
+    imageCount: "{n}枚",
+    invalidImage: "画像ファイルを選択してください",
+    waitImageUpload: "画像をアップロード中です。お待ちください",
   },
 }
