@@ -2,7 +2,7 @@ import { defineComponent, ref, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { mercariAccountApi, mercariApi, webDriveApi } from '@/api/index.js'
+import { mercariAccountApi, mercariApi, webDriveApi, configApi } from '@/api/index.js'
 
 export default defineComponent({
   setup() {
@@ -19,6 +19,9 @@ export default defineComponent({
 
     const loading = ref(false)
     const submitting = ref(false)
+    // 自动出品（售出即补挂）总开关
+    const autoListingMaster = ref(false)
+    const autoListingMasterLoading = ref(false)
     const list = ref([])
     const total = ref(0)
     const page = ref(1)
@@ -407,8 +410,37 @@ export default defineComponent({
       }
     }
 
+    async function loadAutoListingMaster() {
+      try {
+        const res = await configApi.getAutoListingMaster()
+        autoListingMaster.value = !!res?.enabled
+      } catch {
+        autoListingMaster.value = false
+      }
+    }
+
+    async function onAutoListingMasterToggle(val) {
+      const next = !!val
+      autoListingMasterLoading.value = true
+      try {
+        const res = await configApi.putAutoListingMaster({ enabled: next })
+        autoListingMaster.value = !!res?.enabled
+        ElMessage.success(
+          autoListingMaster.value
+            ? t('mercariAccounts.autoListingMasterOnMsg')
+            : t('mercariAccounts.autoListingMasterOffMsg')
+        )
+      } catch {
+        // 失败回滚（错误提示由拦截器处理）
+        autoListingMaster.value = !next
+      } finally {
+        autoListingMasterLoading.value = false
+      }
+    }
+
     onMounted(() => {
       load()
+      loadAutoListingMaster()
     })
 
     return {
@@ -428,6 +460,9 @@ export default defineComponent({
       browserKeyFor,
       loading,
       submitting,
+      autoListingMaster,
+      autoListingMasterLoading,
+      onAutoListingMasterToggle,
       list,
       total,
       page,

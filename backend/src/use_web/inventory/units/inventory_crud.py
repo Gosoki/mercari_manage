@@ -41,9 +41,9 @@ def create_inventory(data: InventoryCreate, _claims: dict = Depends(require_auth
             """
             INSERT INTO [inventory] (
                 name, barcode, category_id, product_type_id, owner_user_id, warehouse_id, price, quantity,
-                mercari_item_id, on_sale_quantity, pending_outbound_qty,
+                mercari_item_id, on_sale_quantity, pending_outbound_qty, auto_listing_enabled,
                 description, listing_title, listing_body, image, image_front, image_back, images_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data.name,
@@ -57,6 +57,7 @@ def create_inventory(data: InventoryCreate, _claims: dict = Depends(require_auth
                 (data.mercari_item_id or "").strip() or None,
                 int(data.on_sale_quantity) if data.on_sale_quantity is not None else 0,
                 0,
+                1 if int(data.auto_listing_enabled or 0) == 1 else 0,
                 data.description,
                 data.listing_title,
                 data.listing_body,
@@ -134,10 +135,12 @@ def update_inventory(pid: int, data: InventoryUpdate, _claims: dict = Depends(re
         new_owner_user_id = update_data['owner_user_id']
         if new_owner_user_id is not None and not _user_exists(new_owner_user_id):
             raise HTTPException(status_code=400, detail="商品归属用户不存在")
+    if "auto_listing_enabled" in update_data:
+        update_data["auto_listing_enabled"] = 1 if int(update_data.get("auto_listing_enabled") or 0) == 1 else 0
     allowed_fields = {
         "name", "barcode", "category_id", "product_type_id", "owner_user_id", "warehouse_id", "price",
         "quantity",
-        "mercari_item_id", "on_sale_quantity",
+        "mercari_item_id", "on_sale_quantity", "auto_listing_enabled",
         "description", "listing_title", "listing_body", "image", "image_front", "image_back", "images_json",
     }
     update_data = {k: v for k, v in update_data.items() if k in allowed_fields}

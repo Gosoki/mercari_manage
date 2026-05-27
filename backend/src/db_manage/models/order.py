@@ -157,6 +157,12 @@ class OrderModel(BaseModel):
                 'not_null': True,
                 'default': 0,
             },
+            # 自动出品去重：1=本售出订单已触发过补挂，不再重复上架
+            'auto_relisted': {
+                'type': 'INTEGER',
+                'not_null': True,
+                'default': 0,
+            },
         }
 
     @classmethod

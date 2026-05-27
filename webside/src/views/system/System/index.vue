@@ -97,6 +97,16 @@
             <el-option v-for="s in shippingDaysOptions" :key="s.value" :label="s.label" :value="s.value" />
           </el-select>
         </el-form-item>
+        <el-form-item :label="t('system.defaultCondition')">
+          <el-select v-model="listingDefForm.condition" clearable :placeholder="t('system.autoListingDefaultPlaceholder')" style="width: 100%; max-width: 280px">
+            <el-option v-for="s in conditionOptions" :key="s.value" :label="s.label" :value="s.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('system.defaultSaleType')">
+          <el-select v-model="listingDefForm.sale_type" clearable :placeholder="t('system.autoListingDefaultPlaceholder')" style="width: 100%; max-width: 280px">
+            <el-option v-for="s in saleTypeOptions" :key="s.value" :label="s.label" :value="s.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item :label="t('system.defaultListingAccount')">
           <el-select
             v-model="listingDefForm.mercari_account_id"

@@ -21,6 +21,9 @@ from .units.app_config_handler import (
     ListingDefaultsOut,
     get_listing_defaults,
     put_listing_defaults,
+    AutoListingMasterOut,
+    get_auto_listing_master,
+    put_auto_listing_master,
 )
 from .units.ssl_mitm_handler import (
     download_ca_cert,
@@ -52,6 +55,10 @@ router.add_api_route("/change-password", change_password, methods=["POST"])
 # 应用配置（出品默认值）
 router.add_api_route("/listing-defaults", get_listing_defaults, methods=["GET"], response_model=ListingDefaultsOut)
 router.add_api_route("/listing-defaults", put_listing_defaults, methods=["PUT"], response_model=ListingDefaultsOut)
+
+# 自动出品总开关
+router.add_api_route("/auto-listing-master", get_auto_listing_master, methods=["GET"], response_model=AutoListingMasterOut)
+router.add_api_route("/auto-listing-master", put_auto_listing_master, methods=["PUT"], response_model=AutoListingMasterOut)
 
 # SSL MITM 代理控制
 router.add_api_route("/ssl-mitm/status", get_status, methods=["GET"])

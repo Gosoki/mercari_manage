@@ -53,6 +53,18 @@ export default defineComponent({
       { label: t('system.shippingDays23'), value: '2_3_days' },
       { label: t('system.shippingDays47'), value: '4_7_days' }
     ])
+    // 自动出品兜底默认：商品状态 / 售卖类型
+    const conditionOptions = computed(() => [
+      { label: t('system.conditionNewUnused'), value: 'new_unused' },
+      { label: t('system.conditionAlmostUnused'), value: 'almost_unused' },
+      { label: t('system.conditionGood'), value: 'good' },
+      { label: t('system.conditionFair'), value: 'fair' },
+      { label: t('system.conditionUsed'), value: 'used' }
+    ])
+    const saleTypeOptions = computed(() => [
+      { label: t('system.saleTypeInstantBuy'), value: 'instant_buy' },
+      { label: t('system.saleTypeAuction'), value: 'auction' }
+    ])
 
     function buildShippingFromPath(areaId) {
       if (!areaId) return []
@@ -74,7 +86,10 @@ export default defineComponent({
       shipping_method: null,
       shipping_payer: null,
       shipping_days: null,
-      mercari_account_id: null
+      mercari_account_id: null,
+      // 自动出品兜底默认（库存不存这两个字段）
+      condition: null,
+      sale_type: null
     })
 
     const listingDefLoading = ref(false)
@@ -118,6 +133,8 @@ export default defineComponent({
         listingDefForm.shipping_method = d?.shipping_method ?? null
         listingDefForm.shipping_payer = d?.shipping_payer ?? null
         listingDefForm.shipping_days = d?.shipping_days ?? null
+        listingDefForm.condition = d?.condition ?? null
+        listingDefForm.sale_type = d?.sale_type ?? null
         listingDefForm.mercari_account_id =
           d?.mercari_account_id != null && Number.isFinite(Number(d.mercari_account_id)) && Number(d.mercari_account_id) > 0
             ? Number(d.mercari_account_id)
@@ -138,6 +155,8 @@ export default defineComponent({
           shipping_method: listingDefForm.shipping_method,
           shipping_payer: listingDefForm.shipping_payer,
           shipping_days: listingDefForm.shipping_days,
+          condition: listingDefForm.condition,
+          sale_type: listingDefForm.sale_type,
           mercari_account_id: listingDefForm.mercari_account_id
         })
         ElMessage.success(t('system.listingDefaultsSaved'))
@@ -285,6 +304,8 @@ export default defineComponent({
       shippingPayerOptions,
       shippingMethodOptions,
       shippingDaysOptions,
+      conditionOptions,
+      saleTypeOptions,
       buildShippingFromPath,
       mercariAccountOptionLabel,
       listingDefForm,

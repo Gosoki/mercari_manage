@@ -215,6 +215,9 @@ async def sync_new_data(
             f"已获取 {len(items)} 条订单，开始入库与回填 {pending_total} 条新订单…",
         )
 
+    # 本次新入库且回填成功的订单号，用于自动出品（售出即补挂）
+    inserted_relist_nos: List[str] = []
+
     for idx, item in enumerate(to_save, start=1):
         iid = item.get("id")
         report(
@@ -236,10 +239,24 @@ async def sync_new_data(
             err = await apply_item_info_to_order(str(iid), account_id=aid)
             if err is None:
                 stats["info_enriched"] += 1
+                if result == "inserted":
+                    inserted_relist_nos.append(str(iid))
             else:
                 stats["info_errors"].append({"item_id": iid, "error": err})
         except Exception as exc:
             stats["info_errors"].append({"item_id": iid, "error": f"info_exception:{exc}"})
+
+    # 自动出品（售出即补挂）：仅增量路径触发，按总开关 / 单品开关 / 剩余库存层层把关。
+    # 历史全量同步不接此 hook，避免首次导入海量旧订单触发批量上架。
+    if inserted_relist_nos:
+        try:
+            from .auto_relist import schedule_auto_relist_for_orders
+
+            schedule_auto_relist_for_orders(
+                inserted_relist_nos, seller_id=seller_key, account_id=aid
+            )
+        except Exception as exc:
+            print(f"[sync_new_data] 调度自动出品失败：{exc}")
 
     print(
         f"[sync_new_data] watermark_order_no={watermark_order_no!r} "

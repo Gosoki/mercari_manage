@@ -1,6 +1,17 @@
 <template>
   <div>
     <el-card shadow="never" class="list-card" v-loading="loading">
+      <div class="auto-listing-master-bar">
+        <div class="auto-listing-master-bar__text">
+          <span class="auto-listing-master-bar__title">{{ t('mercariAccounts.autoListingMaster') }}</span>
+          <span class="auto-listing-master-bar__hint">{{ t('mercariAccounts.autoListingMasterHint') }}</span>
+        </div>
+        <el-switch
+          v-model="autoListingMaster"
+          :loading="autoListingMasterLoading"
+          @change="onAutoListingMasterToggle"
+        />
+      </div>
       <el-row :gutter="16">
         <el-col :xs="24" :sm="12" :md="8" :lg="6" class="card-col">
           <div class="add-card">

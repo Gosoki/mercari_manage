@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""应用配置处理器：出品默认值读写。"""
+"""应用配置处理器：出品默认值读写 + 自动出品总开关。"""
 
 from typing import Any, Dict, Optional
 
@@ -14,10 +14,16 @@ _K_SHIP_METHOD = "listing_defaults_shipping_method"
 _K_SHIP_PAYER = "listing_defaults_shipping_payer"
 _K_SHIP_DAYS = "listing_defaults_shipping_days"
 _K_MERCARI = "listing_defaults_mercari_account_id"
+_K_CONDITION = "listing_defaults_condition"
+_K_SALE_TYPE = "listing_defaults_sale_type"
+# 自动出品（售出即补挂）总开关："1"=开，其余=关
+_K_AUTO_MASTER = "auto_listing_master_enabled"
 
 _ALLOWED_METHODS = frozenset({"undecided", "rakuraku", "yuuyu", "tanome", "regular_mail"})
 _ALLOWED_PAYERS = frozenset({"seller", "buyer"})
 _ALLOWED_DAYS = frozenset({"1_2_days", "2_3_days", "4_7_days"})
+_ALLOWED_CONDITIONS = frozenset({"new_unused", "almost_unused", "good", "fair", "used"})
+_ALLOWED_SALE_TYPES = frozenset({"instant_buy", "auction"})
 
 
 class ListingDefaultsOut(BaseModel):
@@ -28,6 +34,9 @@ class ListingDefaultsOut(BaseModel):
     shipping_payer: Optional[str] = None
     shipping_days: Optional[str] = None
     mercari_account_id: Optional[int] = None
+    # 自动出品兜底用（库存不存这两个字段）：商品状态 / 售卖类型
+    condition: Optional[str] = None
+    sale_type: Optional[str] = None
 
 
 class ListingDefaultsUpdate(BaseModel):
@@ -36,6 +45,8 @@ class ListingDefaultsUpdate(BaseModel):
     shipping_payer: Optional[str] = None
     shipping_days: Optional[str] = None
     mercari_account_id: Optional[int] = None
+    condition: Optional[str] = None
+    sale_type: Optional[str] = None
 
     @field_validator("shipping_from_area_id", mode="before")
     @classmethod
@@ -45,7 +56,10 @@ class ListingDefaultsUpdate(BaseModel):
         s = str(v).strip()
         return s if s else None
 
-    @field_validator("shipping_method", "shipping_payer", "shipping_days", mode="before")
+    @field_validator(
+        "shipping_method", "shipping_payer", "shipping_days", "condition", "sale_type",
+        mode="before",
+    )
     @classmethod
     def strip_opt(cls, v: Any) -> Any:
         if v is None:
@@ -54,12 +68,22 @@ class ListingDefaultsUpdate(BaseModel):
         return s if s else None
 
 
+class AutoListingMasterOut(BaseModel):
+    enabled: bool = False
+
+
+class AutoListingMasterUpdate(BaseModel):
+    enabled: bool
+
+
 def _read_listing_defaults() -> Dict[str, Any]:
     raw_area = ConfigEntryModel.get_value(_K_SHIP_FROM)
     raw_method = ConfigEntryModel.get_value(_K_SHIP_METHOD)
     raw_payer = ConfigEntryModel.get_value(_K_SHIP_PAYER)
     raw_days = ConfigEntryModel.get_value(_K_SHIP_DAYS)
     raw_mercari = ConfigEntryModel.get_value(_K_MERCARI)
+    raw_condition = ConfigEntryModel.get_value(_K_CONDITION)
+    raw_sale_type = ConfigEntryModel.get_value(_K_SALE_TYPE)
     mid: Optional[int] = None
     if raw_mercari:
         try:
@@ -74,7 +98,14 @@ def _read_listing_defaults() -> Dict[str, Any]:
         "shipping_payer": raw_payer,
         "shipping_days": raw_days,
         "mercari_account_id": mid,
+        "condition": raw_condition,
+        "sale_type": raw_sale_type,
     }
+
+
+def auto_listing_master_enabled() -> bool:
+    """自动出品总开关是否开启（供同步链路调用）。"""
+    return str(ConfigEntryModel.get_value(_K_AUTO_MASTER) or "").strip() == "1"
 
 
 def get_listing_defaults():
@@ -99,6 +130,16 @@ def put_listing_defaults(body: ListingDefaultsUpdate):
         if v is not None and v not in _ALLOWED_DAYS:
             raise HTTPException(status_code=400, detail=f"无效的 shipping_days: {v}")
 
+    if "condition" in data:
+        v = data["condition"]
+        if v is not None and v not in _ALLOWED_CONDITIONS:
+            raise HTTPException(status_code=400, detail=f"无效的 condition: {v}")
+
+    if "sale_type" in data:
+        v = data["sale_type"]
+        if v is not None and v not in _ALLOWED_SALE_TYPES:
+            raise HTTPException(status_code=400, detail=f"无效的 sale_type: {v}")
+
     if "mercari_account_id" in data:
         mid = data["mercari_account_id"]
         if mid is not None:
@@ -116,8 +157,21 @@ def put_listing_defaults(body: ListingDefaultsUpdate):
         ConfigEntryModel.set_value(_K_SHIP_PAYER, data["shipping_payer"])
     if "shipping_days" in data:
         ConfigEntryModel.set_value(_K_SHIP_DAYS, data["shipping_days"])
+    if "condition" in data:
+        ConfigEntryModel.set_value(_K_CONDITION, data["condition"])
+    if "sale_type" in data:
+        ConfigEntryModel.set_value(_K_SALE_TYPE, data["sale_type"])
     if "mercari_account_id" in data:
         mid = data["mercari_account_id"]
         ConfigEntryModel.set_value(_K_MERCARI, str(mid) if mid is not None else None)
 
     return ListingDefaultsOut(**_read_listing_defaults())
+
+
+def get_auto_listing_master():
+    return AutoListingMasterOut(enabled=auto_listing_master_enabled())
+
+
+def put_auto_listing_master(body: AutoListingMasterUpdate):
+    ConfigEntryModel.set_value(_K_AUTO_MASTER, "1" if body.enabled else "0")
+    return AutoListingMasterOut(enabled=auto_listing_master_enabled())

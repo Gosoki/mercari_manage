@@ -137,6 +137,12 @@ class InventoryModel(BaseModel):
                 'not_null': False,
                 'default': None,
             },
+            # 自动出品（售出即补挂）单品开关：0=关，1=开。需总开关一并开启才生效。
+            'auto_listing_enabled': {
+                'type': 'INTEGER',
+                'not_null': True,
+                'default': 0,
+            },
             'created_at': {
                 'type': 'DATETIME',
                 'not_null': False,

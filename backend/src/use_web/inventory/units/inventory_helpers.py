@@ -22,6 +22,7 @@ INVENTORY_COLUMNS = [
     "mercari_item_id",
     "on_sale_quantity",
     "pending_outbound_qty",
+    "auto_listing_enabled",
     "is_combined",
     "combined_items",
     "description",

@@ -677,6 +677,10 @@
           <el-form-item :label="t('inventory.onSaleQuantity')">
             <el-input-number v-model="form.on_sale_quantity" :min="0" :max="999999" :step="1" controls-position="right" style="width: 160px" />
           </el-form-item>
+          <el-form-item :label="t('inventory.autoListing')">
+            <el-switch v-model="form.auto_listing_enabled" :active-value="1" :inactive-value="0" />
+            <span style="margin-left: 10px; font-size: 12px; color: #909399; line-height: 1.4;">{{ t('inventory.autoListingHint') }}</span>
+          </el-form-item>
         </template>
       </el-form>
         </div>
