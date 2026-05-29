@@ -172,31 +172,11 @@ def update_inventory(pid: int, data: InventoryUpdate, _claims: dict = Depends(re
 
 
 def delete_inventory(pid: int):
+    """假删除：仅置 is_delete=1，保留图片与数据，可通过数据库手动恢复（SET is_delete=0）。"""
     if not _inventory_exists(pid):
         raise HTTPException(status_code=404, detail="商品不存在")
-    images = db.execute_query(
-        """
-        SELECT image, image_front, image_back, images_json, is_combined, combined_items, quantity
-        FROM [inventory] WHERE id = ? LIMIT 1
-        """,
+    db.execute_update(
+        "UPDATE [inventory] SET is_delete = 1 WHERE id = ? AND COALESCE(is_delete, 0) = 0",
         (pid,),
     )
-    if images:
-        paths = _legacy_paths_from_db_columns(images[0][1], images[0][0], images[0][2], images[0][3])
-        for p in paths:
-            delete_image_file(p)
-    try:
-        with db.get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute("BEGIN IMMEDIATE")
-            if images and int(images[0][4] or 0):
-                _adjust_combined_source_stock(
-                    cur,
-                    _parse_combined_items(images[0][5]),
-                    -int(images[0][6] or 0),
-                )
-            cur.execute("DELETE FROM [inventory] WHERE id = ?", (pid,))
-            conn.commit()
-    except HTTPException:
-        raise
     return {"message": "删除成功"}

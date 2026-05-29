@@ -635,18 +635,23 @@ export default defineComponent({
     })
 
     const PRODUCT_EDIT_DIALOG_FORM_WIDTH = 580
+    const PRODUCT_EDIT_IMAGES_ASIDE_WIDTH = 300
     const COMBINED_EDIT_ASIDE_WIDTH = 280
     const COMBINED_EDIT_LAYOUT_GAP = 20
 
     const productEditDialogWidth = computed(() => {
       if (isMobile.value) return '96vw'
+      // 左侧表单 + 间距 + 右侧商品图片 aside（始终存在）
+      let total =
+        PRODUCT_EDIT_DIALOG_FORM_WIDTH +
+        COMBINED_EDIT_LAYOUT_GAP +
+        PRODUCT_EDIT_IMAGES_ASIDE_WIDTH +
+        40
       if (showCombinedEditDetail.value) {
-        // 左侧表单与一般商品同宽 + 间距 + 右侧组成明细
-        const total =
-          PRODUCT_EDIT_DIALOG_FORM_WIDTH + COMBINED_EDIT_LAYOUT_GAP + COMBINED_EDIT_ASIDE_WIDTH + 40
-        return `min(${total}px, 98vw)`
+        // 组合商品再追加一栏「组成明细」
+        total += COMBINED_EDIT_LAYOUT_GAP + COMBINED_EDIT_ASIDE_WIDTH
       }
-      return `${PRODUCT_EDIT_DIALOG_FORM_WIDTH}px`
+      return `min(${total}px, 98vw)`
     })
 
     const rules = computed(() => ({

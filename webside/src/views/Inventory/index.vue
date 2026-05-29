@@ -316,7 +316,7 @@
             <span v-else class="cell-muted">{{ Number(row.pending_outbound_qty || 0) }}</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="!listingPickMode" :label="t('common.operate')" :width="isMobile ? 140 : 160" align="center" header-align="center" :fixed="isMobile ? false : 'right'">
+        <el-table-column v-if="!listingPickMode" :label="t('common.operate')" :width="isMobile ? 140 : 160" align="center" header-align="center" fixed="right">
           <template #default="{ row }">
             <div class="row-actions">
               <el-tooltip
@@ -347,7 +347,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column v-else :label="t('inventory.selectColumn')" width="64" align="center" header-align="center" :fixed="isMobile ? false : 'right'">
+        <el-table-column v-else :label="t('inventory.selectColumn')" width="64" align="center" header-align="center" fixed="right">
           <template #default="{ row }">
             <el-icon v-if="listingPickIds.has(row.id)" color="#67C23A" :size="20"><Check /></el-icon>
             <span v-else class="cell-muted">-</span>
@@ -373,12 +373,12 @@
       class="product-dialog"
       destroy-on-close
     >
+      <el-form :model="form" :rules="rules" ref="formRef">
       <div
-        class="product-edit-dialog-layout"
+        class="product-edit-dialog-layout product-edit-dialog-layout--with-aside"
         :class="{ 'product-edit-dialog-layout--combined': showCombinedEditDetail }"
       >
         <div class="product-edit-dialog-layout__form">
-      <el-form :model="form" :rules="rules" ref="formRef">
         <!-- 条形码行 -->
         <el-form-item :label="t('inventory.barcode')" prop="barcode">
           <el-input
@@ -466,19 +466,22 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item :label="t('inventory.productOwner')" prop="owner_user_id">
-          <el-select
-            v-model="form.owner_user_id"
-            clearable
-            :filterable="!isIOS"
-            :placeholder="t('inventory.pleaseSelectOwner')"
-            class="product-field-inline__main"
-          >
-            <el-option v-for="u in ownerUsers" :key="u.id" :label="u.display_name || u.username" :value="u.id" />
-          </el-select>
-        </el-form-item>
         <el-row :gutter="12">
-          <el-col :xs="24" :sm="16">
+          <el-col :xs="24" :sm="12">
+            <el-form-item :label="t('inventory.productOwner')" prop="owner_user_id">
+              <el-select
+                v-model="form.owner_user_id"
+                clearable
+                :filterable="!isIOS"
+                :placeholder="t('inventory.pleaseSelectOwner')"
+                class="product-field-inline__main"
+                style="width: 100%"
+              >
+                <el-option v-for="u in ownerUsers" :key="u.id" :label="u.display_name || u.username" :value="u.id" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12">
             <el-form-item :label="t('inventory.belongingShelf')" prop="warehouse_id">
               <div class="product-field-inline">
                 <el-cascader
@@ -497,7 +500,9 @@
               </div>
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="8">
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item :label="t('inventory.stockQuantity')" prop="quantity">
               <el-input
                 v-model="quantityEdit"
@@ -508,12 +513,59 @@
               />
             </el-form-item>
           </el-col>
+          <el-col v-if="form.id" :xs="24" :sm="12">
+            <el-form-item :label="t('inventory.onSaleQuantity')">
+              <el-input-number
+                v-model="form.on_sale_quantity"
+                :min="0"
+                :max="999999"
+                :step="1"
+                controls-position="right"
+                style="width: 100%"
+                disabled
+              />
+            </el-form-item>
+          </el-col>
         </el-row>
-        <!-- 商品图（最多 {{ MAX_INVENTORY_IMAGES }} 张） -->
-        <el-form-item :label="t('inventory.productImages')" class="inventory-images-combined-header">
-          <div class="inventory-images-combined-header__inner">
-            <span class="img-label-count">{{ form.images.length }} / {{ MAX_INVENTORY_IMAGES }}</span>
-            <div class="inventory-images-toolbar inventory-images-toolbar--inline">
+        <el-form-item :label="t('inventory.listingTitle')">
+          <el-input v-model="form.listing_title" class="listing-field-fullwidth" type="text" clearable />
+        </el-form-item>
+        <el-form-item :label="t('inventory.productDescription')">
+          <el-input
+            v-model="form.listing_body"
+            class="listing-field-fullwidth"
+            type="textarea"
+            :rows="5"
+            clearable
+          />
+        </el-form-item>
+        <template v-if="form.id">
+          <el-form-item :label="t('inventory.mercariItemId')">
+            <div class="mercari-id-editor">
+              <div
+                v-for="(mid, idx) in mercariIdList.filter((v) => String(v || '').trim() !== '')"
+                :key="idx"
+                class="mercari-id-row"
+              >
+                <el-input
+                  :model-value="mid"
+                  size="small"
+                  class="mercari-id-input"
+                  readonly
+                  disabled
+                />
+              </div>
+            </div>
+          </el-form-item>
+          <el-form-item :label="t('inventory.autoListing')">
+            <el-switch v-model="form.auto_listing_enabled" :active-value="1" :inactive-value="0" />
+          </el-form-item>
+        </template>
+        </div>
+        <aside class="product-edit-dialog-layout__aside product-edit-dialog-layout__aside--images">
+          <div class="inventory-images-aside-block">
+            <div class="inventory-images-aside-header">
+              <span class="inventory-images-aside-header__label">{{ t('inventory.productImages') }}</span>
               <el-button
                 v-if="showCombinedEditDetail"
                 type="primary"
@@ -533,160 +585,123 @@
                 {{ t('common.upload') }}
               </el-button>
               <span v-if="form.images.length >= MAX_INVENTORY_IMAGES" class="img-count-hint">{{ t('inventory.reachedLimit') }}</span>
+              <span class="inventory-images-aside-header__count">{{ form.images.length }} / {{ MAX_INVENTORY_IMAGES }}</span>
             </div>
-          </div>
-        </el-form-item>
-        <el-form-item
-          prop="image_front"
-          style="display: block"
-          :label="t('inventory.productImages')"
-          class="inventory-images-form-item inventory-images-form-item--combined inventory-images-form-item--combined-grid"
-        >
-          <div v-if="form.images.length > 1" class="inventory-images-reorder-hint">
-            {{ t('inventory.dragReorderHint') }}
-          </div>
-          <div class="inventory-images-grid inventory-images-grid--combined">
-            <div
-              v-for="(imgUrl, imgIdx) in form.images"
-              :key="`inv-img-${imgIdx}-${imgUrl || ''}`"
-              class="inventory-image-cell inventory-image-cell--compact"
-              :class="{
-                'inventory-image-cell--draggable': form.images.length > 1 && !!imgUrl,
-                'inventory-image-cell--drag-active': inventoryImageDragFrom === imgIdx,
-                'inventory-image-cell--drop-hover':
-                  inventoryImageDropHoverIndex === imgIdx &&
-                  inventoryImageDragFrom >= 0 &&
-                  inventoryImageDragFrom !== imgIdx
-              }"
-              :draggable="form.images.length > 1 && !!imgUrl"
-              :title="t('inventory.dragToReorder')"
-              @dragstart="onInventoryImageDragStart(imgIdx, $event)"
-              @dragend="onInventoryImageDragEnd"
-              @dragover.prevent="onInventoryImageDragOver(imgIdx, $event)"
-              @dragleave="onInventoryImageDragLeave(imgIdx, $event)"
-              @drop.prevent="onInventoryImageDrop(imgIdx)"
+            <el-form-item
+              prop="image_front"
+              style="display: block"
+              label=""
+              class="inventory-images-form-item inventory-images-form-item--combined inventory-images-form-item--combined-grid inventory-images-form-item--no-label"
             >
-              <div class="inventory-image-cell__frame inventory-image-cell__frame--badge">
-                <span class="inventory-image-cell__badge">{{ imgIdx === 0 ? t('inventory.primaryImage') : t('inventory.imageN', { n: imgIdx + 1 }) }}</span>
+              <div v-if="form.images.length > 1" class="inventory-images-reorder-hint">
+                {{ t('inventory.dragReorderHint') }}
+              </div>
+              <div class="inventory-images-grid inventory-images-grid--combined">
                 <div
-                  class="image-upload-area inventory-form-image-area"
-                  :class="{ 'inventory-form-image-area--empty': !imgUrl }"
-                  @click="!imgUrl && openProductImageSource(imgIdx)"
+                  v-for="(imgUrl, imgIdx) in form.images"
+                  :key="`inv-img-${imgIdx}-${imgUrl || ''}`"
+                  class="inventory-image-cell inventory-image-cell--compact"
+                  :class="{
+                    'inventory-image-cell--draggable': form.images.length > 1 && !!imgUrl,
+                    'inventory-image-cell--drag-active': inventoryImageDragFrom === imgIdx,
+                    'inventory-image-cell--drop-hover':
+                      inventoryImageDropHoverIndex === imgIdx &&
+                      inventoryImageDragFrom >= 0 &&
+                      inventoryImageDragFrom !== imgIdx
+                  }"
+                  :draggable="form.images.length > 1 && !!imgUrl"
+                  :title="t('inventory.dragToReorder')"
+                  @dragstart="onInventoryImageDragStart(imgIdx, $event)"
+                  @dragend="onInventoryImageDragEnd"
+                  @dragover.prevent="onInventoryImageDragOver(imgIdx, $event)"
+                  @dragleave="onInventoryImageDragLeave(imgIdx, $event)"
+                  @drop.prevent="onInventoryImageDrop(imgIdx)"
                 >
-                  <el-image
-                    v-if="imgUrl"
-                    class="inventory-form-preview-img"
-                    :src="inventoryFormImageSrcByIndex(imgIdx)"
-                    :preview-src-list="inventoryFormImagePreviewList()"
-                    :initial-index="imgIdx"
-                    :hide-on-click-modal="true"
-                    :preview-teleported="true"
-                    :z-index="5000"
-                    fit="cover"
-                    referrerpolicy="no-referrer"
-                  />
-                  <div v-else class="upload-placeholder">
-                    <el-icon size="32" color="#4a5a72"><Camera /></el-icon>
+                  <div class="inventory-image-cell__frame inventory-image-cell__frame--badge">
+                    <span class="inventory-image-cell__badge">{{ imgIdx === 0 ? t('inventory.primaryImage') : t('inventory.imageN', { n: imgIdx + 1 }) }}</span>
+                    <div
+                      class="image-upload-area inventory-form-image-area"
+                      :class="{ 'inventory-form-image-area--empty': !imgUrl }"
+                      @click="!imgUrl && openProductImageSource(imgIdx)"
+                    >
+                      <el-image
+                        v-if="imgUrl"
+                        class="inventory-form-preview-img"
+                        :src="inventoryFormImageSrcByIndex(imgIdx)"
+                        :preview-src-list="inventoryFormImagePreviewList()"
+                        :initial-index="imgIdx"
+                        :hide-on-click-modal="true"
+                        :preview-teleported="true"
+                        :z-index="5000"
+                        fit="cover"
+                        referrerpolicy="no-referrer"
+                      />
+                      <div v-else class="upload-placeholder">
+                        <el-icon size="32" color="#4a5a72"><Camera /></el-icon>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    v-if="inventoryFormImmediateImageUpload && noBarcodeImgUpload[imgIdx]?.uploading"
+                    class="nb-inventory-upload-progress"
+                  >
+                    <el-progress :percentage="noBarcodeImgUpload[imgIdx].percent" :stroke-width="10" />
+                  </div>
+                  <div class="img-actions img-actions--inline">
+                    <el-button size="small" type="danger" text @click.stop="removeInventoryFormImageAt(imgIdx)">{{ t('inventory.remove') }}</el-button>
+                    <el-button
+                      v-if="imgUrl"
+                      size="small"
+                      type="primary"
+                      text
+                      @click.stop="replaceInventoryFormImageAt(imgIdx)"
+                    >
+                      {{ t('inventory.replace') }}
+                    </el-button>
+                  </div>
+                </div>
+                <div
+                  v-if="form.images.length < MAX_INVENTORY_IMAGES"
+                  class="inventory-image-cell inventory-image-cell--add inventory-image-cell--compact"
+                >
+                  <div
+                    class="image-upload-area inventory-form-image-area inventory-form-image-area--empty inventory-image-cell__add-placeholder"
+                    @click="openProductImageSource(-1)"
+                  >
+                    <div class="upload-placeholder">
+                      <el-icon size="32" color="#4a5a72"><Camera /></el-icon>
+                      <span class="img-add-hint">{{ t('inventory.canAddMore', { n: MAX_INVENTORY_IMAGES - form.images.length }) }}</span>
+                    </div>
+                  </div>
+                  <div
+                    v-if="inventoryFormImmediateImageUpload && noBarcodeImgUpload[form.images.length]?.uploading"
+                    class="nb-inventory-upload-progress"
+                  >
+                    <el-progress :percentage="noBarcodeImgUpload[form.images.length].percent" :stroke-width="10" />
                   </div>
                 </div>
               </div>
-              <div
-                v-if="inventoryFormImmediateImageUpload && noBarcodeImgUpload[imgIdx]?.uploading"
-                class="nb-inventory-upload-progress"
-              >
-                <el-progress :percentage="noBarcodeImgUpload[imgIdx].percent" :stroke-width="10" />
-              </div>
-              <div class="img-actions img-actions--inline">
-                <el-button size="small" type="danger" text @click.stop="removeInventoryFormImageAt(imgIdx)">{{ t('inventory.remove') }}</el-button>
-                <el-button
-                  v-if="imgUrl"
-                  size="small"
-                  type="primary"
-                  text
-                  @click.stop="replaceInventoryFormImageAt(imgIdx)"
-                >
-                  {{ t('inventory.replace') }}
-                </el-button>
-              </div>
-            </div>
-            <div
-              v-if="form.images.length < MAX_INVENTORY_IMAGES"
-              class="inventory-image-cell inventory-image-cell--add inventory-image-cell--compact"
-            >
-              <div
-                class="image-upload-area inventory-form-image-area inventory-form-image-area--empty inventory-image-cell__add-placeholder"
-                @click="openProductImageSource(-1)"
-              >
-                <div class="upload-placeholder">
-                  <el-icon size="32" color="#4a5a72"><Camera /></el-icon>
-                  <span class="img-add-hint">{{ t('inventory.canAddMore', { n: MAX_INVENTORY_IMAGES - form.images.length }) }}</span>
-                </div>
-              </div>
-              <div
-                v-if="inventoryFormImmediateImageUpload && noBarcodeImgUpload[form.images.length]?.uploading"
-                class="nb-inventory-upload-progress"
-              >
-                <el-progress :percentage="noBarcodeImgUpload[form.images.length].percent" :stroke-width="10" />
-              </div>
-            </div>
+              <input
+                ref="fileInputInventoryPick"
+                type="file"
+                accept="image/*"
+                style="display: none"
+                @change="handleInventoryImageFileChange"
+              />
+              <input
+                ref="fileInputInventoryCapture"
+                type="file"
+                accept="image/*"
+                :capture="isIOS ? 'environment' : undefined"
+                style="display: none"
+                @change="handleInventoryImageFileChange"
+              />
+            </el-form-item>
           </div>
-          <input
-            ref="fileInputInventoryPick"
-            type="file"
-            accept="image/*"
-            style="display: none"
-            @change="handleInventoryImageFileChange"
-          />
-          <input
-            ref="fileInputInventoryCapture"
-            type="file"
-            accept="image/*"
-            :capture="isIOS ? 'environment' : undefined"
-            style="display: none"
-            @change="handleInventoryImageFileChange"
-          />
-        </el-form-item>
-        <el-form-item :label="t('inventory.listingTitle')">
-          <el-input v-model="form.listing_title" class="listing-field-fullwidth" type="text" clearable />
-        </el-form-item>
-        <el-form-item :label="t('inventory.productDescription')">
-          <el-input
-            v-model="form.listing_body"
-            class="listing-field-fullwidth"
-            type="textarea"
-            :rows="5"
-            clearable
-          />
-        </el-form-item>
-        <template v-if="form.id">
-          <el-form-item :label="t('inventory.mercariItemId')">
-            <div class="mercari-id-editor">
-              <div v-for="(_, idx) in mercariIdList" :key="idx" class="mercari-id-row">
-                <el-input
-                  v-model="mercariIdList[idx]"
-                  size="small"
-                  :placeholder="t('inventory.inputItemId')"
-                  class="mercari-id-input"
-                  clearable
-                />
-                <el-button size="small" type="danger" text @click="removeMercariId(idx)">{{ t('common.delete') }}</el-button>
-              </div>
-              <el-button size="small" type="primary" plain @click="addMercariId">{{ t('inventory.addItemId') }}</el-button>
-            </div>
-          </el-form-item>
-          <el-form-item :label="t('inventory.onSaleQuantity')">
-            <el-input-number v-model="form.on_sale_quantity" :min="0" :max="999999" :step="1" controls-position="right" style="width: 160px" />
-          </el-form-item>
-          <el-form-item :label="t('inventory.autoListing')">
-            <el-switch v-model="form.auto_listing_enabled" :active-value="1" :inactive-value="0" />
-            <span style="margin-left: 10px; font-size: 12px; color: #909399; line-height: 1.4;">{{ t('inventory.autoListingHint') }}</span>
-          </el-form-item>
-        </template>
-      </el-form>
-        </div>
+        </aside>
         <aside
           v-if="showCombinedEditDetail"
-          class="product-edit-dialog-layout__aside"
+          class="product-edit-dialog-layout__aside product-edit-dialog-layout__aside--combined"
           v-loading="combinedEditDetailLoading"
         >
           <div class="combined-edit-aside-title">{{ t('inventory.combinedComponentsDetail') }}</div>
@@ -750,6 +765,7 @@
           </div>
         </aside>
       </div>
+      </el-form>
       <template #footer>
         <div class="product-dialog-footer">
           <div class="product-dialog-footer__left">

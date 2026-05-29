@@ -23,6 +23,7 @@ INVENTORY_COLUMNS = [
     "on_sale_quantity",
     "pending_outbound_qty",
     "auto_listing_enabled",
+    "is_delete",
     "is_combined",
     "combined_items",
     "description",
@@ -114,7 +115,7 @@ def _query_inventory_with_joins(where_sql: str = "", params: tuple = ()) -> list
         LEFT JOIN [product_type_category_mappings] ptcm
                ON ptcm.mapping_id = CAST(p.product_type_id AS TEXT)
         LEFT JOIN [users] u ON u.id = p.owner_user_id
-        WHERE 1=1 {where_sql}
+        WHERE COALESCE(p.is_delete, 0) = 0 {where_sql}
     """
     rows = db.execute_query(sql, tuple(params))
     items = [_enrich_inventory_api_dict(_row_to_inventory_detail(r)) for r in rows]
@@ -125,7 +126,10 @@ def _query_inventory_with_joins(where_sql: str = "", params: tuple = ()) -> list
 
 
 def _inventory_exists(pid: int) -> bool:
-    return bool(db.execute_query("SELECT 1 FROM [inventory] WHERE id = ? LIMIT 1", (pid,)))
+    return bool(db.execute_query(
+        "SELECT 1 FROM [inventory] WHERE id = ? AND COALESCE(is_delete, 0) = 0 LIMIT 1",
+        (pid,),
+    ))
 
 
 def _warehouse_exists(wid: int) -> bool:

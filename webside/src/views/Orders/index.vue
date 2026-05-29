@@ -196,7 +196,7 @@
                       </el-tag>
                     </template>
                   </el-table-column>
-                  <el-table-column :label="t('common.operate')" :width="isAdminUser ? 232 : 168" align="center">
+                  <el-table-column :label="t('common.operate')" :width="isAdminUser ? 232 : 168" align="center" fixed="right">
                     <template #default="{ row: line }">
                       <div class="order-outbound-actions">
                         <el-button
@@ -288,7 +288,7 @@
                         {{ expense.__placeholder ? '-' : formatExpenseTs(expense.record_time) }}
                       </template>
                     </el-table-column>
-                    <el-table-column :label="t('common.operate')" width="120" align="center">
+                    <el-table-column :label="t('common.operate')" width="120" align="center" fixed="right">
                       <template #default="{ row: expense }">
                         <el-button
                           v-if="expense.__placeholder"

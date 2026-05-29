@@ -143,6 +143,12 @@ class InventoryModel(BaseModel):
                 'not_null': True,
                 'default': 0,
             },
+            # 假删除标记：0=正常，1=已删除（前端不可见，可通过数据库手动恢复）
+            'is_delete': {
+                'type': 'INTEGER',
+                'not_null': True,
+                'default': 0,
+            },
             'created_at': {
                 'type': 'DATETIME',
                 'not_null': False,
@@ -304,7 +310,7 @@ class InventoryModel(BaseModel):
             LEFT JOIN [product_type_category_mappings] ptcm
               ON ptcm.mapping_id = CAST(p.product_type_id AS TEXT)
             LEFT JOIN [users] u ON u.id = p.owner_user_id
-            WHERE 1=1
+            WHERE COALESCE(p.is_delete, 0) = 0
         """
         params = []
         if keyword:

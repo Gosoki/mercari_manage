@@ -118,18 +118,18 @@
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
   letter-spacing: 0.04em;
 }
-/* 编辑商品弹窗：组合商品左右分栏，右侧组成明细 */
+/* 编辑商品弹窗：左侧表单，右侧商品图片区（组合商品再追加组成明细 aside） */
 .product-edit-dialog-layout {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
-.product-edit-dialog-layout--combined {
+.product-edit-dialog-layout--with-aside {
   flex-direction: row;
   align-items: flex-start;
   gap: 20px;
 }
-.product-edit-dialog-layout--combined .product-edit-dialog-layout__form {
+.product-edit-dialog-layout--with-aside .product-edit-dialog-layout__form {
   flex: 0 0 580px;
   width: 580px;
   max-width: 580px;
@@ -148,6 +148,43 @@
   background: #18233a;
   box-sizing: border-box;
   align-self: stretch;
+}
+.product-edit-dialog-layout__aside--images {
+  flex: 0 0 300px;
+  width: 300px;
+}
+.inventory-images-aside-block :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+.inventory-images-aside-block :deep(.el-form-item__label) {
+  padding-right: 0;
+  text-align: left;
+  width: 100% !important;
+  float: none;
+  display: block;
+}
+.inventory-images-aside-block :deep(.el-form-item__content) {
+  margin-left: 0 !important;
+}
+.inventory-images-aside-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+.inventory-images-aside-header__label {
+  font-size: 14px;
+  color: var(--el-text-color-regular, #c0c4cc);
+  line-height: 1.4;
+}
+.inventory-images-aside-header__count {
+  margin-left: auto;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.inventory-images-form-item--no-label :deep(.el-form-item__label) {
+  display: none;
 }
 .combined-edit-aside-title {
   font-size: 15px;
@@ -314,15 +351,19 @@
   text-align: center;
 }
 @media (max-width: 768px) {
-  .product-edit-dialog-layout--combined {
+  .product-edit-dialog-layout--with-aside {
     flex-direction: column;
   }
-  .product-edit-dialog-layout--combined .product-edit-dialog-layout__form {
+  .product-edit-dialog-layout--with-aside .product-edit-dialog-layout__form {
     flex: 1 1 auto;
     width: 100%;
     max-width: none;
   }
   .product-edit-dialog-layout__aside {
+    flex: none;
+    width: 100%;
+  }
+  .product-edit-dialog-layout__aside--images {
     flex: none;
     width: 100%;
   }

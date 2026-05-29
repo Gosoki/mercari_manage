@@ -185,7 +185,8 @@ async def find_by_image(file: UploadFile = File(...)):
 
     query_hash = _to_dhash(query_img)
     rows = db.execute_query(
-        "SELECT id, image_front, image, image_back, images_json FROM [inventory]"
+        "SELECT id, image_front, image, image_back, images_json FROM [inventory] "
+        "WHERE COALESCE(is_delete, 0) = 0"
     )
     best_id = None
     best_distance = 999
