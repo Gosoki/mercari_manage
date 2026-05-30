@@ -28,8 +28,18 @@ from .use_mercari.get_to_du_list.todolist_sync import sync_todos_from_mercari
 from .use_mercari.on_sale_items_sync import sync_on_sale_items_from_mercari
 from .use_mercari.sync_data import sync_new_data
 from .web_drive.core.account_serial_queue import queue_key_for_mercari_account, run_mercari_serial_async
+from .web_drive.core.mitm_session import silent_data_fetch_scope
 
 log = logging.getLogger(__name__)
+
+
+class _AutoFetchTaskError(Exception):
+    """携带「失败时正在运行的子任务键」的异常，用于日志记录具体是哪个方法出错。"""
+
+    def __init__(self, task_key: str, original: BaseException) -> None:
+        self.task_key = task_key
+        self.original = original
+        super().__init__(str(original))
 
 _INTERVAL_SEC = {
     "15": 15 * 60,
@@ -146,16 +156,24 @@ async def _run_auto_fetch_for_account(aid: int, item: MercariAccountModel) -> Di
         return results
 
     async def _body():
-        if li:
-            results["order_list"] = await sync_new_data(account_id=aid)
-        if os_:
-            results["on_sale"] = await sync_on_sale_items_from_mercari(account_id=aid)
-        if td:
-            results["todos"] = await sync_todos_from_mercari(account_id=aid)
-        if nt:
-            results["notifications"] = await sync_notifications_from_mercari(account_id=aid)
+        # (子任务键, 是否启用, 实际调用)；按顺序串行执行，失败时携带子任务键抛出便于日志定位
+        plan = (
+            ("order_list", li, lambda: sync_new_data(account_id=aid)),
+            ("on_sale", os_, lambda: sync_on_sale_items_from_mercari(account_id=aid)),
+            ("todos", td, lambda: sync_todos_from_mercari(account_id=aid)),
+            ("notifications", nt, lambda: sync_notifications_from_mercari(account_id=aid)),
+        )
+        for key, enabled, call in plan:
+            if not enabled:
+                continue
+            try:
+                results[key] = await call()
+            except Exception as exc:
+                raise _AutoFetchTaskError(key, exc) from exc
 
-    await run_mercari_serial_async(queue_key_for_mercari_account(aid), _body)
+    # 数据获取全程静默：MITM 浏览器以无头方式启动，不在前台显示、不抢焦点。
+    async with silent_data_fetch_scope():
+        await run_mercari_serial_async(queue_key_for_mercari_account(aid), _body)
     return results
 
 
@@ -253,6 +271,23 @@ async def run_mercari_auto_fetch_tick() -> None:
                 detail=results,
             )
             log.info("[mercari_auto_fetch] 完成账号 id=%s", aid)
+        except _AutoFetchTaskError as exc:
+            label = _AUTO_FETCH_TASK_LABELS.get(exc.task_key, exc.task_key)
+            log.exception(
+                "[mercari_auto_fetch] 账号 id=%s 子任务[%s]失败", aid, label
+            )
+            SystemLogModel.add(
+                category="auto_fetch",
+                level="error",
+                account_id=int(aid) if aid is not None else None,
+                account_name=getattr(item, "account_name", None),
+                message=f"自动获取异常[{label}]：{exc.original}",
+                detail={
+                    "task": exc.task_key,
+                    "task_label": label,
+                    "error": str(exc.original),
+                },
+            )
         except Exception as exc:
             log.exception("[mercari_auto_fetch] 账号 id=%s 本轮失败", aid)
             SystemLogModel.add(
