@@ -410,10 +410,15 @@
 .ship-radio-group {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
+  grid-auto-rows: 1fr;
   gap: 10px;
   width: 100%;
+  align-items: stretch;
 }
 .ship-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   border: 1px solid var(--el-border-color);
   border-radius: 6px;
   padding: 10px 12px;
@@ -435,8 +440,24 @@
   font-weight: 600;
   font-size: 14px;
 }
-.ship-card-body {
+.ship-card-content {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex: 1;
   padding-left: 22px;
+}
+.ship-card-img {
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 4px;
+  background: var(--el-fill-color-light);
+}
+.ship-card-body {
+  flex: 1;
+  min-width: 0;
 }
 .ship-card-row {
   display: flex;

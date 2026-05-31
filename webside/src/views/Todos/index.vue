@@ -92,8 +92,8 @@
 
         <el-table-column :label="t('todos.todoType')" width="140" align="center" header-align="center">
           <template #default="{ row }">
-            <el-tag :type="kindTagType(row.kind)" size="small" effect="light">
-              {{ kindLabel(row.kind) }}
+            <el-tag :type="kindTagType(row)" size="small" effect="light">
+              {{ kindLabel(row) }}
             </el-tag>
             <div v-if="row.is_delete" class="row-tag-done">{{ t('todos.done') }}</div>
           </template>
@@ -410,21 +410,29 @@
           <el-radio :value="idx" class="ship-card-radio">
             <span class="ship-card-radio-label">{{ opt.name }}</span>
           </el-radio>
-          <div class="ship-card-body">
-            <div
-              v-for="(row, ri) in (opt.rows || [])"
-              :key="`row-${ri}`"
-              class="ship-card-row"
-            >
-              <span class="ship-card-label">{{ row[0] }}</span>
-              <span :class="['ship-card-value', row[0] === '送料' ? 'ship-card-fee' : '']">{{ row[1] }}</span>
+          <div class="ship-card-content">
+            <img
+              class="ship-card-img"
+              :src="shippingImageUrl(opt.name)"
+              :alt="opt.name"
+              @error="onShippingImgError"
+            />
+            <div class="ship-card-body">
+              <div
+                v-for="(row, ri) in (opt.rows || [])"
+                :key="`row-${ri}`"
+                class="ship-card-row"
+              >
+                <span class="ship-card-label">{{ row[0] }}</span>
+                <span :class="['ship-card-value', row[0] === '送料' ? 'ship-card-fee' : '']">{{ row[1] }}</span>
+              </div>
+              <div
+                v-for="(c, ci) in (opt.caveats || [])"
+                :key="`cv-${ci}`"
+                class="ship-card-caveat"
+              >{{ c }}</div>
+              <div v-if="opt.auto_finish_no_facility" class="ship-card-note">{{ t('todos.noFacilityNeeded') }}</div>
             </div>
-            <div
-              v-for="(c, ci) in (opt.caveats || [])"
-              :key="`cv-${ci}`"
-              class="ship-card-caveat"
-            >{{ c }}</div>
-            <div v-if="opt.auto_finish_no_facility" class="ship-card-note">{{ t('todos.noFacilityNeeded') }}</div>
           </div>
         </div>
       </el-radio-group>

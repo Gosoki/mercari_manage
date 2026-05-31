@@ -41,6 +41,25 @@ from ..sync_progress import make_sync_reporter
 log = logging.getLogger(__name__)
 
 
+# 「待发货」待办：处理时需打开持久化的有头浏览器（前台可见），便于用户在浏览器内
+# 亲自核对/操作发货。kind 命中下列集合，或标题为「発送をしてください」即视为待发货。
+_WAIT_SHIPPING_KINDS = frozenset(
+    {
+        "WaitShippingCard",
+        "WaitShippingPoint",
+        "WaitShippingCarrier",
+        "TransactionWaitShippingFunds",
+    }
+)
+_WAIT_SHIPPING_TITLE = "発送をしてください"
+
+
+def _is_wait_shipping_todo(todo: Any) -> bool:
+    kind = (getattr(todo, "kind", "") or "").strip()
+    title = (getattr(todo, "title", "") or "").strip()
+    return kind in _WAIT_SHIPPING_KINDS or title == _WAIT_SHIPPING_TITLE
+
+
 # 等待两个 API 都被 MITM 截获的总超时（页面加载 + JS 渲染 + API 往返）
 _WAIT_TIMEOUT_SEC = 30
 # 期间每隔多少秒重新 navigate 一次（兜底：偶发未触发 API）
@@ -264,8 +283,21 @@ async def fetch_transaction_detail(
     # ── Step 2: 用账号主 profile 经 MITM 打开交易页（与 /orders 更新列表同模式，
     #            cookie 由 Edge 持久化自动维护；浏览器留给后续 followup op 复用，
     #            队列空闲自动关闭由路由层 suppress_idle_close=True 关闭）──
+    # 待发货待办：强制有头 + 前台可见的持久化浏览器，便于用户在浏览器内亲自核对发货；
+    # 其余类型沿用默认（由 WEB_DRIVE_AUTOMATION_HEADLESS 决定，通常无头静默）。
+    is_wait_shipping = _is_wait_shipping_todo(todo)
+    headless_override = False if is_wait_shipping else None
+    minimized_override = False if is_wait_shipping else None
+    if is_wait_shipping:
+        log.info("[txdetail] 待发货待办 → 打开有头持久化浏览器 account_id=%s", aid)
+
     report("open_browser", f"正在打开交易页（{item_id}）…")
-    async with mitm_automation_browser(aid, start_url=url) as (mgr, main_key):
+    async with mitm_automation_browser(
+        aid,
+        start_url=url,
+        headless=headless_override,
+        minimized=minimized_override,
+    ) as (mgr, main_key):
         report("wait_captures", "等待 shipping_info 与 transaction_messages 截获…")
         shipping, messages = await _wait_for_both_captures(
             mgr=mgr,

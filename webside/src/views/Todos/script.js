@@ -28,6 +28,7 @@ export default defineComponent({
     const KIND_LABEL_KEYS = {
       WaitShippingCard: 'todos.kind.waitShipping',
       WaitShippingPoint: 'todos.kind.waitShipping',
+      WaitShippingCarrier: 'todos.kind.waitShipping',
       TransactionWaitShippingFunds: 'todos.kind.waitShipping',
       MerpayRealcardWaitActivation: 'todos.kind.merpayActivation',
       ReviewedSeller: 'todos.kind.waitReview',
@@ -136,6 +137,7 @@ export default defineComponent({
     const KIND_TAG_TYPES = {
       WaitShippingCard: 'warning',
       WaitShippingPoint: 'warning',
+      WaitShippingCarrier: 'warning',
       TransactionWaitShippingFunds: 'warning',
       MerpayRealcardWaitActivation: 'info',
       ReviewedSeller: 'success',
@@ -306,6 +308,20 @@ export default defineComponent({
       const opt = shippingOptions.value[shippingPickedIdx.value]
       return !!opt && !opt.auto_finish_no_facility
     })
+
+    // 配送尺寸卡片插图：public/static/post_hukuro/<尺寸名>.png（文件名与 opt.name 完全一致）
+    // 带版本号 query 防止旧的 404 负缓存命中（文件后补放进 public 时浏览器可能缓存过 404）
+    function shippingImageUrl(name) {
+      const s = String(name || '').trim()
+      if (!s) return ''
+      return `/static/post_hukuro/${encodeURIComponent(s)}.png?v=1`
+    }
+
+    // 图片缺失时隐藏 <img>，避免显示破图占位
+    function onShippingImgError(e) {
+      const el = e?.target
+      if (el && el.style) el.style.visibility = 'hidden'
+    }
 
     function listParams() {
       const p = { page: page.value, page_size: pageSize.value }
@@ -543,13 +559,22 @@ export default defineComponent({
       await load()
     }
 
-    function kindLabel(kind) {
+    // 入参可为 kind 字符串（下拉筛选）或整行（表格）；标题为「発送をしてください」时一律按待发货
+    function kindLabel(kindOrRow) {
+      const isRow = kindOrRow && typeof kindOrRow === 'object'
+      const kind = String((isRow ? kindOrRow.kind : kindOrRow) || '').trim()
+      const title = isRow ? String(kindOrRow.title || '').trim() : ''
+      if (title === WAIT_SHIPPING_TITLE) return t('todos.kind.waitShipping')
       if (!kind) return '-'
       const key = KIND_LABEL_KEYS[kind]
       return key ? t(key) : kind
     }
 
-    function kindTagType(kind) {
+    function kindTagType(kindOrRow) {
+      const isRow = kindOrRow && typeof kindOrRow === 'object'
+      const kind = String((isRow ? kindOrRow.kind : kindOrRow) || '').trim()
+      const title = isRow ? String(kindOrRow.title || '').trim() : ''
+      if (title === WAIT_SHIPPING_TITLE) return 'warning'
       return KIND_TAG_TYPES[kind] || 'info'
     }
 
@@ -922,6 +947,8 @@ export default defineComponent({
       shippingFacility,
       shippingOptions,
       shippingNeedsFacility,
+      shippingImageUrl,
+      onShippingImgError,
       listParams,
       load,
       loadAccountOptions,

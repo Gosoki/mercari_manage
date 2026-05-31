@@ -318,6 +318,7 @@ async def mitm_automation_browser(
     *,
     start_url: str,
     minimized: Optional[bool] = None,
+    headless: Optional[bool] = None,
 ) -> AsyncIterator[Tuple[EdgeWebDriveManager, str]]:
     """
     上下文管理器:进入时确保账号主 profile 浏览器已开(走 MITM 代理),并导航到目标页。
@@ -330,6 +331,10 @@ async def mitm_automation_browser(
     ``WEB_DRIVE_MITM_MINIMIZED``(默认 ``"1"`` = 最小化)。已有浏览器复用时仅
     刷新标签页,不会重新决定窗口状态。
 
+    ``headless``: 是否无头启动。``None`` = 读环境变量 ``WEB_DRIVE_AUTOMATION_HEADLESS``
+    (默认无头)。显式传 ``False`` 可强制有头(前台可见)，用于需要用户在浏览器内
+    亲自操作/核对的场景(如「発送をしてください」待办的处理)。
+
     注：``WEB_DRIVE_AUTOMATION_HEADLESS`` 默认开启(无头)，故除 /mercari-accounts
     「打开浏览器」外的所有自动化（含本函数）默认真·无头静默运行，不在前台显示
     ( ``minimized`` 此时自动失效)。设环境变量为 0 可改回有头+最小化（调试用）。
@@ -339,7 +344,7 @@ async def mitm_automation_browser(
     mgr = get_web_drive_manager()
     target_url = (start_url or "").strip()
     use_minimized = _default_minimized() if minimized is None else bool(minimized)
-    use_headless = automation_headless_enabled()
+    use_headless = automation_headless_enabled() if headless is None else bool(headless)
 
     # 每次进入都清掉上一轮残留的「需重新登录」标记；若本轮再次跳转登录页，
     # 监听器 / 一次性检查会重新落标。这样支持用户在 /mercari-accounts 改回 active
