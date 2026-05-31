@@ -24,6 +24,17 @@ class ConfirmShippingSelectionRequest(PydanticModel):
     progress_job_id: Optional[str] = None
 
 
+class ChangeShippingMethodRequest(PydanticModel):
+    """在 /shipping_method 页选中配送方式并点「変更する」。
+
+    ``method_value`` 为 radio 的 value（优先），``method_label`` 为可读标签（回落）。
+    """
+
+    method_value: str = ""
+    method_label: str = ""
+    progress_job_id: Optional[str] = None
+
+
 class CameraFrameRequest(PydanticModel):
     """客户端摄像头单帧（data URL）→ 推送到有头浏览器的虚拟摄像头。
 

@@ -225,50 +225,14 @@
                     </span>
                   </div>
                 </div>
-                <div v-if="invMatch.order_nos.length" class="detail-inv-orders">
-                  <span class="detail-label">{{ t('todos.matchedOrders') }}:</span>
-                  <span v-for="ono in invMatch.order_nos" :key="ono" class="detail-inv-order-no">{{ ono }}</span>
-                </div>
               </template>
             </div>
           </section>
 
-          <section class="detail-section">
-            <div class="detail-section-title">{{ t('orders.buyer') }}</div>
-            <div class="detail-buyer">
-              <div class="detail-buyer-name">{{ detail.buyer_name || dash }}</div>
-              <el-tag v-if="detail.buyer_verified" type="success" size="small" effect="light">{{ t('todos.buyerVerified') }}</el-tag>
-              <span v-if="detail.sender_id" class="detail-buyer-id">ID: {{ detail.sender_id }}</span>
-            </div>
-          </section>
-
-          <section v-if="!isReviewedSeller" class="detail-section">
-            <div class="detail-section-title">{{ t('todos.section.shipping') }}</div>
-            <div class="detail-shipping-status">
-              <span class="detail-label">{{ t('todos.currentStatus') }}</span>
-              <span class="detail-value">{{ detail.current_shipping_status || dash }}</span>
-            </div>
-            <div class="detail-shipping-actions">
-              <el-button
-                size="default"
-                @click="onClickShippingSizeLocation"
-              >
-                {{ t('todos.pickSizeAndLocation') }}
-              </el-button>
-              <el-button
-                size="default"
-                :disabled="!detail.has_change_method_btn"
-                @click="onClickShippingChangeMethod"
-              >
-                {{ t('todos.changeShippingMethod') }}
-              </el-button>
-            </div>
-            <div class="detail-empty-hint">{{ t('todos.shippingButtonsHint') }}</div>
-
-            <!-- 待发货：包材选择 + 关联订单出库（发货成功后同步到 /#/orders） -->
-            <div v-if="isWaitShipping" class="detail-ship-commit">
-              <div class="detail-ship-commit-title">{{ t('todos.packagingAndOutbound') }}</div>
-
+          <!-- 包材与出库（待发货时，放在发货之前） -->
+          <section v-if="!isReviewedSeller && isWaitShipping" class="detail-section">
+            <div class="detail-section-title">{{ t('todos.packagingAndOutbound') }}</div>
+            <div class="detail-ship-commit">
               <div class="detail-ship-pack">
                 <div class="detail-label">{{ t('orders.packagingName') }}</div>
                 <el-select
@@ -301,11 +265,14 @@
                   border
                 >
                   <el-table-column
-                    :label="t('orders.inventoryName')"
-                    prop="inventory_name"
-                    min-width="120"
+                    :label="t('todos.outboundLocation')"
+                    min-width="140"
                     show-overflow-tooltip
-                  />
+                  >
+                    <template #default="{ row: line }">
+                      {{ [line.warehouse_name, line.shelf_name, line.shelf_code].filter(Boolean).join(' - ') || dash }}
+                    </template>
+                  </el-table-column>
                   <el-table-column :label="t('common.quantity')" prop="quantity" width="64" align="center" />
                   <el-table-column :label="t('common.status')" width="86" align="center">
                     <template #default="{ row: line }">
@@ -320,8 +287,29 @@
                 </el-table>
                 <div v-else class="detail-empty">{{ t('todos.noOutboundLines') }}</div>
               </div>
+            </div>
+          </section>
 
-              <div class="detail-empty-hint">{{ t('todos.shipCommitHint') }}</div>
+          <section v-if="!isReviewedSeller" class="detail-section">
+            <div class="detail-section-title">{{ t('todos.section.shipping') }}</div>
+            <div class="detail-shipping-status">
+              <span class="detail-label">{{ t('todos.currentStatus') }}</span>
+              <span class="detail-value">{{ detail.current_shipping_status || dash }}</span>
+            </div>
+            <div class="detail-shipping-actions">
+              <el-button
+                size="default"
+                @click="onClickShippingSizeLocation"
+              >
+                {{ t('todos.pickSizeAndLocation') }}
+              </el-button>
+              <el-button
+                size="default"
+                :disabled="!detail.has_change_method_btn"
+                @click="onClickShippingChangeMethod"
+              >
+                {{ t('todos.changeShippingMethod') }}
+              </el-button>
             </div>
           </section>
         </div>
@@ -569,6 +557,38 @@
         <el-button @click="onShipConfirmCancel">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="shipConfirmLoading" @click="onShipConfirmSubmit">
           {{ t('todos.shipConfirmSubmit') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 修改发货方式：下拉选择配送方式 → 点「変更する」 -->
+    <el-dialog
+      v-model="changeMethodVisible"
+      :title="t('todos.changeMethodTitle')"
+      width="460px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <div v-loading="changeMethodLoading">
+        <div class="detail-label" style="margin-bottom: 8px">{{ t('todos.changeMethodPick') }}</div>
+        <el-select v-model="changeMethodPicked" style="width: 100%" :placeholder="t('todos.changeMethodPick')">
+          <el-option
+            v-for="opt in changeMethodOptions"
+            :key="opt.value"
+            :label="opt.label"
+            :value="String(opt.value)"
+          />
+        </el-select>
+      </div>
+      <template #footer>
+        <el-button @click="changeMethodVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button
+          type="primary"
+          :loading="changeMethodLoading"
+          :disabled="!changeMethodPicked"
+          @click="onConfirmChangeShippingMethod"
+        >
+          {{ t('todos.changeMethodSubmit') }}
         </el-button>
       </template>
     </el-dialog>

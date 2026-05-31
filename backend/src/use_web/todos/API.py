@@ -17,6 +17,7 @@ from .units.todos_query import list_kinds, list_todos, match_inventory_for_item
 from .units.todos_sync import (
     camera_frame_endpoint,
     change_shipping_method_endpoint,
+    confirm_change_shipping_method_endpoint,
     close_detail_browser,
     confirm_shipping_selection_endpoint,
     fetch_todo_transaction_detail,
@@ -73,6 +74,7 @@ router.add_api_route("/{todo_id}/submit-review", submit_transaction_review_endpo
 router.add_api_route("/{todo_id}/shipping/start", start_shipping_class_endpoint, methods=["POST"])
 router.add_api_route("/{todo_id}/shipping/confirm", confirm_shipping_selection_endpoint, methods=["POST"])
 router.add_api_route("/{todo_id}/shipping/change-method", change_shipping_method_endpoint, methods=["POST"])
+router.add_api_route("/{todo_id}/shipping/confirm-change-method", confirm_change_shipping_method_endpoint, methods=["POST"])
 router.add_api_route("/{todo_id}/qr-scanner-frame", qr_scanner_frame_endpoint, methods=["GET"])
 router.add_api_route("/{todo_id}/camera-frame", camera_frame_endpoint, methods=["POST"])
 router.add_api_route("/{todo_id}/post-shipping-info", post_shipping_info_endpoint, methods=["GET"])

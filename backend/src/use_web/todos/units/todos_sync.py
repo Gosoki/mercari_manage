@@ -15,6 +15,7 @@ from ....use_mercari.get_to_du_list.transaction_detail import (
     SUPPORTED_REACTIONS,
     capture_qr_scanner_frame,
     click_change_shipping_method,
+    confirm_change_shipping_method,
     confirm_shipping_selection,
     fetch_transaction_detail,
     finalize_post_shipping,
@@ -37,6 +38,7 @@ from ....web_drive.core.manager import get_web_drive_manager
 from ....web_drive.core.paths import mercari_account_key
 from .todos_models import (
     CameraFrameRequest,
+    ChangeShippingMethodRequest,
     ConfirmShippingSelectionRequest,
     SendMessageReactionRequest,
     SendTransactionMessageRequest,
@@ -253,6 +255,37 @@ async def change_shipping_method_endpoint(
         return await run_mercari_serial_async(
             queue_key_for_mercari_account(aid),
             lambda: click_change_shipping_method(int(todo_id), progress_job_id=jid),
+            suppress_idle_close=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        if jid:
+            clear_sync_progress(jid)
+
+
+async def confirm_change_shipping_method_endpoint(
+    todo_id: int, req: ChangeShippingMethodRequest
+) -> Dict[str, Any]:
+    """在 /shipping_method 页选中配送方式并点「変更する」，完成后回到交易页。"""
+    todo = TodoItemModel.find_by_id(id=int(todo_id))
+    if not todo:
+        raise HTTPException(status_code=404, detail="待办事项不存在")
+    aid = int(getattr(todo, "account_id", 0) or 0)
+    if not aid:
+        raise HTTPException(status_code=400, detail="待办事项缺少 account_id")
+    jid = _validate_job_id(req.progress_job_id if req else None)
+    try:
+        return await run_mercari_serial_async(
+            queue_key_for_mercari_account(aid),
+            lambda: confirm_change_shipping_method(
+                int(todo_id),
+                req.method_value or "",
+                method_label=req.method_label or "",
+                progress_job_id=jid,
+            ),
             suppress_idle_close=True,
         )
     except ValueError as exc:

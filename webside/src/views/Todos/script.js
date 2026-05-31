@@ -1010,19 +1010,66 @@ export default defineComponent({
       shipConfirmVisible.value = false
     }
 
+    // ─── 修改发货方式（点「発送方法を変更する」→ /shipping_method → 下拉选择 → 「変更する」）───
+    const changeMethodVisible = ref(false)
+    const changeMethodOptions = ref([])
+    const changeMethodPicked = ref('')
+    const changeMethodLoading = ref(false)
+
     async function onClickShippingChangeMethod() {
       if (!currentRow.value?.id) return
       try {
-        await txOverlay.run({
+        const result = await txOverlay.run({
           title: t('todos.clickingChangeMethod'),
           consoleTag: '[修改发送方式]',
           pollFn: (jobId) => todosApi.getSyncProgress(jobId),
           actionFn: (jobId) =>
             todosApi.changeShippingMethod(currentRow.value.id, { progress_job_id: jobId }),
         })
-        ElMessage.success(t('todos.changeMethodClicked'))
+        const opts = Array.isArray(result?.options) ? result.options : []
+        if (!opts.length) {
+          ElMessage.warning(t('todos.noShippingMethodOptions'))
+          return
+        }
+        changeMethodOptions.value = opts
+        const checked = opts.find((o) => o.checked)
+        changeMethodPicked.value = String((checked || opts[0]).value || '')
+        changeMethodVisible.value = true
       } catch (e) {
         if (!e?.response) ElMessage.error(e?.message || t('todos.clickFailed'))
+      }
+    }
+
+    async function onConfirmChangeShippingMethod() {
+      const id = currentRow.value?.id
+      if (!id) return
+      const val = String(changeMethodPicked.value || '')
+      if (!val) {
+        ElMessage.warning(t('todos.pleasePickShippingMethod'))
+        return
+      }
+      const opt = (changeMethodOptions.value || []).find((o) => String(o.value) === val)
+      changeMethodLoading.value = true
+      try {
+        await txOverlay.run({
+          title: t('todos.changingShippingMethod'),
+          consoleTag: '[修改发送方式]',
+          pollFn: (jobId) => todosApi.getSyncProgress(jobId),
+          actionFn: (jobId) =>
+            todosApi.confirmChangeShippingMethod(id, {
+              method_value: val,
+              method_label: opt?.label || '',
+              progress_job_id: jobId,
+            }),
+        })
+        ElMessage.success(t('todos.shippingMethodChanged'))
+        changeMethodVisible.value = false
+        // 配送方式变更后刷新交易详情（重新抓取页面状态）
+        onDetailRefresh()
+      } catch (e) {
+        if (!e?.response) ElMessage.error(e?.message || t('todos.submitFailed'))
+      } finally {
+        changeMethodLoading.value = false
       }
     }
 
@@ -1287,6 +1334,11 @@ export default defineComponent({
       onShipConfirmSubmit,
       onShipConfirmCancel,
       onClickShippingChangeMethod,
+      changeMethodVisible,
+      changeMethodOptions,
+      changeMethodPicked,
+      changeMethodLoading,
+      onConfirmChangeShippingMethod,
       onDetailSubmit,
       onResetReplyDefault,
       onSendReply,

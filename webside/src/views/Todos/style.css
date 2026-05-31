@@ -175,17 +175,9 @@
   margin-top: 6px;
 }
 .detail-ship-commit {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--el-border-color);
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-.detail-ship-commit-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
 }
 .detail-ship-pack {
   display: flex;

@@ -458,6 +458,9 @@ async def send_transaction_message(
 
 _SIZE_SELECT_BUTTON_TEXT = "商品サイズと発送場所を選択する"
 _CHANGE_METHOD_BUTTON_TEXT = "発送方法を変更する"
+# /shipping_method 页：配送方式 radio 的 name 与确认按钮文本
+_CHANGE_METHOD_RADIO_NAME = "shippingClass"
+_CHANGE_METHOD_SUBMIT_TEXT = "変更する"
 _SELECT_NEXT_BUTTON_TEXT = "選択して次へ"
 _SELECT_FINISH_BUTTON_TEXT = "選択して完了する"
 # ゆうパケットポスト / ゆうパケットポストmini 完了後、交易ページに出る「2次元コードを読み取る」
@@ -1458,9 +1461,140 @@ async def click_change_shipping_method(
     report("click_button", "正在点击「発送方法を変更する」…")
     await btn.first.click()
     log.info("[shipping] 已点击「%s」 account_id=%s", _CHANGE_METHOD_BUTTON_TEXT, aid)
+
+    # 等待跳转到 /shipping_method 并抓取可选配送方式（radio）
+    try:
+        await page.wait_for_url("**/shipping_method*", timeout=8000)
+    except Exception:
+        log.warning("[shipping] /shipping_method への遷移を観測できず (URL: %s)", page.url)
+    await asyncio.sleep(0.4)
+    options = await _scrape_shipping_method_options(page)
     report("done", "已跳转修改发送方式页")
     return {
         "todo_id": int(todo_id),
         "account_id": aid,
         "clicked": True,
+        "options": options,
+    }
+
+
+async def _scrape_shipping_method_options(page: Any) -> List[Dict[str, Any]]:
+    """抓取 /shipping_method 页配送方式 radio 选项（label / value / 是否已选中）。"""
+    try:
+        opts = await page.evaluate(
+            """(name) => {
+                const radios = Array.from(document.querySelectorAll('input[name="' + name + '"]'));
+                return radios.map((r) => {
+                    let label = r.getAttribute('aria-label') || '';
+                    if (!label) {
+                        const lc = r.closest('label');
+                        if (lc) label = (lc.textContent || '').trim();
+                    }
+                    return {
+                        value: r.getAttribute('value') || '',
+                        label: label,
+                        data_location: r.getAttribute('data-location') || '',
+                        checked: r.getAttribute('aria-checked') === 'true' || r.checked === true,
+                    };
+                });
+            }""",
+            _CHANGE_METHOD_RADIO_NAME,
+        )
+        return [o for o in (opts or []) if (o or {}).get("label")]
+    except Exception as exc:
+        log.debug("[change-method] 配送方式の取得に失敗: %s", exc)
+        return []
+
+
+async def confirm_change_shipping_method(
+    todo_id: int,
+    method_value: str = "",
+    *,
+    method_label: str = "",
+    progress_job_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """在 /shipping_method 页选中指定配送方式（按 value 优先，回落 aria-label/文本）并点「変更する」。"""
+    report = make_sync_reporter(progress_job_id)
+    todo = TodoItemModel.find_by_id(id=int(todo_id))
+    if not todo:
+        raise ValueError(f"待办事项 id={todo_id} 不存在")
+    aid = int(todo.account_id)
+    mgr = get_web_drive_manager()
+    auto_key = mercari_account_key(aid)
+    report("attach_browser", "正在连接已打开的浏览器…")
+    try:
+        page = await mgr.active_tab_page(auto_key)
+    except Exception as exc:
+        raise RuntimeError("浏览器未打开或已关闭，请先点「処理」打开交易页") from exc
+
+    val = str(method_value or "").strip()
+    lbl = str(method_label or "").strip()
+
+    report("select_method", "正在选择配送方式…")
+    selected = False
+    if val:
+        try:
+            loc = page.locator(
+                f'input[name="{_CHANGE_METHOD_RADIO_NAME}"][value="{val}"]'
+            )
+            if await loc.count() > 0:
+                await loc.first.check(force=True)
+                selected = True
+        except Exception as exc:
+            log.debug("[change-method] value 选中失败: %s", exc)
+    if not selected and lbl:
+        try:
+            loc = page.locator(
+                f'input[name="{_CHANGE_METHOD_RADIO_NAME}"][aria-label="{lbl}"]'
+            )
+            if await loc.count() > 0:
+                await loc.first.check(force=True)
+                selected = True
+        except Exception as exc:
+            log.debug("[change-method] aria-label 选中失败: %s", exc)
+    if not selected and lbl:
+        try:
+            await page.get_by_text(lbl, exact=False).first.click()
+            selected = True
+        except Exception as exc:
+            log.debug("[change-method] 文本点击失败: %s", exc)
+    if not selected:
+        raise RuntimeError("未找到对应的配送方式选项")
+
+    await asyncio.sleep(0.3)
+    report("click_submit", "正在点击「変更する」…")
+    clicked = False
+    submit = page.get_by_role("button", name=_CHANGE_METHOD_SUBMIT_TEXT)
+    try:
+        if (
+            await submit.count() > 0
+            and await submit.first.is_visible()
+            and await submit.first.is_enabled()
+        ):
+            await submit.first.click()
+            clicked = True
+    except Exception as exc:
+        log.debug("[change-method] role 按钮点击失败: %s", exc)
+    if not clicked:
+        sub2 = page.locator(f'button:has-text("{_CHANGE_METHOD_SUBMIT_TEXT}")')
+        try:
+            await sub2.first.wait_for(state="visible", timeout=3000)
+            await sub2.first.click()
+            clicked = True
+        except Exception as exc:
+            raise RuntimeError(f"未找到「{_CHANGE_METHOD_SUBMIT_TEXT}」按钮") from exc
+
+    # 等待回到 transaction 详情页（离开 /shipping_method）
+    try:
+        await page.wait_for_url("**/transaction/*", timeout=8000)
+    except Exception:
+        log.warning("[shipping] 変更後 transaction への遷移を観測できず (URL: %s)", page.url)
+    log.info("[shipping] 已变更配送方式 value=%s label=%s account_id=%s", val, lbl, aid)
+    report("done", "配送方式已变更")
+    return {
+        "todo_id": int(todo_id),
+        "account_id": aid,
+        "success": True,
+        "method_value": val,
+        "method_label": lbl,
     }

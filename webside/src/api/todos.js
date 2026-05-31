@@ -45,7 +45,10 @@ export const todosApi = {
   /** 用户二次确认后：勾选シール → 发送通知 → 「発送しました」 */
   finalizePostShipping: (todoId, body = {}, axiosConfig = {}) =>
     http.post(`/use_web/todos/${encodeURIComponent(todoId)}/finalize-post-shipping`, body || {}, { timeout: 60000, ...axiosConfig }),
-  /** 点「発送方法を変更する」（仅导航，后续由用户在浏览器内手动） */
+  /** 点「発送方法を変更する」→ 跳到 /shipping_method 并返回可选配送方式（radio）选项 */
   changeShippingMethod: (todoId, body = {}, axiosConfig = {}) =>
-    http.post(`/use_web/todos/${encodeURIComponent(todoId)}/shipping/change-method`, body || {}, { timeout: 60000, ...axiosConfig })
+    http.post(`/use_web/todos/${encodeURIComponent(todoId)}/shipping/change-method`, body || {}, { timeout: 60000, ...axiosConfig }),
+  /** 在 /shipping_method 页选中指定配送方式并点「変更する」 */
+  confirmChangeShippingMethod: (todoId, body = {}, axiosConfig = {}) =>
+    http.post(`/use_web/todos/${encodeURIComponent(todoId)}/shipping/confirm-change-method`, body || {}, { timeout: 60000, ...axiosConfig })
 }
