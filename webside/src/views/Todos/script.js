@@ -197,31 +197,26 @@ export default defineComponent({
     // ===== 待发货：包材选择 + 关联订单出库（发货成功后同步到 /#/orders） =====
     const PACKAGING_ITEM_NONE = '__PACKAGING_NONE__'
     const packagingItemsOptions = ref([])
-    // 用户在交易详情里选定的包材（暂存，发货成功后才真正写入订单）
-    const shipPackaging = reactive({ item_name: '', quantity: 1, unit_price: null })
+    // 用户选定的包材列表（可多个、可同种重复；每行数量固定 1）。末尾始终保留一个空行供继续添加
+    const shipPackagingRows = ref([{ item_name: '' }])
     // 关联订单的出库明细（发货成功后逐条出库）
     const shipOutbound = reactive({ loading: false, lines: [] })
 
-    function expenseAmount(form) {
-      return Math.max(0, Number(form?.quantity || 0)) * Math.max(0, Number(form?.unit_price || 0))
-    }
-    const isShipPackagingConcrete = computed(() => {
-      const n = String(shipPackaging.item_name || '').trim()
-      return Boolean(n && n !== PACKAGING_ITEM_NONE)
-    })
     function selectedPackagingMeta(itemName) {
       return (packagingItemsOptions.value || []).find((it) => it.item_name === itemName) || null
     }
-    function onShipPackagingChange(itemName) {
-      if (itemName === PACKAGING_ITEM_NONE) {
-        shipPackaging.quantity = 1
-        shipPackaging.unit_price = 0
+    /** 归一化包材行：去掉中间空行、末尾补一个空行；选「不选择包材」时独占一行 */
+    function normalizePackagingRows() {
+      const rows = (shipPackagingRows.value || []).map((r) => ({ item_name: String(r?.item_name || '') }))
+      if (rows.some((r) => r.item_name === PACKAGING_ITEM_NONE)) {
+        shipPackagingRows.value = [{ item_name: PACKAGING_ITEM_NONE }]
         return
       }
-      const meta = selectedPackagingMeta(itemName)
-      if (!meta) return
-      shipPackaging.unit_price = Number(meta.amount || 0)
-      if (!shipPackaging.quantity || shipPackaging.quantity < 1) shipPackaging.quantity = 1
+      const filled = rows.filter((r) => r.item_name.trim())
+      shipPackagingRows.value = [...filled, { item_name: '' }]
+    }
+    function onShipPackagingChange() {
+      normalizePackagingRows()
     }
     async function loadPackagingItemOptions() {
       try {
@@ -233,9 +228,7 @@ export default defineComponent({
       }
     }
     function resetShipCommit() {
-      shipPackaging.item_name = ''
-      shipPackaging.quantity = 1
-      shipPackaging.unit_price = null
+      shipPackagingRows.value = [{ item_name: '' }]
       shipOutbound.loading = false
       shipOutbound.lines = []
     }
@@ -277,19 +270,29 @@ export default defineComponent({
       const itemId = String(currentRow.value?.item_id || '').trim()
       if (!nos.length && itemId) nos.push(itemId)
       if (!nos.length) return
-      // 1) 同步包材到订单（与 /#/orders 二级列表一致）
-      const itemName = String(shipPackaging.item_name || '').trim()
+      // 1) 同步包材到订单（与 /#/orders 二级列表一致）。同种包材按选择次数合并为数量
+      const counts = new Map()
+      let hasNone = false
+      for (const r of shipPackagingRows.value || []) {
+        const name = String(r?.item_name || '').trim()
+        if (!name) continue
+        if (name === PACKAGING_ITEM_NONE) {
+          hasNone = true
+          continue
+        }
+        counts.set(name, (counts.get(name) || 0) + 1)
+      }
       try {
-        if (itemName === PACKAGING_ITEM_NONE) {
-          for (const ono of nos) await orderApi.waivePackaging({ order_no: ono })
-        } else if (itemName) {
-          const qty = Math.max(1, Number(shipPackaging.quantity || 1))
-          const unitPrice = Math.max(1, Number(shipPackaging.unit_price || 0))
-          if (unitPrice > 0) {
-            for (const ono of nos) {
-              await costExpenseApi.create({ order_no: ono, item_name: itemName, quantity: qty, unit_price: unitPrice })
+        if (counts.size) {
+          for (const ono of nos) {
+            for (const [name, qty] of counts) {
+              const meta = selectedPackagingMeta(name)
+              const unitPrice = Math.max(0, Number(meta?.amount || 0))
+              await costExpenseApi.create({ order_no: ono, item_name: name, quantity: qty, unit_price: unitPrice })
             }
           }
+        } else if (hasNone) {
+          for (const ono of nos) await orderApi.waivePackaging({ order_no: ono })
         }
       } catch (e) {
         console.error('[包材同步]', e?.message || e)
@@ -1180,11 +1183,9 @@ export default defineComponent({
       inventoryProductType,
       PACKAGING_ITEM_NONE,
       packagingItemsOptions,
-      shipPackaging,
+      shipPackagingRows,
       shipOutbound,
-      isShipPackagingConcrete,
       onShipPackagingChange,
-      expenseAmount,
       replyLoading,
       reviewLoading,
       reactionLoading,

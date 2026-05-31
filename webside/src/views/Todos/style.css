@@ -192,18 +192,11 @@
   flex-direction: column;
   gap: 6px;
 }
-.detail-ship-pack-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.detail-ship-pack-select {
+  width: 100%;
 }
-.detail-ship-pack-row .el-input-number {
-  width: 110px;
-}
-.detail-ship-pack-amount {
-  font-size: 12px;
-  color: var(--el-text-color-regular);
+.detail-ship-pack-select + .detail-ship-pack-select {
+  margin-top: 6px;
 }
 .detail-ship-outbound {
   display: flex;

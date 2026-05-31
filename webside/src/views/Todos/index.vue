@@ -272,11 +272,13 @@
               <div class="detail-ship-pack">
                 <div class="detail-label">{{ t('orders.packagingName') }}</div>
                 <el-select
-                  v-model="shipPackaging.item_name"
+                  v-for="(row, idx) in shipPackagingRows"
+                  :key="idx"
+                  v-model="row.item_name"
                   filterable
                   clearable
                   size="small"
-                  style="width: 100%"
+                  class="detail-ship-pack-select"
                   :placeholder="t('orders.packagingItemPlaceholder')"
                   @change="onShipPackagingChange"
                 >
@@ -288,26 +290,6 @@
                     :value="item.item_name"
                   />
                 </el-select>
-                <div v-if="isShipPackagingConcrete" class="detail-ship-pack-row">
-                  <el-input-number
-                    v-model="shipPackaging.quantity"
-                    :min="1"
-                    :precision="0"
-                    :controls="false"
-                    size="small"
-                  />
-                  <el-input-number
-                    v-model="shipPackaging.unit_price"
-                    :min="1"
-                    :precision="0"
-                    :controls="false"
-                    size="small"
-                    :placeholder="t('orders.unitPrice')"
-                  />
-                  <span class="detail-ship-pack-amount">
-                    {{ t('common.amount') }}: {{ Math.round(expenseAmount(shipPackaging)) }}
-                  </span>
-                </div>
               </div>
 
               <div class="detail-ship-outbound" v-loading="shipOutbound.loading">
