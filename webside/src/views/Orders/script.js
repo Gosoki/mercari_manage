@@ -28,10 +28,6 @@ export default defineComponent({
   setup() {
     const { t } = useI18n()
     const mercariAccountStore = useMercariAccountStore()
-    const globalAccountId = computed({
-      get: () => mercariAccountStore.selectedId,
-      set: (v) => mercariAccountStore.setSelected(v),
-    })
 
     const orderTableRef = ref(null)
     /** 当前已展开的主表行（用于筛选变更时折叠，避免展开区与缓存不一致） */
@@ -358,16 +354,10 @@ export default defineComponent({
 
     async function runSync(mode = 'newData') {
       if (syncLoading.value) return
-      const aid = mercariAccountStore.selectedId
-      if (!aid) {
-        ElMessage.warning(t('orders.pleaseSelectMercariAccount'))
-        return
-      }
-      const name = mercariAccountStore.selectedAccountName || `#${aid}`
       const actionLabel = mode === 'statusRefresh' ? t('orders.actionBatchUpdateStatus') : t('orders.actionUpdateSellingList')
       try {
         await ElMessageBox.confirm(
-          t('orders.confirmSyncMessage', { name, action: actionLabel }),
+          t('orders.confirmSyncMessage', { action: actionLabel }),
           t('orders.confirmSyncTitle'),
           { type: 'info', confirmButtonText: t('orders.start'), cancelButtonText: t('common.cancel') },
         )
@@ -410,7 +400,7 @@ export default defineComponent({
 
       let syncHadError = false
       try {
-        const payload = { account_id: aid, progress_job_id: progressJobId }
+        const payload = { progress_job_id: progressJobId }
         if (mode === 'statusRefresh') {
           const res = await mercariApi.batchRefreshInfo(payload)
           const d = res.data || {}
@@ -428,6 +418,8 @@ export default defineComponent({
           const d = res.data || {}
           ElMessage.success(
             t('orders.updateDoneMsg', {
+              accountCount: d.account_count ?? 0,
+              failCount: d.fail_count ?? 0,
               api: d.api_item_count ?? 0,
               pending: d.pending_new ?? 0,
               inserted: d.inserted ?? 0,
@@ -1636,7 +1628,6 @@ export default defineComponent({
       mercariImageUrlList,
       t,
       mercariAccountStore,
-      globalAccountId,
       orderTableRef,
       lastExpandedRows,
       ownerUsers,

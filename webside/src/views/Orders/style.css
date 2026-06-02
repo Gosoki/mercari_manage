@@ -75,9 +75,6 @@
   flex-wrap: wrap;
   gap: 10px;
 }
-.sync-account-select {
-  width: 180px;
-}
 .table-card {
   border-radius: 8px;
 }

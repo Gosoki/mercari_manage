@@ -14,5 +14,8 @@ export const mercariAccountApi = {
    * account_key: mercari_prepare（新增）或 mercari_{id}（编辑）
    */
   fetchSellerIdViaMitm: (data, axiosConfig = {}) =>
-    http.post('/use_web/mercari-accounts/fetch-seller-id-via-mitm', data, { timeout: 0, ...axiosConfig })
+    http.post('/use_web/mercari-accounts/fetch-seller-id-via-mitm', data, { timeout: 0, ...axiosConfig }),
+  /** 单账号「同步数据」：一键同步该账号在各业务页面的数据（待办/通知/在售/订单），可能较久 */
+  syncData: (id, data = {}, axiosConfig = {}) =>
+    http.post(`/use_web/mercari-accounts/${id}/sync-data`, data, { timeout: 0, ...axiosConfig })
 }

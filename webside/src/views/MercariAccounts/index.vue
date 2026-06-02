@@ -41,9 +41,9 @@
               <el-button
                 size="small"
                 type="success"
-                :loading="syncingIds.has(row.id)"
-                @click="fetchHistory(row)"
-              >{{ t('mercariAccounts.fetchHistory') }}</el-button>
+                :loading="syncDataIds.has(row.id)"
+                @click="syncAccountData(row)"
+              >{{ t('mercariAccounts.syncData') }}</el-button>
               <el-button size="small" @click="openEdit(row)">{{ t('common.edit') }}</el-button>
             </div>
           </el-card>
@@ -201,6 +201,13 @@
               @click="openPrepareLoginBrowser"
             >{{ t('mercariAccounts.openLoginBrowser') }}</el-button>
             <el-button v-if="!form.id" plain @click="onFetchUserInfoPlaceholder">{{ t('mercariAccounts.fetchUserInfo') }}</el-button>
+            <el-button
+              v-if="form.id"
+              type="success"
+              plain
+              :loading="syncingIds.has(form.id)"
+              @click="fetchHistoryFromForm"
+            >{{ t('mercariAccounts.fetchHistory') }}</el-button>
             <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
             <el-button type="primary" :loading="submitting" @click="submit">{{ t('common.save') }}</el-button>
           </div>

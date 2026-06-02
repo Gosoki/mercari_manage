@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """在售商品列表处理器：从煤炉同步及详情拉取。"""
+import logging
 import re
 from typing import Any, Dict, List, Set
 
@@ -11,6 +12,8 @@ from ....web_drive.core.account_serial_queue import (
     resolve_mercari_account_id,
     run_mercari_serial_async,
 )
+from ....web_drive.core.manager import get_web_drive_manager
+from ....web_drive.core.paths import mercari_account_key
 from ....use_mercari.on_sale_item_detail_sync import fetch_detail_and_sync_inventory
 from ....use_mercari.on_sale_items_sync import sync_on_sale_items_from_mercari
 from ....use_mercari.on_sale_sync_progress import (
@@ -18,7 +21,10 @@ from ....use_mercari.on_sale_sync_progress import (
     get_on_sale_sync_progress,
 )
 from ....use_mercari.sync_progress import clear_sync_progress
-from ....use_mercari.sync_data import resolve_account_id_by_seller_id
+from ....use_mercari.sync_data import (
+    resolve_account_id_by_seller_id,
+    resolve_enabled_account_ids,
+)
 
 from .on_sale_items_models import (
     FetchOnSaleDetailRequest,
@@ -31,14 +37,20 @@ _FETCH_DETAILS_BATCH_MAX = 200
 # 与 listing_post_progress 相同的安全字符集，避免路径注入
 _SYNC_JOB_ID_RE = re.compile(r"^[a-zA-Z0-9_.-]{1,128}$")
 
+log = logging.getLogger(__name__)
+
 
 async def sync_on_sale(data: SyncOnSaleRequest):
     """
-    从煤炉拉取在售列表并同步本地：用账号主 profile ``mercari_{id}`` 经 MITM 打开
-    jp.mercari.com/mypage/listings，截获 api.mercari.jp/items/get_items 响应。
+    从煤炉同步所有已开启账号（status=active 且 is_open=1）的在售列表并写入本地：用各账号主
+    profile ``mercari_{id}`` 经 MITM 打开 jp.mercari.com/mypage/listings，截获
+    api.mercari.jp/items/get_items 响应。
     在同一浏览器会话内，对本次**新增**的商品依次打开商品页截获 items/get，执行与「获取详情」相同的库存回写（可用 WEB_DRIVE_ON_SALE_SYNC_AUTO_DETAIL=0 关闭）。
     新列表中不存在的本地记录不物理删除，而是标记 is_delete=1（软删除）。
     列表接口默认仅返回 is_delete=0 数据。须已启动 mitmdump（与出品/抓包共用）。
+
+    不再指定单个账号：点击即同步全部已开启账号，逐个串行执行并汇总结果——每个账号的在售
+    抓取走按 seller 区分的响应文件，且每账号完成后立即关闭其浏览器，确保严格不重叠。
 
     ``progress_job_id`` 与 GET /use_web/on-sale-items/sync-progress/{job_id} 配合，
     供前端轮询当前步骤展示全屏等待框。
@@ -46,25 +58,60 @@ async def sync_on_sale(data: SyncOnSaleRequest):
     jid = (data.progress_job_id or "").strip() or None
     if jid and not _SYNC_JOB_ID_RE.fullmatch(jid):
         raise HTTPException(status_code=400, detail="invalid progress_job_id")
+
     try:
-        aid = resolve_mercari_account_id(data.account_id)
-        result = await run_mercari_serial_async(
-            queue_key_for_mercari_account(aid),
-            lambda: sync_on_sale_items_from_mercari(
-                account_id=aid,
-                progress_job_id=jid,
-            ),
-        )
+        account_ids = resolve_enabled_account_ids()
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except TimeoutError as exc:
-        raise HTTPException(status_code=504, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"同步失败: {exc}") from exc
+
+    accounts: List[Dict[str, Any]] = []
+    api_item_count = inserted = updated = marked_deleted = 0
+    fail_count = 0
+    mgr = get_web_drive_manager()
+    try:
+        for aid in account_ids:
+            try:
+                stats = await run_mercari_serial_async(
+                    queue_key_for_mercari_account(aid),
+                    lambda aid=aid: sync_on_sale_items_from_mercari(
+                        account_id=aid,
+                        progress_job_id=jid,
+                    ),
+                )
+            except Exception as exc:  # noqa: BLE001 单个账号失败不影响其余账号
+                fail_count += 1
+                accounts.append({"account_id": aid, "error": str(exc)})
+                continue
+            else:
+                api_item_count += int(stats.get("api_item_count", 0) or 0)
+                inserted += int(stats.get("inserted", 0) or 0)
+                updated += int(stats.get("updated", 0) or 0)
+                marked_deleted += int(stats.get("marked_deleted", 0) or 0)
+                accounts.append(stats)
+            finally:
+                # 关闭当前账号浏览器，确保与下一账号不重叠（队列层默认 ~10s 后才关）。
+                try:
+                    await mgr.close_session(mercari_account_key(aid), force=True)
+                except Exception as close_exc:  # noqa: BLE001 关闭失败不阻断后续账号
+                    log.warning(
+                        "[on_sale] 关闭 account_id=%s 浏览器失败: %s", aid, close_exc
+                    )
     finally:
         if jid:
             clear_on_sale_sync_progress(jid)
-    return {"success": True, "data": result}
+
+    return {
+        "success": True,
+        "data": {
+            "accounts": accounts,
+            "account_count": len(account_ids),
+            "fail_count": fail_count,
+            "api_item_count": api_item_count,
+            "inserted": inserted,
+            "updated": updated,
+            "marked_deleted": marked_deleted,
+        },
+    }
 
 
 def on_sale_sync_progress(job_id: str):

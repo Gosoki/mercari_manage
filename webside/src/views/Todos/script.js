@@ -2,7 +2,7 @@ import { defineComponent, computed, nextTick, onBeforeUnmount, onMounted, reacti
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Loading } from '@element-plus/icons-vue'
-import { todosApi, mercariAccountApi, costRecordApi, costExpenseApi, orderApi } from '@/api'
+import { todosApi, costRecordApi, costExpenseApi, orderApi } from '@/api'
 import { useMercariAccountStore } from '@/stores/mercariAccount.js'
 import { useSyncOverlay } from '@/composables/useSyncOverlay'
 import SyncOverlay from '@/components/SyncOverlay.vue'
@@ -20,10 +20,6 @@ export default defineComponent({
     const txOverlay = useSyncOverlay()
 
     const mercariAccountStore = useMercariAccountStore()
-    const globalAccountId = computed({
-      get: () => mercariAccountStore.selectedId,
-      set: (v) => mercariAccountStore.setSelected(v),
-    })
 
     const KIND_LABEL_KEYS = {
       WaitShippingCard: 'todos.kind.waitShipping',
@@ -192,12 +188,10 @@ export default defineComponent({
 
     const filters = ref({
       keyword: '',
-      account_id: null,
       kind: '',
       include_deleted: false,
     })
 
-    const accountOptions = ref([])
     const kindOptions = ref([])
 
     const syncLoading = ref(false)
@@ -513,7 +507,6 @@ export default defineComponent({
       const p = { page: page.value, page_size: pageSize.value }
       const kw = filters.value.keyword?.trim()
       if (kw) p.keyword = kw
-      if (filters.value.account_id) p.account_id = filters.value.account_id
       if (filters.value.kind) p.kind = filters.value.kind
       if (filters.value.include_deleted) p.include_deleted = true
       return p
@@ -529,18 +522,6 @@ export default defineComponent({
         ElMessage.error(e?.message || t('todos.loadFailed'))
       } finally {
         loading.value = false
-      }
-    }
-
-    async function loadAccountOptions() {
-      try {
-        const res = await mercariAccountApi.list({ page: 1, page_size: 200 })
-        accountOptions.value = (res.items || []).map((a) => ({
-          id: a.id,
-          label: `${a.account_name}${a.seller_id ? ` (${a.seller_id})` : ''}`,
-        }))
-      } catch {
-        accountOptions.value = []
       }
     }
 
@@ -572,15 +553,9 @@ export default defineComponent({
 
     async function runSync() {
       if (syncLoading.value) return
-      const aid = mercariAccountStore.selectedId
-      if (!aid) {
-        ElMessage.warning(t('todos.pleasePickAccountFirst'))
-        return
-      }
-      const name = mercariAccountStore.selectedAccountName || `#${aid}`
       try {
         await ElMessageBox.confirm(
-          t('todos.syncConfirmMessage', { name }),
+          t('todos.syncConfirmMessage'),
           t('todos.syncConfirmTitle'),
           { type: 'info', confirmButtonText: t('todos.start'), cancelButtonText: t('common.cancel') },
         )
@@ -621,10 +596,11 @@ export default defineComponent({
 
       let syncHadError = false
       try {
-        const d = (await todosApi.sync({ account_id: aid, progress_job_id: progressJobId })) || {}
+        const d = (await todosApi.sync({ progress_job_id: progressJobId })) || {}
         ElMessageBox.alert(
           t('todos.syncResultMessage', {
-            accountId: d.account_id ?? '-',
+            accountCount: d.account_count ?? 0,
+            failCount: d.fail_count ?? 0,
             inserted: d.inserted ?? 0,
             updated: d.updated ?? 0,
             markedDone: d.marked_deleted ?? 0,
@@ -1317,7 +1293,7 @@ export default defineComponent({
 
     onMounted(() => {
       mercariAccountStore.ensureLoaded()
-      Promise.all([loadAccountOptions(), loadKindOptions()])
+      loadKindOptions()
       load()
     })
 
@@ -1342,7 +1318,6 @@ export default defineComponent({
       Download,
       Loading,
       todosApi,
-      mercariAccountApi,
       useMercariAccountStore,
       useSyncOverlay,
       SyncOverlay,
@@ -1350,7 +1325,6 @@ export default defineComponent({
       t,
       txOverlay,
       mercariAccountStore,
-      globalAccountId,
       KIND_LABEL_KEYS,
       DEFAULT_REPLY,
       DEFAULT_REVIEW,
@@ -1362,7 +1336,6 @@ export default defineComponent({
       page,
       pageSize,
       filters,
-      accountOptions,
       kindOptions,
       syncLoading,
       bulkReviewLoading,
@@ -1412,7 +1385,6 @@ export default defineComponent({
       onShippingImgError,
       listParams,
       load,
-      loadAccountOptions,
       loadKindOptions,
       onFilterChange,
       onPageChange,

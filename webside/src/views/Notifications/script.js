@@ -2,7 +2,7 @@ import { defineComponent, computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Loading } from '@element-plus/icons-vue'
-import { notificationsApi, mercariAccountApi } from '@/api'
+import { notificationsApi } from '@/api'
 import { useMercariAccountStore } from '@/stores/mercariAccount.js'
 import BundlePurchaseDialog from '@/components/BundlePurchaseDialog.vue'
 import ItemCommentDialog from '@/components/ItemCommentDialog.vue'
@@ -18,10 +18,6 @@ export default defineComponent({
   setup() {
     const { t } = useI18n()
     const mercariAccountStore = useMercariAccountStore()
-    const globalAccountId = computed({
-      get: () => mercariAccountStore.selectedId,
-      set: (v) => mercariAccountStore.setSelected(v),
-    })
 
     const KIND_LABEL_KEYS = {
       Like: 'notifications.kindLike',
@@ -75,7 +71,6 @@ export default defineComponent({
 
     const filters = ref({
       keyword: '',
-      account_id: null,
       kind: '',
       // 默认仅显示未读，已读的需要勾掉才能看到
       only_unread: true,
@@ -83,7 +78,6 @@ export default defineComponent({
       show_likes: false,
     })
 
-    const accountOptions = ref([])
     const kindOptions = ref([])
     const syncLoading = ref(false)
     const markReadLoadingIds = ref(new Set())
@@ -99,7 +93,6 @@ export default defineComponent({
       const p = { page: page.value, page_size: pageSize.value }
       const kw = filters.value.keyword?.trim()
       if (kw) p.keyword = kw
-      if (filters.value.account_id) p.account_id = filters.value.account_id
       if (filters.value.kind) p.kind = filters.value.kind
       if (filters.value.only_unread) p.only_unread = true
       // 用户没显式按 kind=Like 过滤且未勾选「显示点赞」时，排除 Like
@@ -119,18 +112,6 @@ export default defineComponent({
         ElMessage.error(e?.message || t('notifications.loadFailed'))
       } finally {
         loading.value = false
-      }
-    }
-
-    async function loadAccountOptions() {
-      try {
-        const res = await mercariAccountApi.list({ page: 1, page_size: 200 })
-        accountOptions.value = (res.items || []).map((a) => ({
-          id: a.id,
-          label: `${a.account_name}${a.seller_id ? ` (${a.seller_id})` : ''}`,
-        }))
-      } catch {
-        accountOptions.value = []
       }
     }
 
@@ -160,15 +141,9 @@ export default defineComponent({
 
     async function runSync() {
       if (syncLoading.value) return
-      const aid = mercariAccountStore.selectedId
-      if (!aid) {
-        ElMessage.warning(t('notifications.pleaseSelectMercariAccount'))
-        return
-      }
-      const name = mercariAccountStore.selectedAccountName || `#${aid}`
       try {
         await ElMessageBox.confirm(
-          t('notifications.syncConfirmContent', { name }),
+          t('notifications.syncConfirmContent'),
           t('notifications.syncConfirmTitle'),
           { type: 'info', confirmButtonText: t('notifications.startBtn'), cancelButtonText: t('common.cancel') },
         )
@@ -209,10 +184,11 @@ export default defineComponent({
 
       let syncHadError = false
       try {
-        const d = (await notificationsApi.sync({ account_id: aid, progress_job_id: progressJobId })) || {}
+        const d = (await notificationsApi.sync({ progress_job_id: progressJobId })) || {}
         ElMessageBox.alert(
           t('notifications.syncResultContent', {
-            accountId: d.account_id ?? '-',
+            accountCount: d.account_count ?? 0,
+            failCount: d.fail_count ?? 0,
             inserted: d.inserted ?? 0,
             updated: d.updated ?? 0,
             total: d.total ?? 0,
@@ -443,7 +419,7 @@ export default defineComponent({
 
     onMounted(() => {
       mercariAccountStore.ensureLoaded()
-      Promise.all([loadAccountOptions(), loadKindOptions()])
+      loadKindOptions()
       load()
     })
 
@@ -465,14 +441,12 @@ export default defineComponent({
       Download,
       Loading,
       notificationsApi,
-      mercariAccountApi,
       useMercariAccountStore,
       BundlePurchaseDialog,
       ItemCommentDialog,
       DesiredPriceDialog,
       t,
       mercariAccountStore,
-      globalAccountId,
       KIND_LABEL_KEYS,
       KIND_TAG_TYPES,
       KIND_ACTION,
@@ -483,7 +457,6 @@ export default defineComponent({
       page,
       pageSize,
       filters,
-      accountOptions,
       kindOptions,
       syncLoading,
       markReadLoadingIds,
@@ -494,7 +467,6 @@ export default defineComponent({
       syncProgressTimer,
       listParams,
       load,
-      loadAccountOptions,
       loadKindOptions,
       onFilterChange,
       onPageChange,

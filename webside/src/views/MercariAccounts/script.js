@@ -318,6 +318,7 @@ export default defineComponent({
     }
 
     const syncingIds = ref(new Set())
+    const syncDataIds = ref(new Set())
     const browserLoadingKeys = ref(new Set())
     const fetchSellerIdLoading = ref(false)
 
@@ -355,6 +356,39 @@ export default defineComponent({
 
     function openBrowserForSavedAccount(row) {
       openBrowserByKey(browserKeyFor(row.id), row.account_name || t('mercariAccounts.accountFallbackLabel', { id: row.id }))
+    }
+
+    /** 单账号「同步数据」：一键同步该账号在各业务页面（待办/通知/在售/订单）的数据 */
+    async function syncAccountData(row) {
+      if (syncDataIds.value.has(row.id)) return
+      syncDataIds.value = new Set([...syncDataIds.value, row.id])
+      try {
+        const res = await mercariAccountApi.syncData(row.id)
+        const d = res.data || {}
+        const okN = d.ok_count ?? 0
+        const failN = d.fail_count ?? 0
+        const msg = t('mercariAccounts.msgSyncDataResult', {
+          name: row.account_name || `#${row.id}`,
+          ok: okN,
+          fail: failN,
+        })
+        if (failN > 0) ElMessage.warning(msg)
+        else ElMessage.success(msg)
+      } finally {
+        const next = new Set(syncDataIds.value)
+        next.delete(row.id)
+        syncDataIds.value = next
+      }
+    }
+
+    /** 编辑表单内「获取历史数据」：复用 fetchHistory，按当前编辑的账号执行 */
+    function fetchHistoryFromForm() {
+      if (!form.value.id) return
+      return fetchHistory({
+        id: form.value.id,
+        seller_id: form.value.seller_id,
+        account_name: form.value.account_name,
+      })
     }
 
     async function fetchHistory(row) {
@@ -463,11 +497,14 @@ export default defineComponent({
       remove,
       removeFromDialog,
       syncingIds,
+      syncDataIds,
       browserLoadingKeys,
       fetchSellerIdLoading,
       openBrowserByKey,
       openBrowserForSavedAccount,
       fetchHistory,
+      fetchHistoryFromForm,
+      syncAccountData,
     }
   },
 })

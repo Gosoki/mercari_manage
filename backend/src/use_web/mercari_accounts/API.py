@@ -17,6 +17,7 @@ from .units.mercari_accounts_mitm import (
     fetch_auth_via_mitm,
     fetch_seller_id_via_mitm,
 )
+from .units.mercari_accounts_sync import sync_account_all_data
 
 router = APIRouter()
 
@@ -25,4 +26,5 @@ router.add_api_route("", create_mercari_account, methods=["POST"])
 router.add_api_route("/{aid}", update_mercari_account, methods=["PUT"])
 router.add_api_route("/fetch-seller-id-via-mitm", fetch_seller_id_via_mitm, methods=["POST"])
 router.add_api_route("/{aid}/fetch-auth-via-mitm", fetch_auth_via_mitm, methods=["POST"])
+router.add_api_route("/{aid}/sync-data", sync_account_all_data, methods=["POST"])
 router.add_api_route("/{aid}", delete_mercari_account, methods=["DELETE"])

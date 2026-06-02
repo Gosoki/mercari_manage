@@ -10,21 +10,6 @@
             @change="onFilterChange"
           />
           <el-select
-            v-model="filters.account_id"
-            :placeholder="t('notifications.account')"
-            clearable
-            filterable
-            style="min-width: 200px"
-            @change="onFilterChange"
-          >
-            <el-option
-              v-for="a in accountOptions"
-              :key="a.id"
-              :label="a.label"
-              :value="a.id"
-            />
-          </el-select>
-          <el-select
             v-model="filters.kind"
             :placeholder="t('common.type')"
             clearable
@@ -47,20 +32,6 @@
           </el-checkbox>
         </el-col>
         <el-col :xs="24" :md="8" class="search-actions">
-          <el-select
-            v-model="globalAccountId"
-            :placeholder="t('notifications.selectMercariAccount')"
-            filterable
-            class="sync-account-select"
-            :loading="mercariAccountStore.loading"
-          >
-            <el-option
-              v-for="acc in mercariAccountStore.activeAccounts"
-              :key="acc.id"
-              :label="acc.account_name"
-              :value="acc.id"
-            />
-          </el-select>
           <el-button type="primary" :icon="Download" :loading="syncLoading" @click="runSync">
             {{ t('notifications.syncFromMercari') }}
           </el-button>

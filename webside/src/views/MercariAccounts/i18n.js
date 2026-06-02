@@ -31,6 +31,7 @@ export default {
       autoFetchOff: "关闭",
       pauseShort: "暂停",
       fetchHistory: "获取历史数据",
+      syncData: "同步数据",
       addDialogTitle: "新增煤炉账号",
       editDialogTitle: "编辑煤炉账号",
       formIntroTip: "打开本弹窗时会自动请求启动「新增前登录」浏览器（会话键 mercari_prepare），请在 Edge 中登录 jp.mercari.com。账号状态默认为「停用」，填写账号名称等信息后保存即可入库。登录完成后可使用「获取用户信息」完善资料（实现待定）。",
@@ -98,6 +99,7 @@ export default {
       confirmFetchHistoryBody: "本地订单库中尚无该卖家的记录。确认从煤炉全量拉取出售中与历史订单？耗时可能较长，请勿关闭页面。",
       confirmFetchBtn: "确认拉取",
       msgSyncResult: "「{name}」同步完成：新增 {inserted} 条，更新 {updated} 条，共 {total} 条",
+      msgSyncDataResult: "「{name}」数据同步完成：成功 {ok} 项，失败 {fail} 项",
     },
   },
   ja: {
@@ -132,6 +134,7 @@ export default {
       autoFetchOff: "無効",
       pauseShort: "一時停止",
       fetchHistory: "履歴データを取得",
+      syncData: "データ同期",
       addDialogTitle: "メルカリアカウントを追加",
       editDialogTitle: "メルカリアカウントを編集",
       formIntroTip: "このダイアログを開くと「追加前ログイン」ブラウザ（セッションキー mercari_prepare）が自動で起動します。Edge で jp.mercari.com にログインしてください。アカウントの状態は既定で「無効」です。アカウント名等を入力して保存すれば登録できます。ログイン後は「ユーザー情報を取得」で情報を補完できます（実装予定）。",
@@ -199,6 +202,7 @@ export default {
       confirmFetchHistoryBody: "ローカルの注文データベースにこの出品者の記録はありません。メルカリから出品中および過去の注文をすべて取得しますか？時間がかかる場合があるため、ページを閉じないでください。",
       confirmFetchBtn: "取得を確認",
       msgSyncResult: "「{name}」同期完了：新規 {inserted} 件、更新 {updated} 件、合計 {total} 件",
+      msgSyncDataResult: "「{name}」データ同期完了：成功 {ok} 件、失敗 {fail} 件",
     },
   },
   en: {
@@ -233,6 +237,7 @@ export default {
       autoFetchOff: "Off",
       pauseShort: "Paused",
       fetchHistory: "Fetch History",
+      syncData: "Sync Data",
       addDialogTitle: "Add Mercari Account",
       editDialogTitle: "Edit Mercari Account",
       formIntroTip: "Opening this dialog will automatically launch the \"pre-add login\" browser (session key mercari_prepare). Please log in to jp.mercari.com in Edge. The account status defaults to \"Disabled\"; fill in the account name and other info, then save to register. After logging in you can use \"Fetch User Info\" to fill in details (implementation pending).",
@@ -300,6 +305,7 @@ export default {
       confirmFetchHistoryBody: "No records for this seller in the local orders database. Fetch all on-sale and historical orders from Mercari? This may take a while; please do not close the page.",
       confirmFetchBtn: "Confirm Fetch",
       msgSyncResult: "\"{name}\" sync complete: {inserted} added, {updated} updated, {total} total",
+      msgSyncDataResult: "\"{name}\" data sync done: {ok} ok, {fail} failed",
     },
   },
 }

@@ -14,12 +14,34 @@ from typing import Any, Callable, Dict, Optional
 _store: Dict[str, Dict[str, Any]] = {}
 
 
-def set_sync_progress(job_id: str, step: str, label_zh: str) -> None:
+def set_sync_progress(
+    job_id: str, step: str, label_zh: str, page_zh: Optional[str] = None
+) -> None:
+    """写入当前步骤。``page_zh``（如「待办事项」）表示当前同步的业务页面：
+    显式传入则更新；传 ``None`` 则沿用上一次的值，使其在该页面的多个子步骤间保持不变。
+    """
     if not job_id:
         return
+    prev = _store.get(job_id) or {}
     _store[job_id] = {
         "step": step,
         "label_zh": label_zh,
+        "page_zh": page_zh if page_zh is not None else prev.get("page_zh"),
+        "ts": time.time(),
+    }
+
+
+def set_sync_progress_page(job_id: str, page_zh: str) -> None:
+    """切换当前业务页面（用于一次性同步多个页面时标注「正在同步哪个页面」）。
+
+    同时把子步骤文案重置为占位，避免短暂显示上一个页面的末步文案。
+    """
+    if not job_id:
+        return
+    _store[job_id] = {
+        "step": "switch_page",
+        "label_zh": "准备同步…",
+        "page_zh": page_zh,
         "ts": time.time(),
     }
 
@@ -28,7 +50,15 @@ def get_sync_progress(job_id: str) -> Optional[Dict[str, Any]]:
     if not job_id:
         return None
     row = _store.get(job_id)
-    return dict(row) if row else None
+    if not row:
+        return None
+    out = dict(row)
+    # 有页面标注时，把页面名拼到 label_zh 前面，前端无需改动即可显示「正在同步哪个页面」。
+    page = out.get("page_zh")
+    if page:
+        lbl = out.get("label_zh") or ""
+        out["label_zh"] = f"【{page}】{lbl}" if lbl else f"【{page}】"
+    return out
 
 
 def clear_sync_progress(job_id: str) -> None:

@@ -11,10 +11,6 @@ export default defineComponent({
   setup() {
     const { t } = useI18n()
     const mercariAccountStore = useMercariAccountStore()
-    const globalAccountId = computed({
-      get: () => mercariAccountStore.selectedId,
-      set: (v) => mercariAccountStore.setSelected(v),
-    })
 
     /** 煤炉商品 item.status → i18n label（key 对应 onSaleItems/i18n.js 的 statusXxx 字段） */
     const onSaleStatusMap = {
@@ -753,15 +749,9 @@ export default defineComponent({
 
     async function runSync() {
       if (syncLoading.value) return
-      const aid = mercariAccountStore.selectedId
-      if (!aid) {
-        ElMessage.warning(t('onSaleItems.pleaseSelectAccount'))
-        return
-      }
-      const name = mercariAccountStore.selectedAccountName || `#${aid}`
       try {
         await ElMessageBox.confirm(
-          t('onSaleItems.runSyncConfirmMsg', { name }),
+          t('onSaleItems.runSyncConfirmMsg'),
           t('onSaleItems.runSyncConfirmTitle'),
           { type: 'info', confirmButtonText: t('onSaleItems.start'), cancelButtonText: t('common.cancel') },
         )
@@ -802,13 +792,17 @@ export default defineComponent({
 
       let syncHadError = false
       try {
+        // 已开启账号逐个串行同步；每个账号在同一浏览器会话内对新增商品自动拉取详情并回写库存，
+        // 故前端不再单独发起批量详情请求。
         const res = await onSaleItemApi.sync(
-          { account_id: aid, progress_job_id: progressJobId },
+          { progress_job_id: progressJobId },
           { timeout: 0 }
         )
         const d = res.data || {}
         ElMessage.success(
           t('onSaleItems.syncSuccessFull', {
+            accountCount: d.account_count ?? 0,
+            failCount: d.fail_count ?? 0,
             apiCount: d.api_item_count ?? 0,
             inserted: d.inserted ?? 0,
             updated: d.updated ?? 0,
@@ -816,23 +810,6 @@ export default defineComponent({
           })
         )
         await load()
-
-        const rawNewIds = Array.isArray(d.inserted_item_ids) ? d.inserted_item_ids : []
-        const newIds = rawNewIds.map((x) => String(x ?? '').trim()).filter(Boolean)
-        if (newIds.length > 0) {
-          syncProgressLabel.value = t('onSaleItems.batchWritingInventory', { count: newIds.length })
-          const batchRes = await onSaleItemApi.fetchDetailsBatch(
-            { account_id: aid, item_ids: newIds },
-            { timeout: 0 }
-          )
-          const bd = batchRes.data || {}
-          const okN = Number(bd.ok_synced ?? 0) || 0
-          const failN = Number(bd.not_ok ?? 0) || 0
-          await load()
-          ElMessage.info(
-            t('onSaleItems.batchDetailResult', { ok: okN, fail: failN })
-          )
-        }
       } catch (exc) {
         syncHadError = true
         syncOverlayTitle.value = t('onSaleItems.syncFailed')
@@ -904,7 +881,6 @@ export default defineComponent({
       useMercariAccountStore,
       t,
       mercariAccountStore,
-      globalAccountId,
       onSaleStatusMap,
       onSaleStatusLabel,
       onSaleStatusTagType,

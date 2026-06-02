@@ -46,20 +46,6 @@
           </el-select>
         </el-col>
         <el-col :xs="24" :md="8" class="search-actions">
-          <el-select
-            v-model="globalAccountId"
-            :placeholder="t('orders.selectMercariAccount')"
-            filterable
-            class="sync-account-select"
-            :loading="mercariAccountStore.loading"
-          >
-            <el-option
-              v-for="acc in mercariAccountStore.activeAccounts"
-              :key="acc.id"
-              :label="acc.account_name"
-              :value="acc.id"
-            />
-          </el-select>
           <el-button type="success" :icon="RefreshRight" :loading="syncLoading && syncMode === 'newData'" @click="runSync('newData')">{{ t('orders.updateList') }}</el-button>
           <el-button type="primary" :icon="Refresh" :loading="syncLoading && syncMode === 'statusRefresh'" @click="runSync('statusRefresh')">{{ t('orders.updateStatus') }}</el-button>
         </el-col>
