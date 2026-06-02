@@ -100,9 +100,12 @@
 .detail-body {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  /* 单行高度限制为容器高度（消息多时让列内 overflow 生效而非撑高弹窗） */
+  grid-template-rows: minmax(0, 1fr);
   gap: 16px;
   min-height: 560px;
   max-height: 70vh;
+  overflow: hidden;
 }
 .detail-col {
   display: flex;
@@ -114,6 +117,11 @@
 .detail-col-right {
   /* 右栏只放消息，撑满整个 dialog 高度 */
   height: 100%;
+}
+.detail-col-left {
+  /* 左栏（商品/包材/出库）内容多时整列滚动，避免被 detail-body 的 overflow 裁剪 */
+  overflow-y: auto;
+  padding-right: 4px;
 }
 .detail-section {
   border: 1px solid var(--el-border-color-lighter);
