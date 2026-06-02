@@ -22,7 +22,7 @@
             <div class="card-item"><span>{{ t('mercariAccounts.sellerIdLabel') }}</span>{{ row.seller_id || '-' }}</div>
             <div class="card-item">
               <span>{{ t('mercariAccounts.autoFetchLabel') }}</span>
-              <template v-if="row.is_open === 1">
+              <template v-if="row.is_open === 1 && row.status === 'active'">
                 {{ t('mercariAccounts.autoFetchOn') }} · {{ fetchIntervalLabel(row.fetch_interval) }}
                 <template v-if="autoFetchTasksLabel(row)">（{{ autoFetchTasksLabel(row) }}）</template>
                 <template v-if="pauseWindowLabel(row)"> · {{ t('mercariAccounts.pauseShort') }} {{ pauseWindowLabel(row) }}</template>
@@ -42,7 +42,9 @@
                 size="small"
                 type="success"
                 :loading="syncDataIds.has(row.id)"
-                @click="syncAccountData(row)"
+                :disabled="row.status !== 'active'"
+                :title="row.status !== 'active' ? t('mercariAccounts.syncDataDisabledHint') : ''"
+                @click="openSyncDataDialog(row)"
               >{{ t('mercariAccounts.syncData') }}</el-button>
               <el-button size="small" @click="openEdit(row)">{{ t('common.edit') }}</el-button>
             </div>
@@ -214,6 +216,31 @@
         </div>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="syncDataDialogVisible"
+      :title="t('mercariAccounts.syncDataDialogTitle')"
+      width="420px"
+      destroy-on-close
+      class="mercari-dialog"
+    >
+      <p class="form-section-hint">
+        {{ t('mercariAccounts.syncDataDialogHint', { name: syncDataRow?.account_name || '' }) }}
+      </p>
+      <div class="sync-data-checks">
+        <el-checkbox
+          v-for="def in SYNC_TASK_DEFS"
+          :key="def.key"
+          v-model="syncDataChecked[def.key]"
+        >{{ t(def.labelKey) }}</el-checkbox>
+      </div>
+      <template #footer>
+        <el-button @click="syncDataDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="confirmSyncData">{{ t('mercariAccounts.syncData') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <SyncOverlay :state="syncOverlay.state" />
   </div>
 </template>
 

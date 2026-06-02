@@ -1,12 +1,16 @@
-import { defineComponent, ref, onMounted, nextTick } from 'vue'
+import { defineComponent, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { mercariAccountApi, mercariApi, webDriveApi } from '@/api/index.js'
+import { useSyncOverlay } from '@/composables/useSyncOverlay'
+import SyncOverlay from '@/components/SyncOverlay.vue'
 
 export default defineComponent({
+  components: { SyncOverlay },
   setup() {
     const { t } = useI18n()
+    const syncOverlay = useSyncOverlay()
 
     const MERCARI_HOME = 'https://jp.mercari.com/'
 
@@ -77,16 +81,8 @@ export default defineComponent({
     }
 
     function onAutoFetchToggle() {
-      if (form.value.is_open !== 1) {
-        form.value.fetch_interval = ''
-        form.value.auto_fetch_order_list = 0
-        form.value.auto_fetch_on_sale = 0
-        form.value.auto_fetch_todos = 0
-        form.value.auto_fetch_notifications = 0
-        form.value.auto_fetch_relist = 0
-        form.value.pause_start_time = null
-        form.value.pause_end_time = null
-      }
+      // 关闭自动同步时**不清空**已选配置（间隔/子任务/暂停时段），
+      // 以便用户重新开启后继续显示原本的数据；仅清掉校验提示。
       nextTick(() => formRef.value?.clearValidate(['fetch_interval', 'pause_window']))
     }
 
@@ -245,14 +241,15 @@ export default defineComponent({
         status: row.status || 'active',
         remark: row.remark || '',
         is_open: open,
-        fetch_interval: open === 1 ? String(row.fetch_interval != null ? row.fetch_interval : '') : '',
+        // 即便当前关闭了自动同步，也保留并回显原本的间隔/子任务/暂停时段，便于重新开启
+        fetch_interval: String(row.fetch_interval != null ? row.fetch_interval : ''),
         auto_fetch_order_list: row.auto_fetch_order_list === 1 ? 1 : 0,
         auto_fetch_on_sale: row.auto_fetch_on_sale === 1 ? 1 : 0,
         auto_fetch_todos: row.auto_fetch_todos === 1 ? 1 : 0,
         auto_fetch_notifications: row.auto_fetch_notifications === 1 ? 1 : 0,
         auto_fetch_relist: row.auto_fetch_relist === 1 ? 1 : 0,
-        pause_start_time: open === 1 ? (row.pause_start_time || null) : null,
-        pause_end_time: open === 1 ? (row.pause_end_time || null) : null,
+        pause_start_time: row.pause_start_time || null,
+        pause_end_time: row.pause_end_time || null,
       }
       dialogVisible.value = true
     }
@@ -260,6 +257,7 @@ export default defineComponent({
     function buildPayload() {
       const name = String(form.value.account_name || '').trim()
       const open = form.value.is_open === 1 ? 1 : 0
+      // 关闭自动同步时仍原样提交配置（间隔/子任务/暂停），后端会保留，便于重新开启后继续显示
       const base = {
         account_name: name,
         login_id: name,
@@ -267,14 +265,14 @@ export default defineComponent({
         status: form.value.status,
         remark: form.value.remark || null,
         is_open: open,
-        fetch_interval: open === 1 ? String(form.value.fetch_interval || '').trim() || null : null,
-        auto_fetch_order_list: open === 1 && form.value.auto_fetch_order_list === 1 ? 1 : 0,
-        auto_fetch_on_sale: open === 1 && form.value.auto_fetch_on_sale === 1 ? 1 : 0,
-        auto_fetch_todos: open === 1 && form.value.auto_fetch_todos === 1 ? 1 : 0,
-        auto_fetch_notifications: open === 1 && form.value.auto_fetch_notifications === 1 ? 1 : 0,
-        auto_fetch_relist: open === 1 && form.value.auto_fetch_relist === 1 ? 1 : 0,
-        pause_start_time: open === 1 ? (String(form.value.pause_start_time || '').trim() || null) : null,
-        pause_end_time: open === 1 ? (String(form.value.pause_end_time || '').trim() || null) : null,
+        fetch_interval: String(form.value.fetch_interval || '').trim() || null,
+        auto_fetch_order_list: form.value.auto_fetch_order_list === 1 ? 1 : 0,
+        auto_fetch_on_sale: form.value.auto_fetch_on_sale === 1 ? 1 : 0,
+        auto_fetch_todos: form.value.auto_fetch_todos === 1 ? 1 : 0,
+        auto_fetch_notifications: form.value.auto_fetch_notifications === 1 ? 1 : 0,
+        auto_fetch_relist: form.value.auto_fetch_relist === 1 ? 1 : 0,
+        pause_start_time: String(form.value.pause_start_time || '').trim() || null,
+        pause_end_time: String(form.value.pause_end_time || '').trim() || null,
       }
       if (form.value.id) {
         return base
@@ -358,22 +356,78 @@ export default defineComponent({
       openBrowserByKey(browserKeyFor(row.id), row.account_name || t('mercariAccounts.accountFallbackLabel', { id: row.id }))
     }
 
-    /** 单账号「同步数据」：一键同步该账号在各业务页面（待办/通知/在售/订单）的数据 */
-    async function syncAccountData(row) {
+    // 可勾选同步的页面（key 与后端 _TASK_KEYS 一致；顺序即执行顺序）
+    const SYNC_TASK_DEFS = [
+      { key: 'todos', labelKey: 'mercariAccounts.syncTaskTodos' },
+      { key: 'notifications', labelKey: 'mercariAccounts.syncTaskNotifications' },
+      { key: 'on_sale', labelKey: 'mercariAccounts.syncTaskOnSale' },
+      { key: 'orders_list', labelKey: 'mercariAccounts.syncTaskOrdersList' },
+      { key: 'orders_status', labelKey: 'mercariAccounts.syncTaskOrdersStatus' },
+    ]
+
+    function defaultSyncTasks() {
+      return SYNC_TASK_DEFS.reduce((acc, d) => {
+        acc[d.key] = true
+        return acc
+      }, {})
+    }
+
+    const syncDataDialogVisible = ref(false)
+    const syncDataRow = ref(null)
+    /** 各页面勾选状态，默认全选；用户按需取消 */
+    const syncDataChecked = ref(defaultSyncTasks())
+
+    /** 点卡片「同步数据」：打开勾选弹窗（默认全部勾选） */
+    function openSyncDataDialog(row) {
       if (syncDataIds.value.has(row.id)) return
+      if (row.status !== 'active') {
+        ElMessage.warning(t('mercariAccounts.syncDataDisabledHint'))
+        return
+      }
+      syncDataRow.value = row
+      syncDataChecked.value = defaultSyncTasks()
+      syncDataDialogVisible.value = true
+    }
+
+    /** 弹窗内确认：取勾选项执行同步 */
+    async function confirmSyncData() {
+      const row = syncDataRow.value
+      if (!row) return
+      const tasks = SYNC_TASK_DEFS.map((d) => d.key).filter((k) => syncDataChecked.value[k])
+      if (!tasks.length) {
+        ElMessage.warning(t('mercariAccounts.syncDataPickAtLeastOne'))
+        return
+      }
+      syncDataDialogVisible.value = false
+      await runAccountDataSync(row, tasks)
+    }
+
+    /**
+     * 单账号「同步数据」：同步勾选的业务页面（待办/通知/在售/订单）的数据。
+     * 全屏覆盖层实时显示「正在同步哪个页面的什么数据」（后端按页面标注进度）。
+     */
+    async function runAccountDataSync(row, tasks) {
+      if (syncDataIds.value.has(row.id)) return
+      const name = row.account_name || `#${row.id}`
       syncDataIds.value = new Set([...syncDataIds.value, row.id])
       try {
-        const res = await mercariAccountApi.syncData(row.id)
-        const d = res.data || {}
-        const okN = d.ok_count ?? 0
-        const failN = d.fail_count ?? 0
-        const msg = t('mercariAccounts.msgSyncDataResult', {
-          name: row.account_name || `#${row.id}`,
-          ok: okN,
-          fail: failN,
+        const res = await syncOverlay.run({
+          title: t('mercariAccounts.syncingAccountData', { name }),
+          failedTitle: t('mercariAccounts.syncDataFailed'),
+          consoleTag: '[账号同步]',
+          pollFn: (jobId) => mercariApi.getSyncProgress(jobId),
+          actionFn: (jobId) => mercariAccountApi.syncData(row.id, { progress_job_id: jobId, tasks }),
         })
-        if (failN > 0) ElMessage.warning(msg)
+        const d = res?.data || {}
+        const msg = t('mercariAccounts.msgSyncDataResult', {
+          name,
+          ok: d.ok_count ?? 0,
+          fail: d.fail_count ?? 0,
+        })
+        if ((d.fail_count ?? 0) > 0) ElMessage.warning(msg)
         else ElMessage.success(msg)
+      } catch {
+        /* 失败文案已由覆盖层展示 + axios 拦截器提示 */
       } finally {
         const next = new Set(syncDataIds.value)
         next.delete(row.id)
@@ -449,10 +503,16 @@ export default defineComponent({
       load()
     })
 
+    onBeforeUnmount(() => {
+      syncOverlay.dispose()
+    })
+
     return {
       ref,
       onMounted,
       nextTick,
+      syncOverlay,
+      SyncOverlay,
       useI18n,
       Plus,
       ElMessage,
@@ -504,7 +564,12 @@ export default defineComponent({
       openBrowserForSavedAccount,
       fetchHistory,
       fetchHistoryFromForm,
-      syncAccountData,
+      SYNC_TASK_DEFS,
+      syncDataDialogVisible,
+      syncDataRow,
+      syncDataChecked,
+      openSyncDataDialog,
+      confirmSyncData,
     }
   },
 })

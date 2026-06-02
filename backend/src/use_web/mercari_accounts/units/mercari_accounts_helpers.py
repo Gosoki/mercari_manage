@@ -53,19 +53,23 @@ def _norm_auto_fetch(
     notifications: int,
 ) -> tuple:
     """
-    规范化自动同步：总开关关闭时清空间隔与子任务；
-    开启时须合法间隔且至少一项子任务为 1。
+    规范化自动同步。
+
+    - 开启（is_open=1）时：须合法间隔且至少一项子任务为 1。
+    - 关闭（is_open=0）时：**保留**用户已选的间隔与子任务（不清空），
+      以便重新开启后继续显示原本的配置；仅把非法间隔归一为 None。
     """
     io = 1 if is_open else 0
-    if io == 0:
-        return 0, None, 0, 0, 0, 0
     iv = (fetch_interval or "").strip()
-    if iv not in ALLOWED_FETCH_INTERVALS:
-        raise HTTPException(status_code=400, detail="开启自动数据获取时，请选择有效的时间间隔")
     li = 1 if order_list else 0
     os_ = 1 if on_sale else 0
     td = 1 if todos else 0
     nt = 1 if notifications else 0
+    if io == 0:
+        # 关闭时保留配置；间隔若非合法值则置空，避免存入脏数据
+        return 0, (iv if iv in ALLOWED_FETCH_INTERVALS else None), li, os_, td, nt
+    if iv not in ALLOWED_FETCH_INTERVALS:
+        raise HTTPException(status_code=400, detail="开启自动数据获取时，请选择有效的时间间隔")
     if not (li or os_ or td or nt):
         raise HTTPException(status_code=400, detail="开启自动数据获取时，请至少选择一项同步任务")
     return 1, iv, li, os_, td, nt

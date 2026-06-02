@@ -58,8 +58,8 @@ def create_mercari_account(data: MercariAccountCreate):
         _normalize_is_open(data.auto_fetch_todos),
         _normalize_is_open(data.auto_fetch_notifications),
     )
-    # 自动上架（售出即补挂）账号级开关：总开关关闭时清零
-    rl = 1 if (io and _normalize_is_open(data.auto_fetch_relist)) else 0
+    # 自动上架（售出即补挂）账号级开关：保留用户选择，便于重新开启自动同步后继续显示
+    rl = 1 if _normalize_is_open(data.auto_fetch_relist) else 0
     pause_s, pause_e = _norm_pause_window(data.pause_start_time, data.pause_end_time)
     item = MercariAccountModel(
         account_name=name,
@@ -137,8 +137,8 @@ def update_mercari_account(aid: int, data: MercariAccountUpdate):
         item.auto_fetch_on_sale = os_
         item.auto_fetch_todos = td
         item.auto_fetch_notifications = nt
-        # 自动上架账号级开关：总开关关闭时一并清零
-        item.auto_fetch_relist = 0 if io == 0 else rl
+        # 自动上架账号级开关：保留用户选择（关闭自动同步不清空配置）
+        item.auto_fetch_relist = rl
         if io == 0:
             item.auto_fetch_last_at = None
         elif prev_open == 0 and io == 1:

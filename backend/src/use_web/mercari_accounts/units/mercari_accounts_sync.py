@@ -11,7 +11,7 @@
 
 import logging
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -36,52 +36,72 @@ log = logging.getLogger(__name__)
 # 与各同步入口一致的安全字符集，避免路径注入
 _SYNC_JOB_ID_RE = re.compile(r"^[a-zA-Z0-9_.-]{1,128}$")
 
+# 可同步的页面任务 key（与前端勾选项、进度页面名一一对应）
+_TASK_KEYS = ("todos", "notifications", "on_sale", "orders_list", "orders_status")
+
 
 class SyncAccountDataRequest(BaseModel):
     progress_job_id: Optional[str] = None
+    # 要同步的页面 key 列表；为空 / 不传 = 全部同步。仅接受 _TASK_KEYS 内的值。
+    tasks: Optional[List[str]] = None
 
 
 async def sync_account_all_data(aid: int, req: SyncAccountDataRequest) -> Dict[str, Any]:
     """同步单个账号在「待办 / 通知 / 在售 / 订单列表 / 订单状态」各页面的数据。
 
-    所有步骤在该账号的串行队列内顺序执行（一个完成后才进行下一个），结束后关闭浏览器。
+    ``tasks`` 指定要同步哪些页面（默认全部）。**整批步骤作为一个队列任务执行**：
+    在该账号串行队列内只入队一次，浏览器只开启一次并在各步骤间复用（``mitm_automation_browser``
+    退出不关闭、下一步复用存活会话），全部完成后统一关闭一次——避免频繁开关浏览器。
     """
     account_id = int(aid)
     account = MercariAccountModel.find_by_id(id=account_id)
     if account is None:
         raise HTTPException(status_code=404, detail=f"煤炉账号 id={account_id} 不存在")
+    if getattr(account, "status", None) != "active":
+        raise HTTPException(status_code=400, detail="账号已停用，无法同步数据")
 
     jid = (req.progress_job_id or "").strip() or None
     if jid and not _SYNC_JOB_ID_RE.fullmatch(jid):
         raise HTTPException(status_code=400, detail="invalid progress_job_id")
 
+    # 解析勾选的页面：为空表示全部；否则按 _TASK_KEYS 过滤，保持固定执行顺序
+    selected = set(req.tasks) if req.tasks else set(_TASK_KEYS)
+    selected &= set(_TASK_KEYS)
+    if not selected:
+        raise HTTPException(status_code=400, detail="未选择任何要同步的数据")
+
     # (key, 中文名, 构造协程的工厂)；每步都接入该账号的进度上报
-    steps = [
+    all_steps = [
         ("todos", "待办事项", lambda: sync_todos_from_mercari(account_id=account_id, progress_job_id=jid)),
         ("notifications", "通知", lambda: sync_notifications_from_mercari(account_id=account_id, progress_job_id=jid)),
         ("on_sale", "在售商品", lambda: sync_on_sale_items_from_mercari(account_id=account_id, progress_job_id=jid)),
         ("orders_list", "订单列表", lambda: sync_new_data(account_id=account_id, progress_job_id=jid)),
         ("orders_status", "订单状态", lambda: batch_refresh_orders_info(account_id=account_id, progress_job_id=jid)),
     ]
+    steps = [s for s in all_steps if s[0] in selected]
 
     qk = queue_key_for_mercari_account(account_id)
     results: Dict[str, Any] = {}
     errors: Dict[str, str] = {}
-    try:
-        for key, _label, factory in steps:
+
+    async def _run_all_steps() -> None:
+        """在单个队列任务内顺序执行所选步骤：浏览器开一次、各步复用。"""
+        for key, label, factory in steps:
+            # 标注当前正在同步的页面（前端轮询时显示「【页面】子步骤」）。
+            set_sync_progress_page(jid, label)
             try:
-                results[key] = await run_mercari_serial_async(
-                    qk,
-                    factory,
-                    suppress_idle_close=True,  # 多步复用同一浏览器，全部完成后再统一关闭
-                )
+                results[key] = await factory()
             except Exception as exc:  # noqa: BLE001 单步失败不影响其余步骤
                 errors[key] = str(exc)
                 log.warning(
                     "[account-sync] account_id=%s step=%s 失败: %s", account_id, key, exc
                 )
+
+    try:
+        # 仅入队一次：整批步骤共用同一浏览器会话，suppress_idle_close 跳过中途自动关闭
+        await run_mercari_serial_async(qk, _run_all_steps, suppress_idle_close=True)
     finally:
-        # 全部步骤完成后关闭该账号浏览器（各步以 suppress_idle_close 跳过了自动关闭）。
+        # 全批完成后统一关闭一次浏览器。
         try:
             mgr = get_web_drive_manager()
             await mgr.close_session(mercari_account_key(account_id), force=True)
