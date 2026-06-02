@@ -96,7 +96,11 @@ def list_packaging_items():
             "amount": int(row.amount or 0),
             "quantity": int(row.quantity or 0),
         }
-    items = sorted(latest_by_name.values(), key=lambda x: x["item_name"])
+    # 库存（最新记录数量）为 0 的包材不出现在下拉选择中
+    items = sorted(
+        (v for v in latest_by_name.values() if v["quantity"] > 0),
+        key=lambda x: x["item_name"],
+    )
     return {"items": items}
 
 
@@ -106,8 +110,8 @@ def create_cost_record(data: CostRecordCreate):
         raise HTTPException(status_code=400, detail="物品名称不能为空")
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="金额必须大于0")
-    if data.quantity <= 0:
-        raise HTTPException(status_code=400, detail="数量必须大于0")
+    if data.quantity < 0:
+        raise HTTPException(status_code=400, detail="数量不能小于0")
     cost_ts = data.cost_date if data.cost_date else int(datetime.now(timezone.utc).timestamp())
     item = CostRecordModel(
         cost_date=cost_ts,
@@ -150,8 +154,8 @@ def update_cost_record(cid: int, data: CostRecordUpdate):
             raise HTTPException(status_code=400, detail="金额必须大于0")
         item.amount = data.amount
     if data.quantity is not None:
-        if data.quantity <= 0:
-            raise HTTPException(status_code=400, detail="数量必须大于0")
+        if data.quantity < 0:
+            raise HTTPException(status_code=400, detail="数量不能小于0")
         item.quantity = data.quantity
     if data.warehouse_id is not None:
         item.warehouse_id = data.warehouse_id

@@ -103,27 +103,13 @@
               >{{ t('mercariAccounts.fetch') }}</el-button>
             </template>
           </el-input>
-          <p class="seller-id-hint">
-            {{ t('mercariAccounts.sellerIdHintPrefix') }}
-            <a href="https://jp.mercari.com/mypage/listings" target="_blank" rel="noopener">{{ t('mercariAccounts.sellerIdHintLink') }}</a>
-            {{ t('mercariAccounts.sellerIdHintMiddle') }}
-            <code>api.mercari.jp/items/get_items</code>
-            {{ t('mercariAccounts.sellerIdHintSuffix') }}
-          </p>
         </el-form-item>
         <el-form-item :label="t('mercariAccounts.accountStatus')" prop="status">
           <el-select v-model="form.status" style="width: 100%">
             <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="t('common.remark')">
-          <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="200" show-word-limit />
-        </el-form-item>
-
         <el-divider content-position="left">{{ t('mercariAccounts.sectionAutoFetch') }}</el-divider>
-        <p class="form-section-hint">
-          {{ t('mercariAccounts.autoFetchSectionHint') }}
-        </p>
         <el-form-item :label="t('mercariAccounts.autoFetch')" prop="is_open">
           <el-select v-model="form.is_open" style="width: 100%" @change="onAutoFetchToggle">
             <el-option v-for="opt in autoFetchSwitchOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
@@ -131,38 +117,72 @@
         </el-form-item>
         <template v-if="form.is_open === 1">
           <el-form-item :label="t('mercariAccounts.syncItems')">
-            <div class="af-task-checks">
-              <el-checkbox
-                v-model="form.auto_fetch_order_list"
-                :true-value="1"
-                :false-value="0"
-                @change="onAutoFetchTaskChange"
-              >{{ t('mercariAccounts.taskOrderList') }}</el-checkbox>
-              <el-checkbox
-                v-model="form.auto_fetch_on_sale"
-                :true-value="1"
-                :false-value="0"
-                @change="onAutoFetchTaskChange"
-              >{{ t('mercariAccounts.taskOnSale') }}</el-checkbox>
-              <el-checkbox
-                v-model="form.auto_fetch_todos"
-                :true-value="1"
-                :false-value="0"
-                @change="onAutoFetchTaskChange"
-              >{{ t('mercariAccounts.taskTodos') }}</el-checkbox>
-              <el-checkbox
-                v-model="form.auto_fetch_notifications"
-                :true-value="1"
-                :false-value="0"
-                @change="onAutoFetchTaskChange"
-              >{{ t('mercariAccounts.taskNotifications') }}</el-checkbox>
-              <el-checkbox
-                v-model="form.auto_fetch_relist"
-                :true-value="1"
-                :false-value="0"
-              >{{ t('mercariAccounts.taskRelist') }}</el-checkbox>
+            <div class="af-task-cards">
+              <div
+                class="af-task-card"
+                :class="{ 'is-active': form.auto_fetch_order_list === 1 }"
+                @click="form.auto_fetch_order_list = form.auto_fetch_order_list === 1 ? 0 : 1; onAutoFetchTaskChange()"
+              >
+                <el-checkbox
+                  v-model="form.auto_fetch_order_list"
+                  :true-value="1"
+                  :false-value="0"
+                  @click.stop
+                  @change="onAutoFetchTaskChange"
+                >{{ t('mercariAccounts.taskOrderList') }}</el-checkbox>
+              </div>
+              <div
+                class="af-task-card"
+                :class="{ 'is-active': form.auto_fetch_on_sale === 1 }"
+                @click="form.auto_fetch_on_sale = form.auto_fetch_on_sale === 1 ? 0 : 1; onAutoFetchTaskChange()"
+              >
+                <el-checkbox
+                  v-model="form.auto_fetch_on_sale"
+                  :true-value="1"
+                  :false-value="0"
+                  @click.stop
+                  @change="onAutoFetchTaskChange"
+                >{{ t('mercariAccounts.taskOnSale') }}</el-checkbox>
+              </div>
+              <div
+                class="af-task-card"
+                :class="{ 'is-active': form.auto_fetch_todos === 1 }"
+                @click="form.auto_fetch_todos = form.auto_fetch_todos === 1 ? 0 : 1; onAutoFetchTaskChange()"
+              >
+                <el-checkbox
+                  v-model="form.auto_fetch_todos"
+                  :true-value="1"
+                  :false-value="0"
+                  @click.stop
+                  @change="onAutoFetchTaskChange"
+                >{{ t('mercariAccounts.taskTodos') }}</el-checkbox>
+              </div>
+              <div
+                class="af-task-card"
+                :class="{ 'is-active': form.auto_fetch_notifications === 1 }"
+                @click="form.auto_fetch_notifications = form.auto_fetch_notifications === 1 ? 0 : 1; onAutoFetchTaskChange()"
+              >
+                <el-checkbox
+                  v-model="form.auto_fetch_notifications"
+                  :true-value="1"
+                  :false-value="0"
+                  @click.stop
+                  @change="onAutoFetchTaskChange"
+                >{{ t('mercariAccounts.taskNotifications') }}</el-checkbox>
+              </div>
+              <div
+                class="af-task-card"
+                :class="{ 'is-active': form.auto_fetch_relist === 1 }"
+                @click="form.auto_fetch_relist = form.auto_fetch_relist === 1 ? 0 : 1"
+              >
+                <el-checkbox
+                  v-model="form.auto_fetch_relist"
+                  :true-value="1"
+                  :false-value="0"
+                  @click.stop
+                >{{ t('mercariAccounts.taskRelist') }}</el-checkbox>
+              </div>
             </div>
-            <p class="af-task-hint">{{ t('mercariAccounts.taskRelistHint') }}</p>
           </el-form-item>
           <el-form-item :label="t('mercariAccounts.interval')" prop="fetch_interval">
             <el-select v-model="form.fetch_interval" style="width: 100%" :placeholder="t('mercariAccounts.intervalPlaceholder')" @change="onAutoFetchTaskChange">
@@ -189,9 +209,6 @@
                 class="af-pause-picker"
               />
             </div>
-            <p class="af-pause-hint">
-              {{ t('mercariAccounts.pauseHint') }}
-            </p>
           </el-form-item>
         </template>
       </el-form>
@@ -231,15 +248,19 @@
       destroy-on-close
       class="mercari-dialog"
     >
-      <p class="form-section-hint">
-        {{ t('mercariAccounts.syncDataDialogHint', { name: syncDataRow?.account_name || '' }) }}
-      </p>
-      <div class="sync-data-checks">
-        <el-checkbox
+      <div class="af-task-cards sync-data-cards">
+        <div
           v-for="def in SYNC_TASK_DEFS"
           :key="def.key"
-          v-model="syncDataChecked[def.key]"
-        >{{ t(def.labelKey) }}</el-checkbox>
+          class="af-task-card"
+          :class="{ 'is-active': syncDataChecked[def.key] }"
+          @click="syncDataChecked[def.key] = !syncDataChecked[def.key]"
+        >
+          <el-checkbox
+            v-model="syncDataChecked[def.key]"
+            @click.stop
+          >{{ t(def.labelKey) }}</el-checkbox>
+        </div>
       </div>
       <template #footer>
         <el-button @click="syncDataDialogVisible = false">{{ t('common.cancel') }}</el-button>

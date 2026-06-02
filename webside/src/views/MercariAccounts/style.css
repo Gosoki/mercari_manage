@@ -1,14 +1,8 @@
 .list-card {
   border-radius: 8px;
 }
-.sync-data-checks {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 4px 2px;
-}
-.sync-data-checks .el-checkbox {
-  margin-right: 0;
+.sync-data-cards {
+  margin-top: 4px;
 }
 .card-col {
   margin-bottom: 16px;
@@ -126,16 +120,33 @@
   font-size: 11px;
   color: #a8b4c8;
 }
-.af-task-checks {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+.af-task-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
+  width: 100%;
 }
-.af-task-checks .el-checkbox {
+.af-task-card {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #3a4255;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.af-task-card:hover {
+  border-color: #69b1ff;
+}
+.af-task-card.is-active {
+  border-color: #409eff;
+  background-color: rgba(64, 158, 255, 0.1);
+}
+.af-task-card .el-checkbox {
   margin-right: 0;
   height: auto;
   white-space: normal;
+  width: 100%;
 }
 .af-pause-row {
   display: flex;
