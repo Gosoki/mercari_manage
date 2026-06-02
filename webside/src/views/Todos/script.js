@@ -48,6 +48,30 @@ export default defineComponent({
       { code: 'LAWSON', label: 'ローソン', img: 'lawson' },
     ]
 
+    // らくらくメルカリ便 各尺寸（ネコポス / 宅急便コンパクト / 宅急便60-160 / 宅急便180-200）共用的
+    // 发送方法（发货地）：到店出示二维码发货的门店类。code 与煤炉 /shipping_facilities
+    // radio 的 value 属性完全一致（大写）。选择后浏览器内点「選択して完了する」→ 返回交易页
+    // 点「発送用◯◯コードを発行」生成二维码 → 后端保存到本地。
+    const RAKURAKU_FACILITIES = [
+      { code: 'SEVEN_ELEVEN', label: 'セブン-イレブン', img: '7-eleven' },
+      { code: 'FAMILY_MART', label: 'ファミリーマート', img: 'family-mart' },
+      { code: 'YAMATO_OFFICE', label: 'ヤマト運輸 営業所', img: 'yamato' },
+      { code: 'PUDO', label: '宅配便ロッカーPUDO', img: 'pudo' },
+    ]
+
+    // 宅急便60-160（taQBin 60-160）专用发送方法：与煤炉 /shipping_facilities 页
+    // 该尺寸可用 radio 完全一致（code = value 属性）。比小尺寸多出 集荷 / スマリボックス /
+    // マンション・戸建てSmari。选择后同样：返回交易页点「発送用◯◯コードを発行」生成并保存二维码。
+    const RAKURAKU_TAQ160_FACILITIES = [
+      { code: 'SEVEN_ELEVEN', label: 'セブン-イレブン', img: '7-eleven' },
+      { code: 'FAMILY_MART', label: 'ファミリーマート', img: 'family-mart' },
+      { code: 'YAMATO_OFFICE', label: 'ヤマト運輸 営業所', img: 'yamato' },
+      { code: 'PICKUP', label: 'ヤマト運輸による集荷', img: 'pick-up' },
+      { code: 'PUDO', label: '宅配便ロッカーPUDO', img: 'pudo' },
+      { code: 'SMARI', label: 'スマリボックス', img: 'smari-box' },
+      { code: 'SMARI_HOME_LOCKER', label: 'マンション・戸建てSmari', img: 'smari-box' },
+    ]
+
     // 发货尺寸硬编码列表，按 shipping_method_name 区分。
     // name 字段必须与煤炉 /shipping_class 页 radio 卡片标题文本完全一致（用于 Playwright 文本匹配点击）
     const SHIPPING_OPTIONS = {
@@ -122,12 +146,7 @@ export default defineComponent({
             ['最小', '23cm × 11.5cm'],
           ],
           // 发货地（与煤炉 /shipping_facilities radio 的 value 属性一致）。img 为 public/static/post_hukuro 下文件名（无扩展名）
-          facilities: [
-            { code: 'SEVEN_ELEVEN', label: 'セブン-イレブン', img: '7-eleven' },
-            { code: 'FAMILY_MART', label: 'ファミリーマート', img: 'family-mart' },
-            { code: 'YAMATO_OFFICE', label: 'ヤマト運輸 営業所', img: 'yamato' },
-            { code: 'PUDO', label: '宅配便ロッカーPUDO', img: 'pudo' },
-          ],
+          facilities: RAKURAKU_FACILITIES,
         },
         {
           name: '宅急便コンパクト',
@@ -135,6 +154,7 @@ export default defineComponent({
             ['サイズ', '専用BOX (20cm×25cm×5cm) / 薄型専用BOX (24.8cm×34cm)'],
             ['送料', '¥450'],
           ],
+          facilities: RAKURAKU_FACILITIES,
         },
         {
           name: '宅急便60 - 160',
@@ -142,12 +162,14 @@ export default defineComponent({
             ['サイズ', '3辺合計160cm以内'],
             ['送料', '¥750'],
           ],
+          facilities: RAKURAKU_TAQ160_FACILITIES,
         },
         {
           name: '宅急便180 - 200',
           rows: [
             ['サイズ', '3辺合計200cm以内'],
           ],
+          facilities: RAKURAKU_FACILITIES,
         },
       ],
     }

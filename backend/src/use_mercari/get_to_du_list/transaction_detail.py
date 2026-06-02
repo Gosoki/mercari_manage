@@ -309,14 +309,19 @@ async def fetch_transaction_detail(
             start_url=url,
             since_ms=since_ms,
         )
-        # 同步发货二维码：若该商品已发行（含在 App/其他平台已完成发货的情况），
-        # 交易页会带二维码图片 → 抓取保存到本地（页面已加载，短超时探测）。
+        # 同步发货二维码：交易页若带二维码（含在 App/其他平台已完成发货）→ 抓取保存；
+        # 若页面确无二维码（别处取消/重置了发货）→ 后续清除本地已存的二维码，回到选择发送状态。
         synced_qr_url: Optional[str] = None
+        qr_checked = False
+        qr_present = False
         try:
             qr_page = await mgr.active_tab_page(main_key)
-            synced_qr_url = await _save_qr_code_image(
-                qr_page, item_id=item_id, todo_id=int(todo_id), timeout=3000
-            )
+            qr_present = await _qr_code_exists(qr_page, timeout=3000)
+            qr_checked = True
+            if qr_present:
+                synced_qr_url = await _save_qr_code_image(
+                    qr_page, item_id=item_id, todo_id=int(todo_id), timeout=1500
+                )
         except Exception as exc:
             log.debug("[txdetail] 同步发货二维码失败 todo_id=%s: %s", todo_id, exc)
 
@@ -343,9 +348,16 @@ async def fetch_transaction_detail(
         **shipping_part,
         **messages_part,
     }
-    # 发货二维码：优先本次刚同步到的；否则沿用此前已保存的。并整体缓存进 DB（下次打开免开浏览器）
+    # 发货二维码同步：
+    #   - 本次抓到 → 用新的
+    #   - 页面已加载且确无二维码（别处取消/重置发货）→ 清除本地已存的，回到选择发送状态
+    #   - 检查失败/页面未加载（保守）→ 沿用此前已保存的
+    page_loaded = (shipping is not None) or (messages is not None)
     if synced_qr_url:
         result["qr_image_url"] = synced_qr_url
+    elif qr_checked and not qr_present and page_loaded:
+        _clear_qr_image(int(todo_id))
+        result["qr_image_url"] = None
     else:
         try:
             prev = DatabaseManager().execute_query(
@@ -892,6 +904,17 @@ def get_cached_transaction_detail(todo_id: int) -> Dict[str, Any]:
     if qr_path and not data.get("qr_image_url"):
         data["qr_image_url"] = qr_path
     return data
+
+
+async def _qr_code_exists(page: Any, *, timeout: int = 3000) -> bool:
+    """快速判断交易页上是否存在发货二维码图片（已发行）。"""
+    try:
+        await page.locator(_QR_CODE_IMG_SELECTOR).first.wait_for(
+            state="visible", timeout=timeout
+        )
+        return True
+    except Exception:
+        return False
 
 
 async def _save_qr_code_image(
