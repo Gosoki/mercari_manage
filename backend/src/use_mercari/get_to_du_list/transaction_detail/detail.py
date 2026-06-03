@@ -184,6 +184,9 @@ async def fetch_transaction_detail(
     result["post_ship_ready"] = bool(post_ship.get("ready")) and not synced_qr_url
     result["ship_confirm_code"] = post_ship.get("confirm_code")
     result["ship_tracking_no"] = post_ship.get("tracking_no")
+    # 发送方法标签（通过什么发送，展示用）：优先页面抓到的「サイズ/配送の方法」，
+    # 回落到 shipping/get_info 解析出的 shipping_method_name。
+    result["ship_method_label"] = post_ship.get("method") or result.get("shipping_method_name") or None
     # 缓存有效性判定：只有真正截获到「该类型关键数据」时才写缓存并置 detail_synced_at；
     # 否则跳过——若仍标记为已缓存，则该待办会被永久当作「已缓存的空详情」：前端一直显示
     # 「待抓取」，且 list_uncached_detail_todo_ids 不再返回它，后续「从煤炉同步」批量预缓存
@@ -196,7 +199,18 @@ async def fetch_transaction_detail(
     if require_api == "messages":
         capture_ok = messages is not None
     elif is_wait_shipping:
-        capture_ok = (shipping is not None) or bool(result.get("recipient_address"))
+        # 待发货关键数据任一即视为成功并缓存：
+        #   - メルカリ便：shipping/get_info；未定/非匿名：お届け先(DOM)；
+        #   - 已发行发货码：qr_image_url；
+        #   - 待发送通知（ゆうパケットポスト等，可能在 App/别处已扫码）：post_ship_ready。
+        #     最后一项很关键——匿名 ゆうパケットポスト 扫码后页面常无 shipping/お届け先，
+        #     若不纳入判定，刷新抓取会检测到却因 capture_ok=False 不落库，前端永远拿不到。
+        capture_ok = (
+            (shipping is not None)
+            or bool(result.get("recipient_address"))
+            or bool(result.get("qr_image_url"))
+            or bool(result.get("post_ship_ready"))
+        )
     else:
         capture_ok = page_loaded
     if capture_ok:

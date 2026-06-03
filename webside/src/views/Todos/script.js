@@ -472,6 +472,7 @@ export default defineComponent({
         post_ship_ready: false,
         ship_confirm_code: '',
         ship_tracking_no: '',
+        ship_method_label: '',
         // 发行后保存到本地的发货二维码图片（/imges/...）
         qr_image_url: '',
         // 发送场所信息（发货码上方「○○から発送」标题/说明/设施图标 URL，煤炉 CDN）
@@ -614,6 +615,17 @@ export default defineComponent({
       if (!m) return ''
       if (m.includes('ゆうゆう')) return 'post-box'
       if (m.includes('らくらく')) return 'yamato'
+      return ''
+    })
+
+    // 待发送通知卡片的发送方式图标：ship_method_label 多为「ゆうパケットポスト/mini」(ゆうゆう便)
+    //   或「ネコポス/宅急便」(らくらく便)，需比 shippingMethodCardImg 更宽地匹配。
+    //   ゆう系/ポスト/郵便 → post-box；らくらく/ヤマト/ネコ/宅急便 → yamato。
+    const postShipMethodImg = computed(() => {
+      const m = (detail.ship_method_label || detail.shipping_method_name || detail.current_shipping_status || '').trim()
+      if (!m) return ''
+      if (m.includes('らくらく') || m.includes('ヤマト') || m.includes('ネコ') || m.includes('宅急便')) return 'yamato'
+      if (m.includes('ゆうゆう') || m.includes('ゆうパケット') || m.includes('ゆうパック') || m.includes('ポスト') || m.includes('郵便')) return 'post-box'
       return ''
     })
 
@@ -1087,9 +1099,10 @@ export default defineComponent({
         if (res?.done) {
           qrScanDone.value = true
           stopQrScanMirror()
-          // 读取成功 → 自动关闭扫码弹窗 → 读取确认信息并弹二次确认框
+          // 读取成功 → 关闭扫码弹窗 → 抓取确认符号/追跡番号并缓存到发货栏（不再弹二次确认窗）。
+          // 缓存后发货栏出现「确认发送」按钮，用户随后点击才执行发送通知。
           qrScanVisible.value = false
-          openShipConfirmDialog()
+          await cachePostShipAfterScan()
         }
       } catch (e) {
         console.error('[QR摄像头]', e?.message || e)
@@ -1135,6 +1148,25 @@ export default defineComponent({
     const shipConfirmVisible = ref(false)
     const shipConfirmLoading = ref(false)
     const shipConfirmInfo = reactive({ ok: false, confirm_code: '', tracking_no: '' })
+
+    // 扫码成功后：读取「ポスト発送確認符号 / 追跡番号」，由后端写入缓存(detail_json)，
+    // 然后刷新本地详情，使发货栏出现确认符号/追跡番号 + 「确认发送」按钮。不再弹二次确认窗。
+    // 用户即便扫码后关闭系统/页面，再次打开也能从缓存看到发货栏的「确认发送」。
+    async function cachePostShipAfterScan() {
+      const id = currentRow.value?.id
+      if (!id) return
+      try {
+        const res = await todosApi.postShippingInfo(id)
+        // 立即本地反映（后端已同步写入缓存，刷新/重开亦可见）
+        detail.post_ship_ready = true
+        if (res?.confirm_code) detail.ship_confirm_code = res.confirm_code
+        if (res?.tracking_no) detail.ship_tracking_no = res.tracking_no
+        if (res?.method_label) detail.ship_method_label = res.method_label
+        ElMessage.success(t('todos.scanDoneCached'))
+      } catch (e) {
+        if (!e?.response) ElMessage.error(e?.message || t('todos.fetchFailed'))
+      }
+    }
 
     async function openShipConfirmDialog() {
       const id = currentRow.value?.id
@@ -1551,6 +1583,7 @@ export default defineComponent({
       facilityImageUrl,
       shippingImageUrl,
       shippingMethodCardImg,
+      postShipMethodImg,
       onShippingImgError,
       listParams,
       load,

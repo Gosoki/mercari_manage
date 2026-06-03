@@ -13,6 +13,7 @@ from .....web_drive.core.mitm_session import mitm_automation_browser
 from .....web_drive.core.paths import mercari_account_key
 from ....sync.sync_progress import make_sync_reporter
 from .._common import _is_wait_shipping_todo
+from .._qr_facility import _persist_post_ship_ready
 from .._ui import _click_visible_button_by_text
 from .qr_scan import _SCAN_OK_TEXT
 
@@ -71,17 +72,38 @@ async def read_post_shipping_confirm_info(todo_id: int) -> Dict[str, Any]:
     m = re.search(r"追跡番号[\s:：]*([0-9\-]+)", text)
     if m:
         tracking_no = m.group(1)
+    # 発送方法（通过什么发送）：优先 slip 区「サイズ」(ゆうパケットポスト/mini)，回落「配送の方法」。
+    method_label = None
+    m = re.search(r"サイズ[\s\r\n]+([^\r\n]+)", text)
+    if m:
+        method_label = m.group(1).strip() or None
+    if not method_label:
+        m = re.search(r"配送の方法[\s\r\n]+([^\r\n]+)", text)
+        if m:
+            method_label = m.group(1).strip() or None
 
     log.info(
-        "[postship] 読み取り情報 ok=%s code=%s tracking=%s todo=%s",
-        ok, confirm_code, tracking_no, todo_id,
+        "[postship] 読み取り情報 ok=%s code=%s tracking=%s method=%s todo=%s",
+        ok, confirm_code, tracking_no, method_label, todo_id,
     )
+    # 扫码完成 → 把「待发送通知」状态写入缓存（detail_json）。这样即便用户关闭系统/页面，
+    # 再次打开（loadDetailCache，不开浏览器）也能在发货栏直接显示发送方式/确认符号/追跡番号 +
+    # 「确认发送」按钮，无需重新扫码。
+    if ok or confirm_code or tracking_no:
+        _persist_post_ship_ready(
+            int(todo_id),
+            ready=True,
+            confirm_code=confirm_code,
+            tracking_no=tracking_no,
+            method_label=method_label,
+        )
     return {
         "todo_id": int(todo_id),
         "account_id": aid,
         "ok": ok,
         "confirm_code": confirm_code,
         "tracking_no": tracking_no,
+        "method_label": method_label,
     }
 
 async def _tick_ship_confirm_checkboxes(page: Any) -> int:

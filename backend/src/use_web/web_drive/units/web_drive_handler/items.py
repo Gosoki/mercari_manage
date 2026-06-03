@@ -30,14 +30,14 @@ async def delete_on_sale_item(body: DeleteMercariItemBody):
     ``progress_job_id`` 与 GET /use_web/on-sale-items/sync-progress/{job_id} 共用通用
     sync_progress 内存存储，前端可复用同一个轮询接口展示步骤。
     """
-    from ....web_drive.core.account_serial_queue import (
+    from .....web_drive.core.account_serial_queue import (
         queue_key_for_mercari_account,
         run_mercari_serial_async,
     )
-    from ....web_drive.core.paths import mercari_id_from_account_key
-    from ....web_drive.delete.units.delete_order import delete_mercari_item as _do_delete
-    from ....ssl_mitm_proxy.runner import default_mitm_proxy_url
-    from ....use_mercari.sync.sync_progress import clear_sync_progress
+    from .....web_drive.core.paths import mercari_id_from_account_key
+    from .....web_drive.delete.units.delete_order import delete_mercari_item as _do_delete
+    from .....ssl_mitm_proxy.runner import default_mitm_proxy_url
+    from .....use_mercari.sync.sync_progress import clear_sync_progress
 
     item_id = (body.item_id or "").strip()
     if not item_id:
@@ -105,14 +105,14 @@ async def revise_on_sale_item(body: ReviseMercariItemBody):
     ``progress_job_id`` 与 GET /use_web/on-sale-items/sync-progress/{job_id} 共用通用
     sync_progress 内存存储，前端可复用同一个轮询接口展示步骤。
     """
-    from ....web_drive.core.account_serial_queue import (
+    from .....web_drive.core.account_serial_queue import (
         queue_key_for_mercari_account,
         run_mercari_serial_async,
     )
-    from ....web_drive.core.paths import mercari_id_from_account_key
-    from ....web_drive.revise.units.revise_order import revise_mercari_item as _do_revise
-    from ....ssl_mitm_proxy.runner import default_mitm_proxy_url
-    from ....use_mercari.sync.sync_progress import clear_sync_progress
+    from .....web_drive.core.paths import mercari_id_from_account_key
+    from .....web_drive.revise.units.revise_order import revise_mercari_item as _do_revise
+    from .....ssl_mitm_proxy.runner import default_mitm_proxy_url
+    from .....use_mercari.sync.sync_progress import clear_sync_progress
 
     item_id = (body.item_id or "").strip()
     if not item_id:
@@ -181,14 +181,14 @@ async def resume_on_sale_item(body: ResumeMercariItemBody):
     ``progress_job_id`` 与 GET /use_web/on-sale-items/sync-progress/{job_id} 共用通用
     sync_progress 内存存储，前端可复用同一个轮询接口展示步骤。
     """
-    from ....web_drive.core.account_serial_queue import (
+    from .....web_drive.core.account_serial_queue import (
         queue_key_for_mercari_account,
         run_mercari_serial_async,
     )
-    from ....web_drive.core.paths import mercari_id_from_account_key
-    from ....web_drive.resume.units.resume_order import resume_mercari_item as _do_resume
-    from ....ssl_mitm_proxy.runner import default_mitm_proxy_url
-    from ....use_mercari.sync.sync_progress import clear_sync_progress
+    from .....web_drive.core.paths import mercari_id_from_account_key
+    from .....web_drive.resume.units.resume_order import resume_mercari_item as _do_resume
+    from .....ssl_mitm_proxy.runner import default_mitm_proxy_url
+    from .....use_mercari.sync.sync_progress import clear_sync_progress
 
     item_id = (body.item_id or "").strip()
     if not item_id:
@@ -203,7 +203,7 @@ async def resume_on_sale_item(body: ResumeMercariItemBody):
         raise HTTPException(status_code=400, detail="无效的 account_key")
 
     # 恢复上架前校验：绑定的库存ID数量归零/不足时禁止恢复（不打开浏览器，快速失败）
-    from ....use_mercari.inventory_stock_apply import (
+    from .....use_mercari.inventory_stock_apply import (
         check_bound_inventory_sufficient_for_resume,
     )
 
@@ -266,14 +266,14 @@ async def suspend_on_sale_item(body: SuspendMercariItemBody):
     ``progress_job_id`` 与 GET /use_web/on-sale-items/sync-progress/{job_id} 共用通用
     sync_progress 内存存储，前端可复用同一个轮询接口展示步骤。
     """
-    from ....web_drive.core.account_serial_queue import (
+    from .....web_drive.core.account_serial_queue import (
         queue_key_for_mercari_account,
         run_mercari_serial_async,
     )
-    from ....web_drive.core.paths import mercari_id_from_account_key
-    from ....web_drive.suspend.units.suspend_order import suspend_mercari_item as _do_suspend
-    from ....ssl_mitm_proxy.runner import default_mitm_proxy_url
-    from ....use_mercari.sync.sync_progress import clear_sync_progress
+    from .....web_drive.core.paths import mercari_id_from_account_key
+    from .....web_drive.suspend.units.suspend_order import suspend_mercari_item as _do_suspend
+    from .....ssl_mitm_proxy.runner import default_mitm_proxy_url
+    from .....use_mercari.sync.sync_progress import clear_sync_progress
 
     item_id = (body.item_id or "").strip()
     if not item_id:

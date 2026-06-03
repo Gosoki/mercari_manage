@@ -151,27 +151,77 @@ _POST_SHIP_READY_JS = """
   let tracking = '';
   m = body.match(/追跡番号[\\s:：]*([0-9\\-]+)/);
   if (m) tracking = m[1];
-  return { ready, code, tracking };
+  // 発送方法（通过什么发送）：优先 slip 区的「サイズ」(例: ゆうパケットポスト / mini)，
+  // 回落到「配送の方法」(例: ゆうゆうメルカリ便)。
+  let method = '';
+  m = body.match(/サイズ[\\s\\r\\n]+([^\\r\\n]+)/);
+  if (m) method = m[1].trim();
+  if (!method) {
+    m = body.match(/配送の方法[\\s\\r\\n]+([^\\r\\n]+)/);
+    if (m) method = m[1].trim();
+  }
+  return { ready, code, tracking, method };
 }
 """
 
 async def _extract_post_ship_ready(page: Any) -> Dict[str, Any]:
     """检测交易页是否处于「待发送通知」状态（シール贴付/控え切り取りのチェック＋発送通知ボタン）。
 
-    返回 ``{ready, confirm_code, tracking_no}``；抓取失败时 ready=False。
+    返回 ``{ready, confirm_code, tracking_no, method}``；抓取失败时 ready=False。
     """
     try:
         data = await page.evaluate(_POST_SHIP_READY_JS)
     except Exception as exc:
         log.debug("[shipping] 提取发送通知待ち状态失败: %s", exc)
-        return {"ready": False, "confirm_code": None, "tracking_no": None}
+        return {"ready": False, "confirm_code": None, "tracking_no": None, "method": None}
     if not isinstance(data, dict):
-        return {"ready": False, "confirm_code": None, "tracking_no": None}
+        return {"ready": False, "confirm_code": None, "tracking_no": None, "method": None}
     return {
         "ready": bool(data.get("ready")),
         "confirm_code": (data.get("code") or "").strip() or None,
         "tracking_no": (data.get("tracking") or "").strip() or None,
+        "method": (data.get("method") or "").strip() or None,
     }
+
+def _persist_post_ship_ready(
+    todo_id: int,
+    *,
+    ready: bool,
+    confirm_code: Optional[str] = None,
+    tracking_no: Optional[str] = None,
+    method_label: Optional[str] = None,
+) -> None:
+    """把「待发送通知」状态(post_ship_ready/确认符号/追跡番号)合并进 todo_items.detail_json。
+
+    扫码完成后调用：即使用户随后关闭系统/页面，再次打开也能直接从缓存显示发货栏的
+    确认符号·追跡番号 + 「确认发送」按钮（无需重新扫码）。
+    """
+    db = DatabaseManager()
+    try:
+        rows = db.execute_query(
+            "SELECT [detail_json] FROM [todo_items] WHERE [id]=?", (int(todo_id),)
+        )
+        d: Dict[str, Any] = {}
+        if rows and rows[0] and rows[0][0]:
+            try:
+                parsed = json.loads(rows[0][0])
+                if isinstance(parsed, dict):
+                    d = parsed
+            except Exception:
+                d = {}
+        d["post_ship_ready"] = bool(ready)
+        if confirm_code:
+            d["ship_confirm_code"] = confirm_code
+        if tracking_no:
+            d["ship_tracking_no"] = tracking_no
+        if method_label:
+            d["ship_method_label"] = method_label
+        db.execute_update(
+            "UPDATE [todo_items] SET [detail_json]=? WHERE [id]=?",
+            (json.dumps(d, ensure_ascii=False), int(todo_id)),
+        )
+    except Exception as exc:
+        log.warning("[postship] 缓存发送通知待ち状态失败 todo_id=%s: %s", todo_id, exc)
 
 def _persist_shipping_facility(todo_id: int, fac: Dict[str, str]) -> None:
     """把发送场所信息合并进 todo_items.detail_json（不覆盖其它字段）。"""

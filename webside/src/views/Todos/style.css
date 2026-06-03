@@ -436,6 +436,13 @@
 .detail-postship-hint {
   color: var(--el-text-color-secondary);
 }
+/* 「确认发送 / 修改」按钮：放在卡片右下方 */
+.detail-postship-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
 /* お届け先（未定/非匿名方式时的买家收货地址） */
 .detail-recipient {
   display: flex;

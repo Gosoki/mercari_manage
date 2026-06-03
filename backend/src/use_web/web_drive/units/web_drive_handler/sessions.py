@@ -42,7 +42,7 @@ async def open_session(body: OpenSessionBody):
     try:
         proxy = None
         if body.use_mitm_proxy:
-            from ....ssl_mitm_proxy.runner import default_mitm_proxy_url
+            from .....ssl_mitm_proxy.runner import default_mitm_proxy_url
 
             proxy = (body.mitm_proxy_url or "").strip() or default_mitm_proxy_url()
         return {

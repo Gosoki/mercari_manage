@@ -49,7 +49,7 @@ def _get_category_positions(mapping_id: Optional[str]) -> dict:
     if not mapping_id:
         return {}
     try:
-        from ....db_manage.models.product_type_category_mapping import (
+        from .....db_manage.models.product_type_category_mapping import (
             ProductTypeCategoryMappingModel,
         )
         rows = ProductTypeCategoryMappingModel.find_all(
@@ -72,7 +72,7 @@ def _get_category_positions(mapping_id: Optional[str]) -> dict:
 
 def listing_post_progress(job_id: str):
     """出品自动化执行过程中轮询当前步骤（与 POST body.progress_job_id 对应）。"""
-    from ....web_drive.listing.units.listing_progress import get_listing_progress
+    from .....web_drive.listing.units.listing_progress import get_listing_progress
 
     jid = (job_id or "").strip()
     if not _LISTING_JOB_ID_RE.fullmatch(jid):
@@ -90,14 +90,14 @@ async def post_to_market(body: PostToMarketBody):
       · 商品类型选择 → 販売タイプ+价格 → 发货天数 → 发货地址
     经 ``run_mercari_serial_async`` 串行执行；浏览器在队列空闲后由队列自动关闭。
     """
-    from ....web_drive.core.account_serial_queue import (
+    from .....web_drive.core.account_serial_queue import (
         queue_key_for_mercari_account,
         run_mercari_serial_async,
     )
-    from ....web_drive.core.paths import mercari_id_from_account_key
-    from ....web_drive.listing.units.listing_progress import clear_listing_progress
-    from ....web_drive.listing.units.post_to_macket import post_to_market as _do_post
-    from ....ssl_mitm_proxy.runner import default_mitm_proxy_url
+    from .....web_drive.core.paths import mercari_id_from_account_key
+    from .....web_drive.listing.units.listing_progress import clear_listing_progress
+    from .....web_drive.listing.units.post_to_macket import post_to_market as _do_post
+    from .....ssl_mitm_proxy.runner import default_mitm_proxy_url
 
     jid = (body.progress_job_id or "").strip() or None
     if jid and not _LISTING_JOB_ID_RE.fullmatch(jid):

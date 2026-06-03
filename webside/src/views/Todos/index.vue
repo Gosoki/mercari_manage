@@ -269,7 +269,7 @@
             <!-- 已发行二维码/条形码时：确认发送 + 修改发货方式 并排放到标题右上角 -->
             <div class="detail-section-head">
               <div class="detail-section-title">{{ t('todos.section.shipping') }}</div>
-              <div v-if="detail.qr_image_url || detail.post_ship_ready" class="detail-section-head-actions">
+              <div v-if="detail.qr_image_url" class="detail-section-head-actions">
                 <el-button
                   type="primary"
                   size="default"
@@ -314,11 +314,22 @@
                 />
               </div>
             </template>
-            <!-- 待发送通知（ゆうパケットポスト等：シール读取已完成，仅需勾选+発送通知）。
-                 「确认发送」按钮在上方头部，点后由后端自动勾选并发送通知。 -->
+            <!-- 待发送通知（ゆうパケットポスト等：シール读取已完成/別の場所で扫码済み）。
+                 显示发送方式 + 发送确认符号 + 追踪番号；「确认发送」按钮放在卡片右下方，
+                 点后由后端自动勾选「発送用シールを貼りました」并发送通知。 -->
             <template v-else-if="detail.post_ship_ready">
               <div class="detail-postship">
-                <div class="detail-postship-hint">{{ t('todos.postShipReadyHint') }}</div>
+                <!-- 发送方式：图标（ゆうゆう→post-box / らくらく→yamato）+ 名称（不隐藏） -->
+                <div v-if="postShipMethodImg || detail.ship_method_label || detail.shipping_method_name" class="detail-method-head">
+                  <img
+                    v-if="postShipMethodImg"
+                    class="detail-method-img"
+                    :src="facilityImageUrl(postShipMethodImg)"
+                    :alt="detail.ship_method_label || detail.shipping_method_name || ''"
+                    @error="onShippingImgError"
+                  />
+                  <span class="detail-method-name">{{ detail.ship_method_label || detail.shipping_method_name }}</span>
+                </div>
                 <div v-if="detail.ship_confirm_code" class="detail-row">
                   <span class="detail-label">{{ t('todos.shipConfirmCode') }}</span>
                   <span class="detail-value">{{ detail.ship_confirm_code }}</span>
@@ -326,6 +337,22 @@
                 <div v-if="detail.ship_tracking_no" class="detail-row">
                   <span class="detail-label">{{ t('todos.shipTrackingNo') }}</span>
                   <span class="detail-value">{{ detail.ship_tracking_no }}</span>
+                </div>
+                <div class="detail-postship-actions">
+                  <el-button
+                    size="default"
+                    @click="onReviseShippingAfterQr"
+                  >
+                    {{ t('todos.changeShippingMethod') }}
+                  </el-button>
+                  <el-button
+                    type="primary"
+                    size="default"
+                    :loading="shipConfirmLoading"
+                    @click="onConfirmShipFromBarcode"
+                  >
+                    {{ t('todos.confirmShip') }}
+                  </el-button>
                 </div>
               </div>
             </template>
