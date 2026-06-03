@@ -31,6 +31,7 @@ export default defineComponent({
       MerpayRealcardWaitActivation: 'todos.kind.merpayActivation',
       ReviewedSeller: 'todos.kind.waitReview',
       IncomingMessage: 'todos.kind.waitReply',
+      Shipped: 'todos.kind.waitReceipt',
     }
 
     // 待回复（IncomingMessage）默认回复：分两种状态
@@ -186,6 +187,7 @@ export default defineComponent({
       MerpayRealcardWaitActivation: 'info',
       ReviewedSeller: 'success',
       IncomingMessage: 'primary',
+      Shipped: 'success',
     }
 
     const list = ref([])
@@ -405,6 +407,8 @@ export default defineComponent({
     const isWaitShipping = computed(
       () => String(currentRow.value?.title || '').trim() === WAIT_SHIPPING_TITLE,
     )
+    // 是否反查到关联本地库存（待发货时未关联则不允许选包材 / 发货，须先更新订单管理）
+    const hasInventoryMatch = computed(() => (invMatch.inventory || []).length > 0)
     // 反查到的库存里是否有至少一张本地图片
     const hasLocalInventoryImages = computed(() =>
       (invMatch.inventory || []).some((inv) => Array.isArray(inv?.images) && inv.images.length > 0),
@@ -833,6 +837,8 @@ export default defineComponent({
       const isRow = kindOrRow && typeof kindOrRow === 'object'
       const kind = String((isRow ? kindOrRow.kind : kindOrRow) || '').trim()
       const title = isRow ? String(kindOrRow.title || '').trim() : ''
+      // Shipped（已发货 / 待买家收货）优先于标题判断：即便标题为「発送をしてください」也按待收货
+      if (kind === 'Shipped') return t('todos.kind.waitReceipt')
       if (title === WAIT_SHIPPING_TITLE) return t('todos.kind.waitShipping')
       if (!kind) return '-'
       const key = KIND_LABEL_KEYS[kind]
@@ -843,6 +849,7 @@ export default defineComponent({
       const isRow = kindOrRow && typeof kindOrRow === 'object'
       const kind = String((isRow ? kindOrRow.kind : kindOrRow) || '').trim()
       const title = isRow ? String(kindOrRow.title || '').trim() : ''
+      if (kind === 'Shipped') return KIND_TAG_TYPES.Shipped
       if (title === WAIT_SHIPPING_TITLE) return 'warning'
       return KIND_TAG_TYPES[kind] || 'info'
     }
@@ -928,17 +935,13 @@ export default defineComponent({
       }
     }
 
-    function onOpenMercariPage() {
-      const iid = String(detail.item_id || '').trim()
-      if (!iid) {
-        ElMessage.warning(t('todos.noItemIdCannotOpen'))
-        return
-      }
-      window.open(`https://jp.mercari.com/transaction/${iid}`, '_blank', 'noopener')
-    }
-
     async function onClickShippingSizeLocation() {
       if (!currentRow.value?.id) return
+      // 待发货但未关联本地库存：先去更新订单管理，禁止发货
+      if (isWaitShipping.value && !hasInventoryMatch.value) {
+        ElMessage.warning(t('todos.updateOrderFirst'))
+        return
+      }
       // 先点开页面上的「商品サイズと発送場所を選択する」让浏览器跳到尺寸选择页
       try {
         await txOverlay.run({
@@ -1223,6 +1226,11 @@ export default defineComponent({
 
     async function onClickShippingChangeMethod() {
       if (!currentRow.value?.id) return
+      // 待发货但未关联本地库存：先去更新订单管理，禁止发货相关操作
+      if (isWaitShipping.value && !hasInventoryMatch.value) {
+        ElMessage.warning(t('todos.updateOrderFirst'))
+        return
+      }
       try {
         const result = await txOverlay.run({
           title: t('todos.clickingChangeMethod'),
@@ -1494,6 +1502,7 @@ export default defineComponent({
       inventoryThumbUrl,
       loadInventoryMatch,
       isWaitShipping,
+      hasInventoryMatch,
       hasLocalInventoryImages,
       showMercariPhoto,
       inventoryProductType,
@@ -1540,7 +1549,6 @@ export default defineComponent({
       mercariItemUrl,
       onProcess,
       onDetailRefresh,
-      onOpenMercariPage,
       onClickShippingSizeLocation,
       onConfirmShippingSelection,
       qrScanVisible,

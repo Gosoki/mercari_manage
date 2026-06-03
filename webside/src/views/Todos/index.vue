@@ -142,7 +142,6 @@
           <span :id="titleId" :class="titleClass">{{ t('todos.transactionDetail') }} <code>{{ detail.item_id || '-' }}</code></span>
           <div class="detail-header-actions">
             <el-button size="small" :loading="detailLoading" @click="onDetailRefresh">{{ t('todos.refreshFetch') }}</el-button>
-            <el-button size="small" type="primary" link @click="onOpenMercariPage">{{ t('todos.openMercariPage') }}</el-button>
           </div>
         </div>
       </template>
@@ -200,14 +199,49 @@
                     </span>
                   </div>
                 </div>
+
+                <!-- 出库明细：与关联本地库存合并展示 -->
+                <div class="detail-ship-outbound" v-loading="shipOutbound.loading">
+                  <div class="detail-label">{{ t('todos.outboundLines') }}</div>
+                  <el-table
+                    v-if="shipOutbound.lines.length"
+                    :data="shipOutbound.lines"
+                    size="small"
+                    border
+                  >
+                    <el-table-column
+                      :label="t('todos.outboundLocation')"
+                      min-width="140"
+                      show-overflow-tooltip
+                    >
+                      <template #default="{ row: line }">
+                        {{ [line.warehouse_name, line.shelf_name, line.shelf_code].filter(Boolean).join(' - ') || dash }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column :label="t('common.quantity')" prop="quantity" width="64" align="center" />
+                    <el-table-column :label="t('common.status')" width="86" align="center">
+                      <template #default="{ row: line }">
+                        <el-tag
+                          :type="Number(line?.is_stocked_out || 0) === 1 ? 'success' : 'info'"
+                          size="small"
+                        >
+                          {{ Number(line?.is_stocked_out || 0) === 1 ? t('orders.stockedOut') : t('orders.pendingStockOut') }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                  <div v-else class="detail-empty">{{ t('todos.noOutboundLines') }}</div>
+                </div>
               </template>
             </div>
           </section>
 
-          <!-- 包材与出库（待发货时，放在发货之前） -->
+          <!-- 包材（待发货时，放在发货之前） -->
           <section v-if="!isReviewedSeller && isWaitShipping" class="detail-section">
-            <div class="detail-section-title">{{ t('todos.packagingAndOutbound') }}</div>
-            <div class="detail-ship-commit">
+            <div class="detail-section-title">{{ t('todos.packaging') }}</div>
+            <div v-if="invMatch.loading" class="detail-empty">{{ t('todos.matching') }}</div>
+            <div v-else-if="!hasInventoryMatch" class="detail-empty-hint">{{ t('todos.updateOrderFirst') }}</div>
+            <div v-else class="detail-ship-commit">
               <div class="detail-ship-pack">
                 <div class="detail-label">{{ t('orders.packagingName') }}</div>
                 <el-select
@@ -229,38 +263,6 @@
                     :value="item.item_name"
                   />
                 </el-select>
-              </div>
-
-              <div class="detail-ship-outbound" v-loading="shipOutbound.loading">
-                <div class="detail-label">{{ t('todos.outboundLines') }}</div>
-                <el-table
-                  v-if="shipOutbound.lines.length"
-                  :data="shipOutbound.lines"
-                  size="small"
-                  border
-                >
-                  <el-table-column
-                    :label="t('todos.outboundLocation')"
-                    min-width="140"
-                    show-overflow-tooltip
-                  >
-                    <template #default="{ row: line }">
-                      {{ [line.warehouse_name, line.shelf_name, line.shelf_code].filter(Boolean).join(' - ') || dash }}
-                    </template>
-                  </el-table-column>
-                  <el-table-column :label="t('common.quantity')" prop="quantity" width="64" align="center" />
-                  <el-table-column :label="t('common.status')" width="86" align="center">
-                    <template #default="{ row: line }">
-                      <el-tag
-                        :type="Number(line?.is_stocked_out || 0) === 1 ? 'success' : 'info'"
-                        size="small"
-                      >
-                        {{ Number(line?.is_stocked_out || 0) === 1 ? t('orders.stockedOut') : t('orders.pendingStockOut') }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-                </el-table>
-                <div v-else class="detail-empty">{{ t('todos.noOutboundLines') }}</div>
               </div>
             </div>
           </section>
@@ -322,26 +324,35 @@
               </div>
               <div class="detail-shipping-actions">
                 <el-tooltip
-                  :disabled="!isWaitShipping || hasPackagingSelected"
-                  :content="t('todos.pickPackagingFirst')"
+                  :disabled="!isWaitShipping || (hasInventoryMatch && hasPackagingSelected)"
+                  :content="!hasInventoryMatch ? t('todos.updateOrderFirst') : t('todos.pickPackagingFirst')"
                   placement="top"
                 >
                   <span>
                     <el-button
                       size="default"
-                      :disabled="isWaitShipping && !hasPackagingSelected"
+                      :disabled="isWaitShipping && (!hasInventoryMatch || !hasPackagingSelected)"
                       @click="onClickShippingSizeLocation"
                     >
                       {{ t('todos.pickSizeAndLocation') }}
                     </el-button>
                   </span>
                 </el-tooltip>
-                <el-button
-                  size="default"
-                  @click="onClickShippingChangeMethod"
+                <el-tooltip
+                  :disabled="!isWaitShipping || hasInventoryMatch"
+                  :content="t('todos.updateOrderFirst')"
+                  placement="top"
                 >
-                  {{ t('todos.changeShippingMethod') }}
-                </el-button>
+                  <span>
+                    <el-button
+                      size="default"
+                      :disabled="isWaitShipping && !hasInventoryMatch"
+                      @click="onClickShippingChangeMethod"
+                    >
+                      {{ t('todos.changeShippingMethod') }}
+                    </el-button>
+                  </span>
+                </el-tooltip>
               </div>
             </template>
           </section>
@@ -575,7 +586,6 @@
       </div>
       <template #footer>
         <el-button @click="onQrScanDialogClose">{{ t('common.close') }}</el-button>
-        <el-button type="primary" link @click="onOpenMercariPage">{{ t('todos.openMercariPage') }}</el-button>
       </template>
     </el-dialog>
 
