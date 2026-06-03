@@ -36,7 +36,7 @@ _SYNC_JOB_ID_RE = re.compile(r"^[a-zA-Z0-9_.-]{1,128}$")
 
 
 async def sync_notifications(req: SyncNotificationsRequest) -> Dict[str, Any]:
-    """从煤炉同步所有已开启账号（status=active 且 is_open=1）的お知らせ通知；按账号串行避免浏览器抢占。
+    """从煤炉同步所有启用账号（status=active；不要求自动获取开启）的お知らせ通知；按账号串行避免浏览器抢占。
 
     不再指定单个账号：点击即同步全部已开启账号，逐个执行并汇总结果。
     ``progress_job_id`` 与 GET /use_web/notifications/sync-progress/{job_id} 配合，

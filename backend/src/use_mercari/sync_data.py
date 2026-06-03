@@ -40,14 +40,14 @@ def resolve_account_id_by_seller_id(seller_id_str: Optional[str]) -> Optional[in
 
 
 def resolve_enabled_account_ids() -> List[int]:
-    """取所有 is_open=1 且 status=active 的账号 id（用于「从煤炉同步」一键同步全部已开启账号）。"""
+    """取所有 status=active 的账号 id（用于「从煤炉同步」一键同步全部启用账号；不要求自动获取开启）。"""
     rows = MercariAccountModel.find_all(
-        where="[status] = ? AND [is_open] = 1",
+        where="[status] = ?",
         params=("active",),
         order_by="[id] ASC",
     )
     if not rows:
-        raise RuntimeError("没有可用的煤炉账号（status=active 且 is_open=1）")
+        raise RuntimeError("没有可用的煤炉账号（status=active）")
     return [int(r.id) for r in rows]
 
 

@@ -47,7 +47,7 @@ log = logging.getLogger(__name__)
 
 async def sync_on_sale(data: SyncOnSaleRequest):
     """
-    从煤炉同步所有已开启账号（status=active 且 is_open=1）的在售列表并写入本地：用各账号主
+    从煤炉同步所有启用账号（status=active；不要求自动获取开启）的在售列表并写入本地：用各账号主
     profile ``mercari_{id}`` 经 MITM 打开 jp.mercari.com/mypage/listings，截获
     api.mercari.jp/items/get_items 响应。
     在同一浏览器会话内，对本次**新增**的商品依次打开商品页截获 items/get，执行与「获取详情」相同的库存回写（可用 WEB_DRIVE_ON_SALE_SYNC_AUTO_DETAIL=0 关闭）。

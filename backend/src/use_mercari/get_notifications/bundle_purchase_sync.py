@@ -188,20 +188,20 @@ def _mark_state_if_exists(account_id: int, bundle_id: str, new_state: str) -> in
 
 
 def _resolve_account_id(account_id: Optional[int]) -> int:
-    """显式 account_id 优先；否则取第一个 is_open=1 且 status=active 的账号。"""
+    """显式 account_id 优先；否则取第一个 status=active 的账号（不要求自动获取开启）。"""
     if account_id is not None:
         acc = MercariAccountModel.find_by_id(id=int(account_id))
         if acc is None:
             raise ValueError(f"煤炉账号 id={account_id} 不存在")
         return int(account_id)
     rows = MercariAccountModel.find_all(
-        where="[status] = ? AND [is_open] = 1",
+        where="[status] = ?",
         params=("active",),
         order_by="[id] ASC",
         limit=1,
     )
     if not rows:
-        raise ValueError("没有可用的煤炉账号（status=active 且 is_open=1）")
+        raise ValueError("没有可用的煤炉账号（status=active）")
     return int(rows[0].id)
 
 

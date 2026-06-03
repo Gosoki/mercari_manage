@@ -56,7 +56,7 @@ class SyncOrdersRequest(PydanticModel):
 @router.post("/sync-new-data")
 async def api_sync_new_data(data: SyncOrdersRequest):
     """
-    订单页「更新列表」：对所有已开启账号（status=active 且 is_open=1）逐个串行执行——
+    订单页「更新列表」：对所有启用账号（status=active；不要求自动获取开启）逐个串行执行——
     WebDriver 打开取引中一覧 + MITM 截获 trading 列表；仅增量入库尚未存在的出售中单，倒序写入。
 
     不再指定单个账号：点击即更新全部已开启账号，逐个执行并汇总结果；每账号完成后立即关闭其浏览器。
