@@ -7,6 +7,13 @@ from ..order_outbound_line import OUTBOUND_ALERT_SKIP_STATUSES, PACKAGING_CHECK_
 
 class _QueryMixin:
 
+    # 批量信息刷新时跳过的「已结束」状态集合
+    _STATUSES_SKIP_BATCH_INFO: Tuple[str, ...] = (
+        "done",
+        "cancelled",
+        "sold_out",
+    )
+
     @classmethod
     def find_for_batch_info_refresh(
         cls,
