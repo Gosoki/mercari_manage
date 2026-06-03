@@ -297,10 +297,10 @@ async def finalize_post_shipping(
         confirmed = bool(steps.get("confirmed"))
         shipped_ok = bool(steps.get("shipped_ok"))
     else:
-        # ── 兜底：浏览器未打开 → 打开并导航到交易页（待发货走有头），再操作。──
-        is_wait_shipping = _is_wait_shipping_todo(todo)
-        headless_override = False if is_wait_shipping else None
-        minimized_override = False if is_wait_shipping else None
+        # ── 兜底：浏览器未打开 → 打开并导航到交易页，再操作。──
+        # /todos 浏览器操作统一无头静默：headless=None 走环境默认（默认无头）。
+        headless_override = None
+        minimized_override = None
         report("open_browser", f"正在打开交易页（{item_id}）…")
         async with mitm_automation_browser(
             aid,

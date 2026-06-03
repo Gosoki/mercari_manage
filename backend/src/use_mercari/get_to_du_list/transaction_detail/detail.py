@@ -68,10 +68,10 @@ async def fetch_transaction_detail(
         headless_override = True
         minimized_override = True
     else:
-        headless_override = False if is_wait_shipping else None
-        minimized_override = False if is_wait_shipping else None
-        if is_wait_shipping:
-            log.info("[txdetail] 待发货待办 → 打开有头持久化浏览器 account_id=%s", aid)
+        # /todos 相关浏览器操作统一无头静默（含待发货）：headless=None 走环境默认
+        # （WEB_DRIVE_AUTOMATION_HEADLESS 默认 1=无头）；调试时设该环境变量为 0 可改回有头。
+        headless_override = None
+        minimized_override = None
 
     report("open_browser", f"正在打开交易页（{item_id}）…")
     async with mitm_automation_browser(

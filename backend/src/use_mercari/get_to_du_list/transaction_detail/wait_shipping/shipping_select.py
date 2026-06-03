@@ -57,9 +57,9 @@ async def start_select_shipping_class(
 
     # 点「处理」不再自动开浏览器，因此本操作需自行确保浏览器已打开并停在交易页。
     # mitm_automation_browser 已开则复用并 reload 到交易页，未开则启动；退出不关闭。
-    is_wait_shipping = _is_wait_shipping_todo(todo)
-    headless_override = False if is_wait_shipping else None
-    minimized_override = False if is_wait_shipping else None
+    # /todos 浏览器操作统一无头静默（含待发货）：headless=None 走环境默认（默认无头）。
+    headless_override = None
+    minimized_override = None
     report("open_browser", f"正在打开交易页（{item_id}）…")
     async with mitm_automation_browser(
         aid,

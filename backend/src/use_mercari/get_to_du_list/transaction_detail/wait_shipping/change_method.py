@@ -75,9 +75,9 @@ async def click_change_shipping_method(
     url = f"https://jp.mercari.com/transaction/{item_id}"
 
     # 点「处理」不再自动开浏览器，因此本操作需自行确保浏览器已打开并停在交易页。
-    is_wait_shipping = _is_wait_shipping_todo(todo)
-    headless_override = False if is_wait_shipping else None
-    minimized_override = False if is_wait_shipping else None
+    # /todos 浏览器操作统一无头静默（含待发货）：headless=None 走环境默认（默认无头）。
+    headless_override = None
+    minimized_override = None
     report("open_browser", f"正在打开交易页（{item_id}）…")
     async with mitm_automation_browser(
         aid,
@@ -171,9 +171,9 @@ async def revise_shipping_after_qr(
         raise ValueError("该待办无关联 item_id，无法打开交易页")
     url = f"https://jp.mercari.com/transaction/{item_id}"
 
-    is_wait_shipping = _is_wait_shipping_todo(todo)
-    headless_override = False if is_wait_shipping else None
-    minimized_override = False if is_wait_shipping else None
+    # /todos 浏览器操作统一无头静默（含待发货）：headless=None 走环境默认（默认无头）。
+    headless_override = None
+    minimized_override = None
     report("open_browser", f"正在打开交易页（{item_id}）…")
     async with mitm_automation_browser(
         aid,
