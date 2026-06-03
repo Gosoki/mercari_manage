@@ -53,8 +53,8 @@ async def post_to_market(
     登录态由 Edge 持久化 cookie 自动维护（每次进入复用主 profile，cookie 始终保持最新）。
     浏览器在队列空闲后由 ``account_serial_queue`` 自动关闭，不在此处显式关闭。
     """
-    from ...core.manager import EdgeWebDriveManager
-    from ...core.mitm_session import mitm_automation_browser
+    from ....core.manager import EdgeWebDriveManager
+    from ....core.mitm_session import mitm_automation_browser
 
     if not isinstance(manager, EdgeWebDriveManager):
         raise TypeError("manager 须为 EdgeWebDriveManager 实例")
@@ -71,7 +71,7 @@ async def post_to_market(
         else:
             log.warning("无法解析图片路径，跳过: %s", u)
 
-    from ...core.paths import mercari_account_key, mercari_id_from_account_key
+    from ....core.paths import mercari_account_key, mercari_id_from_account_key
 
     account_id = mercari_id_from_account_key(account_key)
     if account_id is None:
