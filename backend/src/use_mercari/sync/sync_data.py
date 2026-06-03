@@ -8,19 +8,19 @@ Mercari 数据同步调度层
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from .get_order.get_history_order.get_history_list import (
+from ..get_order.get_history_order.get_history_list import (
     fetch_and_sync_history_orders,
 )
-from .get_order.get_in_progress_order.get_order_list import (
+from ..get_order.get_in_progress_order.get_order_list import (
     fetch_and_sync_open_orders,
     fetch_open_order_items,
     _item_to_order_data,
     _upsert_order,
 )
-from .get_order.get_in_progress_order.get_order_info import apply_item_info_to_order
+from ..get_order.get_in_progress_order.get_order_info import apply_item_info_to_order
 from .sync_progress import make_sync_reporter
-from ..db_manage.models.mercari_account import MercariAccountModel
-from ..db_manage.models.order import OrderModel
+from ...db_manage.models.mercari_account import MercariAccountModel
+from ...db_manage.models.order import OrderModel
 
 
 def resolve_account_id_by_seller_id(seller_id_str: Optional[str]) -> Optional[int]:
@@ -262,7 +262,7 @@ async def sync_new_data(
     # 历史全量同步不接此 hook，避免首次导入海量旧订单触发批量上架。
     if inserted_relist_nos:
         try:
-            from .auto_relist import schedule_auto_relist_for_orders
+            from ..auto_relist import schedule_auto_relist_for_orders
 
             schedule_auto_relist_for_orders(
                 inserted_relist_nos, seller_id=seller_key, account_id=aid

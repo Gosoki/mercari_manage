@@ -13,7 +13,7 @@ import time
 import re
 from typing import Any, Callable, Dict, List, Optional
 
-from .get_order.get_on_sale.on_sale_list import (
+from ..get_order.get_on_sale.on_sale_list import (
     LISTINGS_PAGE_URL,
     capture_on_sale_list_via_mitm_session,
 )
@@ -22,14 +22,14 @@ from .on_sale_item_detail_sync import (
     relink_inventory_from_persisted_listing,
 )
 from .on_sale_sync_progress import make_on_sale_sync_reporter
-from .sync_data import _resolve_account_and_seller
-from ..db_manage.models.on_sale_item import OnSaleItemModel
-from ..db_manage.database import DatabaseManager
-from ..ssl_mitm_proxy.capture_config import (
+from ..sync_data import _resolve_account_and_seller
+from ...db_manage.models.on_sale_item import OnSaleItemModel
+from ...db_manage.database import DatabaseManager
+from ...ssl_mitm_proxy.capture_config import (
     canonical_mercari_item_id,
     clear_on_sale_list_response_file,
 )
-from ..web_drive.core.mitm_session import mitm_automation_browser
+from ...web_drive.core.mitm_session import mitm_automation_browser
 
 _MERCARI_ID_SEP_RE = re.compile(r"[\n,，、\s]+")
 
