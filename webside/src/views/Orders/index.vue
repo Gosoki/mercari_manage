@@ -282,16 +282,38 @@
                         {{ expense.__placeholder ? '-' : formatExpenseTs(expense.record_time) }}
                       </template>
                     </el-table-column>
-                    <el-table-column :label="t('common.operate')" width="120" align="center" fixed="right">
+                    <el-table-column :label="t('common.operate')" width="220" align="center" fixed="right">
                       <template #default="{ row: expense }">
-                        <el-button
-                          v-if="expense.__placeholder"
-                          size="small"
-                          type="primary"
-                          @click="openPackagingDialog(row)"
-                        >
-                          {{ t('orders.addPackaging') }}
-                        </el-button>
+                        <template v-if="expense.__placeholder || expense.__canAdd">
+                          <el-select
+                            v-if="packagingAddingOpen[row.order_no]"
+                            :model-value="''"
+                            size="small"
+                            style="width: 100%"
+                            :placeholder="t('orders.packagingItemPlaceholder')"
+                            :loading="packagingState[row.order_no]?.submitting"
+                            :disabled="packagingState[row.order_no]?.submitting"
+                            @change="(val) => submitInlinePackaging(row.order_no, val)"
+                            @visible-change="(v) => { if (!v) closePackagingSelect(row.order_no) }"
+                          >
+                            <el-option :label="t('orders.noPackaging')" :value="PACKAGING_ITEM_NONE" />
+                            <el-option
+                              v-for="item in packagingItemsOptions"
+                              :key="item.item_name"
+                              :label="`${item.item_name}（${t('orders.stockLabel')}:${Number(item.quantity || 0)}）`"
+                              :value="item.item_name"
+                            />
+                          </el-select>
+                          <el-button
+                            v-else
+                            size="small"
+                            type="primary"
+                            :disabled="packagingState[row.order_no]?.submitting"
+                            @click="openPackagingSelect(row.order_no)"
+                          >
+                            {{ t('orders.addPackaging') }}
+                          </el-button>
+                        </template>
                         <span v-else class="cell-dash">-</span>
                       </template>
                     </el-table-column>
@@ -935,69 +957,6 @@
       </template>
     </el-dialog>
 
-    <el-dialog
-      v-model="packagingDialogVisible"
-      :title="t('orders.addPackagingMaterial')"
-      width="520px"
-      destroy-on-close
-    >
-      <el-form label-width="96px">
-        <el-form-item :label="t('orders.orderNumber')">
-          <el-input :model-value="packagingForm.order_no" disabled />
-        </el-form-item>
-        <el-form-item :label="t('orders.packagingName')" required>
-          <el-select
-            v-model="packagingForm.item_name"
-            filterable
-            clearable
-            style="width: 100%"
-            :placeholder="t('orders.packagingItemPlaceholder')"
-            @change="onPackagingItemChange"
-          >
-            <el-option :label="t('orders.noPackaging')" :value="PACKAGING_ITEM_NONE" />
-            <el-option
-              v-for="item in packagingItemsOptions"
-              :key="item.item_name"
-              :label="`${item.item_name}（${t('orders.stockLabel')}:${Number(item.quantity || 0)}）`"
-              :value="item.item_name"
-            />
-          </el-select>
-        </el-form-item>
-        <el-row v-show="isPackagingConcreteItemSelected" :gutter="12">
-          <el-col :span="12">
-            <el-form-item :label="t('common.quantity')" required>
-              <el-input-number
-                v-model="packagingForm.quantity"
-                :min="1"
-                :precision="0"
-                :controls="false"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item :label="t('orders.unitPrice')" required>
-              <el-input-number
-                v-model="packagingForm.unit_price"
-                :min="1"
-                :precision="0"
-                :controls="false"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item v-show="isPackagingConcreteItemSelected" :label="t('orders.costAmount')">
-          <el-input :model-value="String(Math.round(expenseAmount(packagingForm)))" disabled />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="packagingDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="packagingSubmitting" @click="submitPackagingExpense">
-          {{ t('orders.confirmAdd') }}
-        </el-button>
-      </template>
-    </el-dialog>
 
     <teleport to="body">
       <div

@@ -90,9 +90,9 @@ export default defineComponent({
       if (Number(oid) === Number(convertOwnerContext.value.current_owner_user_id)) return false
       return Number(convertOwnerContext.value.line_id || 0) > 0
     })
-    const packagingDialogVisible = ref(false)
-    const packagingSubmitting = ref(false)
     const packagingItemsOptions = ref([])
+    // 每个订单的「添加包材」下拉是否展开（点击按钮后才显示下拉框）
+    const packagingAddingOpen = ref({})
     let _manualObRowKeySeq = 0
     function newManualOutboundRowKey() {
       _manualObRowKeySeq += 1
@@ -204,16 +204,6 @@ export default defineComponent({
     const packagingState = ref({})
     /** 包材下拉：与真实库存包材名称隔离，避免重名冲突 */
     const PACKAGING_ITEM_NONE = '__PACKAGING_NONE__'
-    const isPackagingConcreteItemSelected = computed(() => {
-      const n = String(packagingForm.value?.item_name || '').trim()
-      return Boolean(n && n !== PACKAGING_ITEM_NONE)
-    })
-    const packagingForm = ref({
-      order_no: '',
-      item_name: '',
-      quantity: 1,
-      unit_price: null,
-    })
 
     /** 与列表相同条件：keyword、状态、最后时间区间（order_updated_at 优先）；今日副指标为本地当日且仍满足相同 keyword/状态（同上时间口径）。汇总不含 status=cancelled（后端 stats 排除已取消）。 */
     const orderStatCards = computed(() => {
@@ -1120,21 +1110,12 @@ export default defineComponent({
       return (packagingItemsOptions.value || []).find((it) => it.item_name === itemName) || null
     }
 
-    function onPackagingItemChange(itemName) {
-      if (itemName === PACKAGING_ITEM_NONE) {
-        packagingForm.value.quantity = 1
-        packagingForm.value.unit_price = 0
-        return
-      }
-      const meta = selectedPackagingMeta(itemName)
-      if (!meta) return
-      packagingForm.value.unit_price = Number(meta.amount || 0)
-    }
-
     function packagingDisplayRows(orderNo) {
       const rows = packagingState.value?.[String(orderNo || '').trim()]?.rows || []
+      // 无包材：仅一行占位行（操作列显示「添加包材」）
       if (!rows.length) return [{ __placeholder: true }]
-      return [...rows, { __placeholder: true }]
+      // 有包材：不额外生成空行，把「添加包材」放在最后一行的操作列
+      return rows.map((r, i) => (i === rows.length - 1 ? { ...r, __canAdd: true } : r))
     }
 
     async function loadPackagingExpenses(orderNo) {
@@ -1180,60 +1161,67 @@ export default defineComponent({
       }
     }
 
-    function openPackagingDialog(orderRow) {
-      const orderNo = String(orderRow?.order_no || '').trim()
-      if (!orderNo) return
-      packagingForm.value = {
-        order_no: orderNo,
-        item_name: '',
-        quantity: 1,
-        unit_price: null,
+    function setPackagingSubmitting(orderNo, val) {
+      const ono = String(orderNo || '').trim()
+      const cur = packagingState.value?.[ono] || {
+        loading: false,
+        loaded: false,
+        rows: [],
+        total_amount: 0,
       }
-      packagingDialogVisible.value = true
+      packagingState.value = {
+        ...packagingState.value,
+        [ono]: { ...cur, submitting: val },
+      }
     }
 
-    async function submitPackagingExpense() {
-      const orderNo = String(packagingForm.value.order_no || '').trim()
-      const itemName = String(packagingForm.value.item_name || '').trim()
-      const qty = Math.max(1, Number(packagingForm.value.quantity || 1))
-      const unitPrice = Math.max(1, Number(packagingForm.value.unit_price || 0))
-      if (!orderNo) return
-      if (!itemName) {
-        ElMessage.warning(t('orders.pleaseSelectPackaging'))
-        return
-      }
-      if (itemName === PACKAGING_ITEM_NONE) {
-        packagingSubmitting.value = true
-        try {
-          await orderApi.waivePackaging({ order_no: orderNo })
-          packagingDialogVisible.value = false
-          ElMessage.success(t('orders.confirmedNoPackaging'))
-          await loadPackagingExpenses(orderNo)
-          await load()
-        } finally {
-          packagingSubmitting.value = false
-        }
-        return
-      }
-      if (unitPrice <= 0) {
-        ElMessage.warning(t('orders.pleaseInputUnitPrice'))
-        return
-      }
-      packagingSubmitting.value = true
+    function openPackagingSelect(orderNo) {
+      const ono = String(orderNo || '').trim()
+      if (!ono) return
+      packagingAddingOpen.value = { ...packagingAddingOpen.value, [ono]: true }
+    }
+
+    function closePackagingSelect(orderNo) {
+      const ono = String(orderNo || '').trim()
+      if (!ono) return
+      const next = { ...packagingAddingOpen.value }
+      delete next[ono]
+      packagingAddingOpen.value = next
+    }
+
+    async function submitInlinePackaging(orderNo, itemName) {
+      const ono = String(orderNo || '').trim()
+      const name = String(itemName || '').trim()
+      if (!ono || !name) return
+      if (packagingState.value?.[ono]?.submitting) return
+      setPackagingSubmitting(ono, true)
       try {
+        if (name === PACKAGING_ITEM_NONE) {
+          await orderApi.waivePackaging({ order_no: ono })
+          ElMessage.success(t('orders.confirmedNoPackaging'))
+          await loadPackagingExpenses(ono)
+          await load()
+          return
+        }
+        const meta = selectedPackagingMeta(name)
+        const unitPrice = Math.max(1, Number(meta?.amount || 0))
+        if (unitPrice <= 0) {
+          ElMessage.warning(t('orders.pleaseInputUnitPrice'))
+          return
+        }
         await costExpenseApi.create({
-          order_no: orderNo,
-          item_name: itemName,
-          quantity: qty,
+          order_no: ono,
+          item_name: name,
+          quantity: 1,
           unit_price: unitPrice,
         })
         ElMessage.success(t('orders.packagingAddedDeducted'))
-        packagingDialogVisible.value = false
-        await loadPackagingExpenses(orderNo)
+        await loadPackagingExpenses(ono)
         await load()
         await loadStats()
       } finally {
-        packagingSubmitting.value = false
+        setPackagingSubmitting(ono, false)
+        closePackagingSelect(ono)
       }
     }
 
@@ -1658,8 +1646,6 @@ export default defineComponent({
       convertOwnerContext,
       convertOwnerForm,
       convertOwnerCanSubmit,
-      packagingDialogVisible,
-      packagingSubmitting,
       packagingItemsOptions,
       newManualOutboundRowKey,
       manualOutboundForm,
@@ -1676,8 +1662,6 @@ export default defineComponent({
       stats,
       packagingState,
       PACKAGING_ITEM_NONE,
-      isPackagingConcreteItemSelected,
-      packagingForm,
       orderStatCards,
       expandState,
       list,
@@ -1762,11 +1746,12 @@ export default defineComponent({
       onOrderExpandChange,
       loadPackagingItemOptions,
       selectedPackagingMeta,
-      onPackagingItemChange,
       packagingDisplayRows,
       loadPackagingExpenses,
-      openPackagingDialog,
-      submitPackagingExpense,
+      packagingAddingOpen,
+      openPackagingSelect,
+      closePackagingSelect,
+      submitInlinePackaging,
       addManualOutboundRow,
       removeManualOutboundRow,
       rowInventoryOptions,

@@ -386,22 +386,36 @@ export default defineComponent({
         }
         counts.set(name, (counts.get(name) || 0) + 1)
       }
-      try {
-        if (counts.size) {
-          for (const ono of nos) {
-            for (const [name, qty] of counts) {
+      // 同步前确保包材选项已加载，否则取不到 meta.amount 会导致单价缺失 / 同步失败
+      if (counts.size && !(packagingItemsOptions.value || []).length) {
+        await loadPackagingItemOptions()
+      }
+      let packFail = 0
+      if (counts.size) {
+        for (const ono of nos) {
+          for (const [name, qty] of counts) {
+            try {
               const meta = selectedPackagingMeta(name)
-              const unitPrice = Math.max(0, Number(meta?.amount || 0))
+              // 单价取库存包材配置金额；后端要求单价为正整数（0 会被拒绝），故最低为 1
+              const unitPrice = Math.max(1, Number(meta?.amount || 0))
               await costExpenseApi.create({ order_no: ono, item_name: name, quantity: qty, unit_price: unitPrice })
+            } catch (e) {
+              packFail += 1
+              console.error('[包材同步]', ono, name, e?.response?.data?.detail || e?.message || e)
             }
           }
-        } else if (hasNone) {
-          for (const ono of nos) await orderApi.waivePackaging({ order_no: ono })
         }
-      } catch (e) {
-        console.error('[包材同步]', e?.message || e)
-        ElMessage.warning(t('todos.packagingSyncFailed'))
+      } else if (hasNone) {
+        for (const ono of nos) {
+          try {
+            await orderApi.waivePackaging({ order_no: ono })
+          } catch (e) {
+            packFail += 1
+            console.error('[包材免除]', ono, e?.response?.data?.detail || e?.message || e)
+          }
+        }
       }
+      if (packFail) ElMessage.warning(t('todos.packagingSyncFailed'))
       // 2) 出库：关联订单下所有待出库明细
       let okCount = 0
       let failCount = 0
