@@ -72,6 +72,13 @@ async def startup():
         if r.get("error"):
             logging.getLogger(__name__).warning("SSL MITM 未启动: %s", r["error"])
 
+    if os.environ.get("MERCARI_PROXY_AUTO_START", "1").strip().lower() not in ("0", "false", "no", "off"):
+        from src.mercari_proxy import start_proxy
+
+        r = start_proxy()
+        if r.get("error"):
+            logging.getLogger(__name__).warning("mercari-proxy 未启动: %s", r["error"])
+
     from src.mercari_auto_fetch_loop import mercari_auto_fetch_loop
 
     asyncio.create_task(mercari_auto_fetch_loop())
@@ -98,11 +105,13 @@ async def shutdown_web_drive():
     from src.web_drive import get_web_drive_manager, shutdown_serial_executors
     from src.web_drive.core.account_serial_queue import shutdown_queue
     from src.ssl_mitm_proxy.runner import stop_mitm_proxy
+    from src.mercari_proxy import stop_proxy
 
     await shutdown_queue()
     shutdown_serial_executors(wait=False)
     await get_web_drive_manager().shutdown()
     stop_mitm_proxy()
+    stop_proxy()
 
 
 @app.get("/api/health")

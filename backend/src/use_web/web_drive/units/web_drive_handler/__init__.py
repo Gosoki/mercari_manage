@@ -28,6 +28,10 @@ from .items import (
     revise_on_sale_item,
     suspend_on_sale_item,
 )
+from .proxy_inject import (
+    InjectCookiesBody,
+    inject_cookies,
+)
 
 __all__ = [
     "OpenSessionBody",
@@ -47,4 +51,6 @@ __all__ = [
     "revise_on_sale_item",
     "resume_on_sale_item",
     "suspend_on_sale_item",
+    "InjectCookiesBody",
+    "inject_cookies",
 ]

@@ -5,6 +5,9 @@ export const webDriveApi = {
   openSession: (data, axiosConfig = {}) =>
     http.post('/use_web/web-drive/sessions/open', data, { timeout: 0, ...axiosConfig }),
   closeSession: (data) => http.post('/use_web/web-drive/sessions/close', data),
+  /** 读取账号登录态 Cookie 注入 mercari-proxy，返回本地浏览器引导地址 boot_path */
+  injectCookies: (data, axiosConfig = {}) =>
+    http.post('/use_web/web-drive/proxy/inject-cookies', data, { timeout: 0, ...axiosConfig }),
   listSessions: () => http.get('/use_web/web-drive/sessions'),
   profilesRoot: () => http.get('/use_web/web-drive/profiles-root'),
   /** WebDrive 打开编辑页并删除煤炉在售商品 */

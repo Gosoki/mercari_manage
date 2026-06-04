@@ -320,6 +320,7 @@ export default defineComponent({
     const syncingIds = ref(new Set())
     const syncDataIds = ref(new Set())
     const browserLoadingKeys = ref(new Set())
+    const cookieInjectKeys = ref(new Set())
     const fetchSellerIdLoading = ref(false)
 
     async function openBrowserByKey(accountKey, label) {
@@ -356,6 +357,43 @@ export default defineComponent({
 
     function openBrowserForSavedAccount(row) {
       openBrowserByKey(browserKeyFor(row.id), row.account_name || t('mercariAccounts.accountFallbackLabel', { id: row.id }))
+    }
+
+    /**
+     * Cookie 注入：读取服务端该账号登录态 Cookie → 注入 mercari-proxy →
+     * 在用户本地浏览器打开已登录的煤炉（经独立 HTTPS 端口的 mercari-proxy 反代）。
+     */
+    async function injectCookieForAccount(row) {
+      const key = browserKeyFor(row.id)
+      if (cookieInjectKeys.value.has(key)) return
+      const next = new Set(cookieInjectKeys.value)
+      next.add(key)
+      cookieInjectKeys.value = next
+      // 在 await 之前同步打开空白窗口，保留用户手势，避免被弹窗拦截。
+      const win = window.open('', '_blank')
+      try {
+        const res = await webDriveApi.injectCookies({ account_key: key })
+        const d = res.data || {}
+        if (d.boot_path) {
+          // 代理是独立端口的另一个源：用当前访问主机名 + 返回的 scheme/port 拼完整 URL，
+          // 这样本机(127.0.0.1)与局域网/远程访问都能正确指向代理。
+          const scheme = d.scheme || 'https'
+          const host = window.location.hostname
+          const bootUrl = `${scheme}://${host}:${d.port}${d.boot_path}`
+          if (win) win.location.href = bootUrl
+          else window.open(bootUrl, '_blank')
+          ElMessage.success(t('mercariAccounts.cookieInjectDone', { count: d.count || 0 }))
+        } else if (win) {
+          win.close()
+        }
+      } catch {
+        if (win) win.close()
+        /* 错误由 axios 拦截器提示 */
+      } finally {
+        const s = new Set(cookieInjectKeys.value)
+        s.delete(key)
+        cookieInjectKeys.value = s
+      }
     }
 
     // 可勾选同步的页面（key 与后端 _TASK_KEYS 一致；顺序即执行顺序）
@@ -569,9 +607,11 @@ export default defineComponent({
       syncingIds,
       syncDataIds,
       browserLoadingKeys,
+      cookieInjectKeys,
       fetchSellerIdLoading,
       openBrowserByKey,
       openBrowserForSavedAccount,
+      injectCookieForAccount,
       fetchHistory,
       fetchHistoryFromForm,
       SYNC_TASK_DEFS,

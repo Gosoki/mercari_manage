@@ -38,6 +38,13 @@
                 :loading="browserLoadingKeys.has(browserKeyFor(row.id))"
                 @click="openBrowserForSavedAccount(row)"
               >{{ t('mercariAccounts.openBrowser') }}</el-button>
+              <el-button
+                size="small"
+                type="warning"
+                plain
+                :loading="cookieInjectKeys.has(browserKeyFor(row.id))"
+                @click="injectCookieForAccount(row)"
+              >{{ t('mercariAccounts.cookieInject') }}</el-button>
               <el-tooltip
                 :disabled="row.status === 'active' && !syncLockStore.locked"
                 :content="row.status !== 'active' ? t('mercariAccounts.syncDataDisabledHint') : syncLockStore.label"
