@@ -110,6 +110,58 @@ def _parse_shipping_info(payload: Optional[Dict[str, Any]], local_sender_id: Opt
 
     return out
 
+# 消息图片可能挂在的字段（不同版本接口差异，做并集兜底）：消息级 media/images/photos/
+# attachments 列表，或单数 image。逐项再用 _coerce_media_url 取出真正的图片 URL。
+_MEDIA_LIST_KEYS = ("media", "images", "photos", "attachments")
+# media 项为 dict 时，按优先级取图片 URL 的键（原图优先于缩略图）。
+_MEDIA_URL_KEYS = (
+    "url",
+    "image_url",
+    "original_url",
+    "photo_url",
+    "src",
+    "thumbnail_url",
+    "thumbnail",
+    "photo_thumbnail_url",
+)
+
+
+def _coerce_media_url(item: Any) -> Optional[str]:
+    """从单个 media 项里取出图片 URL：item 可能是字符串 URL 或带 url 键的 dict。"""
+    if isinstance(item, str):
+        s = item.strip()
+        return s if s.startswith("http") else None
+    if isinstance(item, dict):
+        for k in _MEDIA_URL_KEYS:
+            v = item.get(k)
+            if isinstance(v, str) and v.strip().startswith("http"):
+                return v.strip()
+        # 兜底：dict 内任意以 http 开头的字符串值
+        for v in item.values():
+            if isinstance(v, str) and v.strip().startswith("http"):
+                return v.strip()
+    return None
+
+
+def _extract_message_image_urls(m: Dict[str, Any]) -> List[str]:
+    """提取单条消息携带的图片 URL（去重保序）。煤炉消息图为 storage.googleapis.com
+    签名 URL，会过期，故仅作为下载源，最终由 _messages_media 落地到本地 /imges。"""
+    candidates: List[Any] = []
+    for key in _MEDIA_LIST_KEYS:
+        v = m.get(key)
+        if isinstance(v, list):
+            candidates.extend(v)
+    single = m.get("image")
+    if single:
+        candidates.append(single)
+    urls: List[str] = []
+    for it in candidates:
+        u = _coerce_media_url(it)
+        if u:
+            urls.append(u)
+    return list(dict.fromkeys(urls))
+
+
 def _parse_messages(
     payload: Optional[Dict[str, Any]],
     local_sender_id: Optional[str],
@@ -138,7 +190,9 @@ def _parse_messages(
         uid = str(uid_raw).strip() if uid_raw is not None else ""
         is_buyer = bool(buyer_uid) and uid == buyer_uid
         body_text = (m.get("body") or "").strip()
-        if not body_text and not user.get("name"):
+        image_urls = _extract_message_image_urls(m)
+        # 文本/图片/用户名全空才跳过——带图无文本的消息要保留。
+        if not body_text and not image_urls and not user.get("name"):
             continue
         msg_id_raw = m.get("id")
         msg_id = str(msg_id_raw).strip() if msg_id_raw is not None else ""
@@ -152,6 +206,8 @@ def _parse_messages(
                 "is_buyer": is_buyer,
                 "user_id": uid or None,
                 "reaction": reaction or None,
+                # 抓取时为远程签名 URL；经 _messages_media 下载后替换为本地 /imges 路径。
+                "images": image_urls,
             }
         )
         if is_buyer and not out["buyer_name"]:

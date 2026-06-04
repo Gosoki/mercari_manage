@@ -832,8 +832,18 @@
                 <div v-else class="combined-edit-aside-item__img-placeholder">{{ t('inventory.noImage') }}</div>
               </div>
               <div class="combined-edit-aside-item__body">
-                <div class="combined-edit-aside-item__title">
-                  {{ t('inventory.mgmtPrefix') }} {{ row.inventory_id }} · {{ row.name || '—' }}
+                <div class="combined-edit-aside-item__title-row">
+                  <div class="combined-edit-aside-item__title">
+                    {{ t('inventory.mgmtPrefix') }} {{ row.inventory_id }} · {{ row.name || '—' }}
+                  </div>
+                  <el-button
+                    v-if="!row.loadError"
+                    class="combined-edit-aside-item__jump"
+                    size="small"
+                    type="primary"
+                    link
+                    @click="openCombinedComponentEdit(row)"
+                  >{{ t('inventory.viewComponentProduct') }}</el-button>
                 </div>
                 <div class="combined-edit-aside-item__meta">
                   <span>{{ t('inventory.perSet') }} <strong>{{ row.per_combo_quantity }}</strong></span>
@@ -894,13 +904,18 @@
               :loading="submitting"
               :disabled="inventorySaveBlockedByImageUpload"
             >{{ t('common.save') }}</el-button>
-            <el-tooltip v-if="form.id" :disabled="!syncLockStore.locked" :content="syncLockStore.label" placement="top">
+            <el-tooltip
+              v-if="form.id"
+              :disabled="!syncLockStore.locked && !currentEditRowIsAlert"
+              :content="syncLockStore.locked ? syncLockStore.label : currentEditRowAlertReason"
+              placement="top"
+            >
               <span>
                 <el-button
                   type="warning"
                   @click="submitListingFromEditForm"
                   :loading="listingSubmitting"
-                  :disabled="inventorySaveBlockedByImageUpload || listableQuantity(form) <= 0 || syncLockStore.locked"
+                  :disabled="inventorySaveBlockedByImageUpload || listableQuantity(form) <= 0 || syncLockStore.locked || currentEditRowIsAlert"
                 >{{ t('inventory.list') }}</el-button>
               </span>
             </el-tooltip>

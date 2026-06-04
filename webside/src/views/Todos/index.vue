@@ -476,7 +476,22 @@
                 :class="['detail-msg', m.is_buyer ? 'detail-msg-buyer' : 'detail-msg-self']"
               >
                 <div v-if="m.from" class="detail-msg-from">{{ m.from }}<span v-if="!m.is_buyer" class="detail-msg-tag-self">{{ t('todos.sellerTag') }}</span></div>
-                <div class="detail-msg-text">{{ m.text }}</div>
+                <div v-if="m.images && m.images.length" class="detail-msg-images">
+                  <el-image
+                    v-for="(img, ii) in m.images"
+                    :key="ii"
+                    :src="mercariImageUrl(img)"
+                    :preview-src-list="mercariImageUrlList(m.images)"
+                    :initial-index="ii"
+                    :preview-teleported="true"
+                    fit="cover"
+                    referrerpolicy="no-referrer"
+                    class="detail-msg-image"
+                  >
+                    <template #error><span class="thumb-fallback">-</span></template>
+                  </el-image>
+                </div>
+                <div v-if="m.text" class="detail-msg-text">{{ m.text }}</div>
                 <div class="detail-msg-footer">
                   <span v-if="m.at" class="detail-msg-at">{{ m.at }}</span>
                   <span v-if="m.reaction" class="detail-msg-reaction">{{ emojiFor(m.reaction) }}</span>

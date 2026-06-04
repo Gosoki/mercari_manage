@@ -2161,6 +2161,7 @@ export default defineComponent({
                 images: imgs,
                 image_front: imgs[0] || null,
                 current_quantity: p?.quantity ?? 0,
+                source: p,
                 loadError: null
               }
             } catch {
@@ -2171,6 +2172,7 @@ export default defineComponent({
                 images: [],
                 image_front: null,
                 current_quantity: null,
+                source: null,
                 loadError: t('inventory.cannotLoadInventoryItem')
               }
             }
@@ -2179,6 +2181,20 @@ export default defineComponent({
         combinedEditDetailRows.value = rows
       } finally {
         combinedEditDetailLoading.value = false
+      }
+    }
+
+    // 组合组成明细：点击跳转到原始商品的编辑表单
+    async function openCombinedComponentEdit(row) {
+      if (!row || !row.inventory_id || row.loadError) {
+        ElMessage.warning(t('inventory.cannotLoadInventoryItem'))
+        return
+      }
+      try {
+        const product = row.source || (await inventoryApi.get(row.inventory_id))
+        openDialog(product)
+      } catch {
+        ElMessage.warning(t('inventory.cannotLoadInventoryItem'))
       }
     }
 
@@ -2750,6 +2766,20 @@ export default defineComponent({
       closeAllInlineEditors()
       await load({ resetPage: false })
     }
+
+    /** 当前编辑行是否「报红」（无归属/归属系统管理员，或在售+待出>库存）。
+     *  form 自身缺少 on_sale_quantity/pending_outbound_qty 等字段，需按 id 回查列表行。 */
+    const currentEditRow = computed(() => {
+      const id = Number(form.value?.id)
+      if (!Number.isFinite(id) || id <= 0) return null
+      return list.value.find((r) => Number(r.id) === id) || null
+    })
+    const currentEditRowIsAlert = computed(() =>
+      currentEditRow.value ? isInventoryAlertRow(currentEditRow.value) : false
+    )
+    const currentEditRowAlertReason = computed(() =>
+      currentEditRow.value ? inventoryAlertReasons(currentEditRow.value).join('；') : ''
+    )
 
     /** 编辑弹窗内「出品」：用当前表单字段派发出品自动化（单条库存） */
     async function submitListingFromEditForm() {
@@ -3843,6 +3873,8 @@ export default defineComponent({
       isInventoryOwnerNeedsAlert,
       isInventoryAlertRow,
       inventoryAlertReasons,
+      currentEditRowIsAlert,
+      currentEditRowAlertReason,
       sortedInventoryList,
       onInventorySortChange,
       quantityTagType,
@@ -3892,6 +3924,7 @@ export default defineComponent({
       pagedList,
       parseCombinedItemsPayload,
       loadCombinedEditDetailForRow,
+      openCombinedComponentEdit,
       normalizeInventoryImagePath,
       isImageInCombinedForm,
       openCombinedLinkImageDialog,

@@ -315,13 +315,26 @@
   flex: 1 1 auto;
   min-width: 0;
 }
+.combined-edit-aside-item__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .combined-edit-aside-item__title {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 13px;
   font-weight: 600;
   color: #e6edf7;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.combined-edit-aside-item__jump {
+  flex: 0 0 auto;
+  padding: 0;
+  height: auto;
+  font-size: 12px;
 }
 .combined-edit-aside-item__meta {
   margin-top: 4px;

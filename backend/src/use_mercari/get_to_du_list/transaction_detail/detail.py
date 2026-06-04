@@ -14,6 +14,7 @@ from ...sync.sync_progress import make_sync_reporter
 from ._cache import _clear_qr_image, _persist_transaction_detail
 from ._captures import _wait_for_both_captures
 from ._common import _WAIT_REPLY_KINDS, _is_wait_shipping_todo, _parse_messages, _parse_shipping_info
+from ._messages_media import cache_message_images
 from ._qr_facility import _extract_delivery_address, _extract_post_ship_ready, _extract_shipping_facility, _qr_code_exists, _save_qr_code_image
 
 log = logging.getLogger(__name__)
@@ -125,6 +126,9 @@ async def fetch_transaction_detail(
     report("parse_response", "正在解析截获的取引详情…")
     shipping_part = _parse_shipping_info(shipping, local_sender_id)
     messages_part = _parse_messages(messages, local_sender_id)
+    # 消息里的图片（storage.googleapis.com 签名 URL，会过期）下载到本地 /imges 持久化，
+    # 前端只显示本地图、不直连煤炉/谷歌签名 URL。原地把 messages[i].images 换成本地路径。
+    await cache_message_images(int(todo_id), messages_part.get("messages") or [])
 
     result = {
         "todo_id": int(todo_id),

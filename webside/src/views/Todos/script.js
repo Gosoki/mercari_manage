@@ -7,7 +7,7 @@ import { useMercariAccountStore } from '@/stores/mercariAccount.js'
 import { useSyncLockStore } from '@/stores/syncLock.js'
 import { useSyncOverlay } from '@/composables/useSyncOverlay'
 import SyncOverlay from '@/components/SyncOverlay.vue'
-import { mercariImageUrl } from '@/utils/mercariImage.js'
+import { mercariImageUrl, mercariImageUrlList } from '@/utils/mercariImage.js'
 
 export default defineComponent({
   components: {
@@ -1529,6 +1529,7 @@ export default defineComponent({
       useSyncOverlay,
       SyncOverlay,
       mercariImageUrl,
+      mercariImageUrlList,
       t,
       txOverlay,
       mercariAccountStore,

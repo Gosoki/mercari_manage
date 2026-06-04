@@ -327,6 +327,23 @@
   white-space: pre-wrap;
   line-height: 1.5;
 }
+.detail-msg-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.detail-msg-image {
+  width: 96px;
+  height: 96px;
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-fill-color-blank);
+  cursor: pointer;
+}
+.detail-msg-images:last-child {
+  margin-bottom: 0;
+}
 .detail-msg-at {
   font-size: 10px;
   color: var(--el-text-color-placeholder);
