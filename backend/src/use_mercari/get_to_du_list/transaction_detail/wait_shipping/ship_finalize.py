@@ -12,6 +12,7 @@ from .....web_drive.core.manager import get_web_drive_manager
 from .....web_drive.core.mitm_session import mitm_automation_browser
 from .....web_drive.core.paths import mercari_account_key
 from ....sync.sync_progress import make_sync_reporter
+from ....get_order.get_in_progress_order.get_order_info import apply_item_info_to_order
 from .._common import _is_wait_shipping_todo
 from .._qr_facility import _persist_post_ship_ready
 from .._ui import _click_visible_button_by_text
@@ -19,12 +20,6 @@ from .qr_scan import _SCAN_OK_TEXT
 
 log = logging.getLogger(__name__)
 
-
-# 確認用チェックボックスのラベル候補（シール/専用箱など発送方法で文言が変わるため複数許容）
-_SHIP_CONFIRM_CHECKBOX_TEXTS = (
-    "ご依頼主様控えを切り取りました",
-    "梱包した商品に発送用シールを貼りました",
-)
 
 _NOTIFY_SHIP_BUTTON_TEXT = "商品を発送したので、発送通知をする"
 
@@ -106,57 +101,110 @@ async def read_post_shipping_confirm_info(todo_id: int) -> Dict[str, Any]:
         "method_label": method_label,
     }
 
-async def _tick_ship_confirm_checkboxes(page: Any) -> int:
-    """発送確認ページのチェックボックスにチェックを入れる（複数文言・構造に対応）。
+async def _is_checked_safe(cb: Any) -> bool:
+    try:
+        return bool(await cb.is_checked())
+    except Exception:
+        return False
 
-    1) ラベル文言を含む要素の祖先 ``<label>`` をクリック（無ければその要素を直接クリック）
-    2) 取りこぼした ``input[type=checkbox]`` を force でチェック
-    戻り値: チェック/クリックできた数。
+
+async def _tick_ship_confirm_checkboxes(page: Any) -> int:
+    """発送確認ページのチェックボックス（「ご依頼主様控えを切り取りました」等）にチェックを入れる。
+
+    **重要**：このチェックを入れて初めて「商品を発送したので、発送通知をする」ボタンが
+    出現/有効化される。先にチェックせずボタンを探すと「見つからない」になる。
+
+    Mercari の ``merCheckbox`` は React 制御の input + ラベル構造で、文言は発送方法
+    （ご依頼主様控え / 発送用シール / 「ご依頼主様」を受け取りました 等）により変わる。
+    ``input.check(force=True)`` は input の状態だけ変えて onChange を発火させないことがあり、
+    その場合ボタンが出ない/disabled のまま残る。よって onChange を確実に発火させる
+    「ユーザー操作に近いクリック」（関連付け ``<label for>`` / 祖先 ``<label>`` / merCheckbox
+    ラッパ / acknowledge-checkbox）を優先し、取りこぼしのみ force-check で補う。文言非依存で
+    全 checkbox を対象にする。
+
+    戻り値: チェック済みにできた数。
     """
     ticked = 0
-    for label_text in _SHIP_CONFIRM_CHECKBOX_TEXTS:
-        try:
-            loc = page.get_by_text(label_text, exact=False)
-            if await loc.count() == 0:
-                continue
-        except Exception:
-            continue
-        clicked = False
-        # チェックボックスの toggle 範囲＝<label>。あればそれをクリック
-        try:
-            lbl = loc.first.locator("xpath=ancestor-or-self::label[1]")
-            if await lbl.count() > 0:
-                await lbl.first.click(timeout=3000)
-                clicked = True
-        except Exception:
-            clicked = False
-        if not clicked:
-            try:
-                await loc.first.click(timeout=3000)
-                clicked = True
-            except Exception:
-                clicked = False
-        if clicked:
-            ticked += 1
-            log.info("[postship] チェック「%s」", label_text)
-            await asyncio.sleep(0.2)
-
-    # 取りこぼし対策：未チェックの checkbox を force でチェック
     try:
         cbs = page.locator('input[type="checkbox"]')
         cnt = await cbs.count()
-        for i in range(cnt):
-            cb = cbs.nth(i)
+    except Exception:
+        cnt = 0
+    for i in range(cnt):
+        cb = cbs.nth(i)
+        if await _is_checked_safe(cb):
+            continue
+
+        # onChange を発火させるクリック候補（=ボタンを出現/有効化させる）。優先順：
+        #  1) 関連付け <label for=id>（兄弟ラベルでも効く）
+        #  2) 祖先 <label>
+        #  3) acknowledge-checkbox / merCheckbox ラッパ
+        cb_id = None
+        try:
+            cb_id = await cb.get_attribute("id")
+        except Exception:
+            cb_id = None
+        click_targets = []
+        if cb_id:
+            click_targets.append(page.locator(f'label[for="{cb_id}"]'))
+        click_targets.append(cb.locator("xpath=ancestor::label[1]"))
+        click_targets.append(cb.locator('xpath=ancestor::*[@data-testid="acknowledge-checkbox"][1]'))
+        click_targets.append(cb.locator('xpath=ancestor::*[contains(@class,"merCheckbox")][1]'))
+        for tgt in click_targets:
+            if await _is_checked_safe(cb):
+                break
             try:
-                if not await cb.is_checked():
-                    await cb.check(force=True, timeout=1500)
-                    ticked += 1
-                    log.info("[postship] force-checked checkbox[%d]", i)
+                if await tgt.count() > 0:
+                    await tgt.first.scroll_into_view_if_needed(timeout=1500)
+                    await tgt.first.click(timeout=2500)
+                    await asyncio.sleep(0.15)
             except Exception:
                 pass
-    except Exception:
-        pass
+
+        # フォールバック：input を直接クリック（force なし）→ それでも未チェックなら force-check
+        if not await _is_checked_safe(cb):
+            try:
+                await cb.click(timeout=1500)
+            except Exception:
+                pass
+        if not await _is_checked_safe(cb):
+            try:
+                await cb.check(force=True, timeout=1500)
+            except Exception:
+                pass
+
+        if await _is_checked_safe(cb):
+            ticked += 1
+            log.info("[postship] checkbox[%d] をチェック", i)
+            await asyncio.sleep(0.2)
     return ticked
+
+
+async def _wait_notify_button_ready(page: Any, text: str, *, timeout_ms: int = 6000) -> bool:
+    """「商品を発送したので、発送通知をする」ボタンが出現し有効化されるまで待つ。
+
+    チェックボックスにチェックを入れた直後は React の再描画でボタンが出る/有効化される
+    まで僅かにラグがある。可視・有効になれば True。
+    """
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        for loc in (
+            page.get_by_role("button", name=text),
+            page.locator(f'button:has-text("{text}")'),
+        ):
+            try:
+                n = await loc.count()
+            except Exception:
+                n = 0
+            for i in range(n):
+                b = loc.nth(i)
+                try:
+                    if await b.is_visible() and await b.is_enabled():
+                        return True
+                except Exception:
+                    continue
+        await asyncio.sleep(0.3)
+    return False
 
 async def _has_tracking_number(page: Any, *, body_text: Optional[str] = None) -> bool:
     """交易页是否出现「送り状番号」(发货后才有的追跡番号)。
@@ -183,7 +231,9 @@ async def _run_post_ship_steps(page: Any, report: Any, todo_id: int) -> Dict[str
     返回 ``{ticked, confirmed, shipped_ok, success_signal}``。
     """
     # ── Step 1: 確認チェックボックスにチェック（「ご依頼主様控えを切り取りました」等） ──
-    report("check_confirm", "正在勾选确认项…")
+    # 必須：先にチェックを入れないと「商品を発送したので、発送通知をする」ボタンが
+    # 出現/有効化されず、Step 2 で「ボタンが見つからない」になる。
+    report("check_confirm", "正在勾选确认项（ご依頼主様控えを切り取りました 等）…")
     ticked = await _tick_ship_confirm_checkboxes(page)
     if ticked == 0:
         log.warning(
@@ -191,13 +241,20 @@ async def _run_post_ship_steps(page: Any, report: Any, todo_id: int) -> Dict[str
             "そのまま発送通知ボタンを試行します。",
             page.url,
         )
-    await asyncio.sleep(0.2)
+
+    # ── Step 1.5: チェック後、発送通知ボタンが出現/有効化されるのを待つ ──
+    # 出てこなければチェックが onChange を発火できていない可能性が高いので一度だけ再チェック。
+    if not await _wait_notify_button_ready(page, _NOTIFY_SHIP_BUTTON_TEXT, timeout_ms=6000):
+        log.info("[postship] 発送通知ボタン未出現 → チェックを再試行")
+        ticked = max(ticked, await _tick_ship_confirm_checkboxes(page))
+        await _wait_notify_button_ready(page, _NOTIFY_SHIP_BUTTON_TEXT, timeout_ms=6000)
 
     # ── Step 2: 「商品を発送したので、発送通知をする」 ──
     report("click_notify", "正在点击「発送通知をする」…")
     if not await _click_visible_button_by_text(page, _NOTIFY_SHIP_BUTTON_TEXT, timeout_ms=8000):
         raise RuntimeError(
-            f"未找到/未能点击「{_NOTIFY_SHIP_BUTTON_TEXT}」按钮（当前 URL: {page.url}）"
+            f"未找到/未能点击「{_NOTIFY_SHIP_BUTTON_TEXT}」按钮"
+            f"（已勾选 {ticked} 个确认项；当前 URL: {page.url}）"
         )
     log.info("[postship] 点击「%s」", _NOTIFY_SHIP_BUTTON_TEXT)
 
@@ -315,6 +372,7 @@ async def finalize_post_shipping(
             shipped_ok = bool(steps.get("shipped_ok"))
 
     # ── Step 5: 成功确认后才软删除本地 todo（列表から消す） ──
+    order_refresh_error: Optional[str] = None
     if shipped_ok:
         try:
             todo.is_delete = 1
@@ -324,6 +382,20 @@ async def finalize_post_shipping(
         except Exception as exc:
             log.warning("[postship] 软删除 todo 失败: %s", exc)
 
+        # 刷新订单信息（回填 transaction_evidences 状态，使 #/orders 同步发货后新状态）
+        if item_id:
+            try:
+                order_refresh_error = await apply_item_info_to_order(item_id, account_id=aid)
+                if order_refresh_error:
+                    log.warning("[postship] 订单刷新返回错误: %s", order_refresh_error)
+                else:
+                    log.info("[postship] 订单刷新完成 item_id=%s", item_id)
+            except Exception as exc:
+                order_refresh_error = f"exception:{exc}"
+                log.warning("[postship] 订单刷新异常: %s", exc)
+        else:
+            log.warning("[postship] todo 无 item_id，跳过订单刷新")
+
     report("done", "已完成发货通知" if shipped_ok else "已发送（未检测到完成文案）")
     return {
         "todo_id": int(todo_id),
@@ -332,4 +404,5 @@ async def finalize_post_shipping(
         "checkboxes_ticked": ticked,
         "shipped_confirmed": confirmed,
         "shipped_ok": shipped_ok,
+        "order_refresh_error": order_refresh_error,
     }

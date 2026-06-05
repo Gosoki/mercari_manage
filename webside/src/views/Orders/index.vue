@@ -417,129 +417,196 @@
     <el-dialog
       v-model="dialogVisible"
       :title="t('orders.editOrder')"
-      width="720px"
+      width="1080px"
       destroy-on-close
       class="order-edit-dialog"
     >
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="140px" class="order-edit-form" disabled>
-        <el-form-item v-if="form.id != null" :label="t('orders.dbId')">
-          <el-input :model-value="String(form.id)" disabled />
-        </el-form-item>
-        <el-form-item :label="t('orders.orderNumber')" prop="order_no">
-          <el-input v-model="form.order_no" :placeholder="t('orders.orderNumberPlaceholder')" maxlength="60" clearable />
-        </el-form-item>
-        <el-form-item :label="t('orders.orderTime')" prop="order_date">
-          <el-date-picker
-            v-model="form.order_date"
-            type="datetime"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            style="width: 100%"
-            :placeholder="t('orders.orderDatePlaceholder')"
-            clearable
-          />
-        </el-form-item>
-        <el-form-item :label="t('orders.updateTime')">
-          <el-date-picker
-            v-model="form.order_updated_at"
-            type="datetime"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            style="width: 100%"
-            :placeholder="t('common.optional')"
-            clearable
-          />
-        </el-form-item>
-        <el-form-item :label="t('orders.purchaseTime')">
-          <el-date-picker
-            v-model="form.purchase_time"
-            type="datetime"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            style="width: 100%"
-            :placeholder="t('common.optional')"
-            clearable
-          />
-        </el-form-item>
-        <el-form-item :label="t('orders.sellerId')">
-          <el-input v-model="form.data_user" placeholder="data_user（Mercari seller.id）" maxlength="64" clearable />
-        </el-form-item>
-        <el-form-item :label="t('orders.buyerId')">
-          <el-input v-model="form.customer_name" :placeholder="t('orders.buyerIdPlaceholder')" maxlength="30" clearable />
-        </el-form-item>
-        <el-form-item :label="t('orders.orderStatus')" prop="status">
-          <el-select v-model="form.status" filterable style="width: 100%">
-            <el-option v-for="item in formOrderStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('orders.amountJpy')" prop="amount">
-          <el-input-number v-model="form.amount" :min="1" :precision="0" :controls="false" style="width: 100%" />
-        </el-form-item>
-        <el-form-item :label="t('orders.serviceFeeJpy')">
-          <el-input-number
-            v-model="form.service_fee"
-            :precision="0"
-            :controls="false"
-            style="width: 100%"
-            :placeholder="t('orders.optionalInteger')"
-          />
-        </el-form-item>
-        <el-form-item :label="t('orders.netIncomeJpy')">
-          <el-input-number
-            v-model="form.net_income"
-            :precision="0"
-            :controls="false"
-            style="width: 100%"
-            :placeholder="t('orders.optionalInteger')"
-          />
-        </el-form-item>
-        <el-form-item :label="t('orders.carrier')">
-          <el-input v-model="form.carrier_display_name" clearable placeholder="carrier_display_name" />
-        </el-form-item>
-        <el-form-item :label="t('orders.shippingMethod')">
-          <el-input v-model="form.request_class_display_name" clearable placeholder="request_class_display_name" />
-        </el-form-item>
-        <el-form-item :label="t('orders.shippingFeeJpy')">
-          <el-input-number
-            v-model="form.shipping_fee"
-            :precision="0"
-            :controls="false"
-            style="width: 100%"
-            :placeholder="t('orders.optionalInteger')"
-          />
-        </el-form-item>
-        <el-form-item :label="t('orders.trackingNo')">
-          <el-input v-model="form.tracking_no" clearable placeholder="tracking_no" />
-        </el-form-item>
-        <el-form-item :label="t('orders.transactionEvidenceId')">
-          <el-input-number
-            v-model="form.transaction_evidence_id"
-            :precision="0"
-            :controls="false"
-            style="width: 100%"
-            :placeholder="t('orders.transactionEvidenceIdPlaceholder')"
-          />
-        </el-form-item>
-        <el-form-item :label="t('orders.itemNameCol')">
-          <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="2000" show-word-limit placeholder="remark" />
-        </el-form-item>
-        <el-form-item :label="t('orders.itemDescription')">
-          <el-input
-            v-model="form.description"
-            type="textarea"
-            :rows="3"
-            maxlength="4000"
-            show-word-limit
-            placeholder="description（transaction_evidences/get）"
-          />
-          <div v-if="orderDescriptionMgmtHint" class="form-hint">{{ orderDescriptionMgmtHint }}</div>
-        </el-form-item>
-        <el-form-item :label="t('orders.thumbnailsJson')">
-          <el-input
-            v-model="form.thumbnails_text"
-            type="textarea"
-            :rows="4"
-            :placeholder="t('orders.thumbnailsJsonPlaceholder')"
-          />
-          <div class="form-hint">{{ t('orders.thumbnailsJsonHint') }}</div>
-        </el-form-item>
+      <el-form :model="form" :rules="rules" ref="formRef" label-position="top" class="order-edit-form order-edit-form--tiled" disabled>
+        <!-- 基本信息 -->
+        <el-divider content-position="left" class="order-edit-section">{{ t('orders.sectionBasic') }}</el-divider>
+        <el-row :gutter="16">
+          <el-col v-if="form.id != null" :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.dbId')">
+              <el-input :model-value="String(form.id)" disabled />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.orderNumber')" prop="order_no">
+              <el-input v-model="form.order_no" :placeholder="t('orders.orderNumberPlaceholder')" maxlength="60" clearable />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.orderStatus')" prop="status">
+              <el-select v-model="form.status" filterable style="width: 100%">
+                <el-option v-for="item in formOrderStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.transactionEvidenceId')">
+              <el-input-number
+                v-model="form.transaction_evidence_id"
+                :precision="0"
+                :controls="false"
+                style="width: 100%"
+                :placeholder="t('orders.transactionEvidenceIdPlaceholder')"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- 时间 -->
+        <el-divider content-position="left" class="order-edit-section">{{ t('orders.sectionTime') }}</el-divider>
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.orderTime')" prop="order_date">
+              <el-date-picker
+                v-model="form.order_date"
+                type="datetime"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                style="width: 100%"
+                :placeholder="t('orders.orderDatePlaceholder')"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.updateTime')">
+              <el-date-picker
+                v-model="form.order_updated_at"
+                type="datetime"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                style="width: 100%"
+                :placeholder="t('common.optional')"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.purchaseTime')">
+              <el-date-picker
+                v-model="form.purchase_time"
+                type="datetime"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                style="width: 100%"
+                :placeholder="t('common.optional')"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- 交易双方 -->
+        <el-divider content-position="left" class="order-edit-section">{{ t('orders.sectionParties') }}</el-divider>
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.sellerId')">
+              <el-input v-model="form.data_user" placeholder="data_user（Mercari seller.id）" maxlength="64" clearable />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.buyerId')">
+              <el-input v-model="form.customer_name" :placeholder="t('orders.buyerIdPlaceholder')" maxlength="30" clearable />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- 金额 -->
+        <el-divider content-position="left" class="order-edit-section">{{ t('orders.sectionAmount') }}</el-divider>
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.amountJpy')" prop="amount">
+              <el-input-number v-model="form.amount" :min="1" :precision="0" :controls="false" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.serviceFeeJpy')">
+              <el-input-number
+                v-model="form.service_fee"
+                :precision="0"
+                :controls="false"
+                style="width: 100%"
+                :placeholder="t('orders.optionalInteger')"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.netIncomeJpy')">
+              <el-input-number
+                v-model="form.net_income"
+                :precision="0"
+                :controls="false"
+                style="width: 100%"
+                :placeholder="t('orders.optionalInteger')"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- 物流 -->
+        <el-divider content-position="left" class="order-edit-section">{{ t('orders.sectionLogistics') }}</el-divider>
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.carrier')">
+              <el-input v-model="form.carrier_display_name" clearable placeholder="carrier_display_name" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.shippingMethod')">
+              <el-input v-model="form.request_class_display_name" clearable placeholder="request_class_display_name" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.shippingFeeJpy')">
+              <el-input-number
+                v-model="form.shipping_fee"
+                :precision="0"
+                :controls="false"
+                style="width: 100%"
+                :placeholder="t('orders.optionalInteger')"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.trackingNo')">
+              <el-input v-model="form.tracking_no" clearable placeholder="tracking_no" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- 商品信息 -->
+        <el-divider content-position="left" class="order-edit-section">{{ t('orders.sectionItemInfo') }}</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="24">
+            <el-form-item :label="t('orders.itemNameCol')">
+              <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="2000" show-word-limit placeholder="remark" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item :label="t('orders.itemDescription')">
+              <el-input
+                v-model="form.description"
+                type="textarea"
+                :rows="3"
+                maxlength="4000"
+                show-word-limit
+                placeholder="description（transaction_evidences/get）"
+              />
+              <div v-if="orderDescriptionMgmtHint" class="form-hint">{{ orderDescriptionMgmtHint }}</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item :label="t('orders.thumbnailsJson')">
+              <el-input
+                v-model="form.thumbnails_text"
+                type="textarea"
+                :rows="4"
+                :placeholder="t('orders.thumbnailsJsonPlaceholder')"
+              />
+              <div class="form-hint">{{ t('orders.thumbnailsJsonHint') }}</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
       </el-form>
       <template #footer>
         <div class="order-dialog-footer">
