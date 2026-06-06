@@ -23,6 +23,7 @@ from ...ssl_mitm_proxy.capture_config import clear_todolist_response_file
 from ...web_drive.core.mitm_session import mitm_automation_browser
 from ..sync.sync_progress import make_sync_reporter
 from .todolist_capture import TODOS_PAGE_URL, capture_todolist_via_mitm_session
+from .transaction_detail._common import _WAIT_SHIPPING_KINDS, _WAIT_SHIPPING_TITLE
 
 log = logging.getLogger(__name__)
 
@@ -131,6 +132,13 @@ def _upsert_todo_row(db: DatabaseManager, row: Dict[str, Any]) -> str:
     return "updated" if pre else "inserted"
 
 
+def _row_is_wait_shipping(row: Dict[str, Any]) -> bool:
+    """待办行是否为「待发货」（kind 命中待发货集合，或标题为「発送をしてください」）。"""
+    kind = (row.get("kind") or "").strip()
+    title = (row.get("title") or "").strip()
+    return kind in _WAIT_SHIPPING_KINDS or title == _WAIT_SHIPPING_TITLE
+
+
 def apply_todolist_sync(account_id: int, items: List[Dict[str, Any]]) -> Dict[str, int]:
     """写入本地 ``todo_items``，并软删除本次未出现的旧行。"""
     db = DatabaseManager()
@@ -139,6 +147,7 @@ def apply_todolist_sync(account_id: int, items: List[Dict[str, Any]]) -> Dict[st
     inserted = 0
     updated = 0
     skipped = 0
+    new_wait_shipping = 0
     incoming_uuids: List[str] = []
 
     for item in items:
@@ -153,6 +162,9 @@ def apply_todolist_sync(account_id: int, items: List[Dict[str, Any]]) -> Dict[st
         action = _upsert_todo_row(db, row)
         if action == "inserted":
             inserted += 1
+            # 新插入(=新出现)的待发货待办视为「新的待发货数据」，用于联动同步在售/订单
+            if _row_is_wait_shipping(row):
+                new_wait_shipping += 1
         elif action == "updated":
             updated += 1
         else:
@@ -181,6 +193,7 @@ def apply_todolist_sync(account_id: int, items: List[Dict[str, Any]]) -> Dict[st
         "inserted": inserted,
         "updated": updated,
         "skipped": skipped,
+        "new_wait_shipping": new_wait_shipping,
         "marked_deleted": int(marked_deleted or 0),
     }
 
@@ -265,11 +278,13 @@ async def sync_todos_with_details(
     account_id: Optional[int] = None,
     progress_job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """同步待办列表后，对新到的「待发货/待回复/待评价」无缓存待办补抓交易详情。
+    """同步待办列表后，对新到的「待发货/待回复/待评价」无缓存待办补抓交易详情，
+    并在有**新待发货**时联动同步一次在售列表与订单列表。
 
     与待办页「从煤炉同步」行为一致；供后台「自动数据获取」与单账号「同步数据」复用。
-    **必须在该账号串行队列内调用**（详情预缓存复用同一浏览器会话，不再单独入队）。
-    预缓存失败仅记录、不影响列表同步结果；返回的 stats 追加 detail_fetched / detail_failed。
+    **必须在该账号串行队列内调用**（详情预缓存 / 联动同步复用同一浏览器会话，不再单独入队）。
+    预缓存与联动同步的失败仅记录、不影响列表同步结果；返回的 stats 追加
+    detail_fetched / detail_failed，以及（仅在有新待发货时）linked_on_sale / linked_orders。
     """
     # 延迟导入避免包加载期潜在的循环依赖
     from .transaction_detail import precache_uncached_todo_details
@@ -283,4 +298,42 @@ async def sync_todos_with_details(
     )
     stats["detail_fetched"] = int(fetched)
     stats["detail_failed"] = int(failed)
+
+    # ── 联动同步：本次有新待发货（=有新订单成交）→ 同步一次在售列表与订单列表 ──
+    #    没有新待发货则不触发，避免无谓抓取。
+    if int(stats.get("new_wait_shipping") or 0) > 0 and aid:
+        await _link_sync_on_new_wait_shipping(aid, stats, progress_job_id)
+
     return stats
+
+
+async def _link_sync_on_new_wait_shipping(
+    account_id: int, stats: Dict[str, Any], progress_job_id: Optional[str]
+) -> None:
+    """检测到新待发货后，联动同步一次「在售列表」与「订单列表」（各自失败互不影响）。
+
+    复用当前账号已打开的浏览器会话（直接调用，不再入队）；结果/错误写入 stats。
+    """
+    # 延迟导入避免循环依赖
+    from ..on_sale.on_sale_items_sync import sync_on_sale_items_from_mercari
+    from ..sync.sync_data import sync_new_data
+
+    log.info(
+        "[todolist] account_id=%s 检测到 %d 条新待发货，联动同步在售列表与订单列表",
+        account_id,
+        int(stats.get("new_wait_shipping") or 0),
+    )
+    try:
+        stats["linked_on_sale"] = await sync_on_sale_items_from_mercari(
+            account_id=account_id, progress_job_id=progress_job_id
+        )
+    except Exception as exc:  # noqa: BLE001 联动失败不影响待办同步结果
+        log.warning("[todolist] account_id=%s 联动在售同步失败: %s", account_id, exc)
+        stats["linked_on_sale_error"] = str(exc)
+    try:
+        stats["linked_orders"] = await sync_new_data(
+            account_id=account_id, progress_job_id=progress_job_id
+        )
+    except Exception as exc:  # noqa: BLE001 联动失败不影响待办同步结果
+        log.warning("[todolist] account_id=%s 联动订单同步失败: %s", account_id, exc)
+        stats["linked_orders_error"] = str(exc)

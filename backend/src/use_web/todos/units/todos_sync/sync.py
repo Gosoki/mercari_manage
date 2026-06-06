@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
-"""待办列表同步 + 交易详情批量预缓存"""
+"""待办列表同步 + 交易详情预缓存 + 新待发货联动同步在售/订单"""
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from fastapi import HTTPException
-from .....use_mercari.get_to_du_list.todolist_sync import resolve_enabled_account_ids, sync_todos_from_mercari
-from .....use_mercari.get_to_du_list.transaction_detail import precache_uncached_todo_details
+from .....use_mercari.get_to_du_list.todolist_sync import resolve_enabled_account_ids, sync_todos_with_details
 from .....use_mercari.sync.sync_progress import clear_sync_progress
 from .....use_mercari.sync.sync_lock import LABEL_FULL, begin_or_conflict as sync_lock_begin, end as sync_lock_end
 from .....web_drive.core.account_serial_queue import queue_key_for_mercari_account, run_mercari_serial_async
@@ -19,6 +18,10 @@ log = logging.getLogger(__name__)
 
 async def sync_todos(req: SyncTodosRequest) -> Dict[str, Any]:
     """从煤炉同步所有启用账号（status=active；不要求自动获取开启）的待办事项；按账号串行避免浏览器抢占。
+
+    每个账号执行 ``sync_todos_with_details``：同步待办列表 → 为「待发货/待回复/待评价」无缓存
+    待办补抓交易详情 → 若本次有**新待发货**则联动同步一次在售列表与订单列表（两个列表对新数据
+    各自再获取详情）。
 
     不再指定单个账号：点击即同步全部已开启账号，逐个执行并汇总结果。
     ``progress_job_id`` 与 GET /use_web/todos/sync-progress/{job_id} 配合，
@@ -36,20 +39,23 @@ async def sync_todos(req: SyncTodosRequest) -> Dict[str, Any]:
     lock_token = sync_lock_begin("page", LABEL_FULL)
     accounts: list[Dict[str, Any]] = []
     inserted = updated = marked_deleted = total = 0
+    detail_fetched = detail_failed = 0
     fail_count = 0
     mgr = get_web_drive_manager()
     try:
-        # 逐个账号严格串行：每个账号 await 完成（抓取 + 写库）后，必须先关闭其浏览器，
-        # 再开始下一个账号。todolist 抓取走单一全局响应文件（请求路径不含 seller_id，
-        # 无法区分账号），若两个账号的 /todos 页同时在线会导致响应串台。
+        # 逐个账号严格串行：每个账号 await 完成（列表抓取 + 详情预缓存 + 新待发货联动）后，
+        # 必须先关闭其浏览器，再开始下一个账号。todolist 抓取走单一全局响应文件（请求路径不含
+        # seller_id，无法区分账号），若两个账号的 /todos 页同时在线会导致响应串台。
+        # 整账号作为一个队列任务（suppress_idle_close=True：列表/详情/联动复用同一浏览器会话）。
         for aid in account_ids:
             try:
                 stats = await run_mercari_serial_async(
                     queue_key_for_mercari_account(aid),
-                    lambda aid=aid: sync_todos_from_mercari(
+                    lambda aid=aid: sync_todos_with_details(
                         account_id=aid,
                         progress_job_id=jid,
                     ),
+                    suppress_idle_close=True,
                 )
             except Exception as exc:  # noqa: BLE001 单个账号失败不影响其余账号
                 fail_count += 1
@@ -60,22 +66,17 @@ async def sync_todos(req: SyncTodosRequest) -> Dict[str, Any]:
                 updated += int(stats.get("updated", 0) or 0)
                 marked_deleted += int(stats.get("marked_deleted", 0) or 0)
                 total += int(stats.get("total", 0) or 0)
+                detail_fetched += int(stats.get("detail_fetched", 0) or 0)
+                detail_failed += int(stats.get("detail_failed", 0) or 0)
                 accounts.append(stats)
             finally:
-                # 关闭当前账号浏览器，确保与下一账号不重叠（队列层默认 ~10s 后才关，
-                # 这里立即强制关闭以消除全局响应文件的串台窗口）。
+                # 关闭当前账号浏览器，确保与下一账号不重叠（消除全局响应文件的串台窗口）。
                 try:
                     await mgr.close_session(mercari_account_key(aid), force=True)
                 except Exception as close_exc:  # noqa: BLE001 关闭失败不阻断后续账号
                     log.warning(
                         "[todolist] 关闭 account_id=%s 浏览器失败: %s", aid, close_exc
                     )
-
-        # ── 交易详情预缓存：列表同步完后，为「待发货」「待回复」且尚无交易详情缓存的待办
-        #    静默无头补抓一次详情，使前端「处理」面板打开即有缓存可用（无需逐条手动「刷新抓取」）。──
-        detail_fetched, detail_failed = await _precache_detail_todos(
-            account_ids, jid, mgr
-        )
     finally:
         sync_lock_end(lock_token)
         if jid:
@@ -92,35 +93,3 @@ async def sync_todos(req: SyncTodosRequest) -> Dict[str, Any]:
         "detail_fetched": detail_fetched,
         "detail_failed": detail_failed,
     }
-
-async def _precache_detail_todos(
-    account_ids: list[int], jid: Optional[str], mgr: Any
-) -> tuple[int, int]:
-    """为各账号下「待发货」「待回复」且无交易详情缓存的待办，按账号串行补抓详情（静默无头）。
-
-    返回 ``(成功条数, 失败条数)``。单条/单账号失败均不抛出，不影响同步整体结果。
-    """
-    fetched = 0
-    failed = 0
-    for aid in account_ids:
-        try:
-            # 整账号补抓作为一个队列任务执行：同账号多条复用同一浏览器会话
-            # （mitm_automation_browser 退出不关闭，仅刷新标签页），串行队列保证不抢占。
-            f, fl = await run_mercari_serial_async(
-                queue_key_for_mercari_account(aid),
-                lambda aid=aid: precache_uncached_todo_details(aid, progress_job_id=jid),
-                suppress_idle_close=True,
-            )
-            fetched += f
-            failed += fl
-        except Exception as exc:  # noqa: BLE001 单账号失败不阻断其余账号
-            log.warning("[todolist] 交易详情预缓存(account_id=%s)失败: %s", aid, exc)
-        finally:
-            # 该账号补抓完毕，强制关闭其浏览器，避免与下一账号或后续操作重叠。
-            try:
-                await mgr.close_session(mercari_account_key(aid), force=True)
-            except Exception as close_exc:  # noqa: BLE001
-                log.warning(
-                    "[todolist] 预缓存后关闭 account_id=%s 浏览器失败: %s", aid, close_exc
-                )
-    return fetched, failed
