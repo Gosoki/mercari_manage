@@ -65,7 +65,14 @@
             >
               <el-icon><component :is="item.icon" /></el-icon>
               <template #title>
-                <span class="menu-title">{{ t(item.titleKey) }}</span>
+                <span
+                  v-if="item.path === '/memos' && memoUnread > 0"
+                  class="menu-title menu-title--badge"
+                >
+                  {{ t(item.titleKey) }}
+                  <span class="memo-badge">{{ memoUnread > 99 ? '99+' : memoUnread }}</span>
+                </span>
+                <span v-else class="menu-title">{{ t(item.titleKey) }}</span>
                 <el-icon
                   v-if="item.children"
                   class="menu-arrow"
@@ -152,6 +159,7 @@ import { ElMessageBox } from 'element-plus'
 import { Menu, Close, ArrowRight, Promotion } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { setLocale, SUPPORTED_LOCALES } from '@/i18n'
+import { memosApi } from '@/api/index.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -175,6 +183,19 @@ const secondaryOpen = ref(false)
 /** 当前正在展开二级面板的一级菜单 path（仅对带 children 的一级有意义） */
 const activeWithChildren = ref(null)
 
+/** 备忘录未处理数量（接收方=当前用户且未读），用于一级菜单红色徽标 */
+const memoUnread = ref(0)
+let memoTimer = null
+
+async function refreshMemoUnread() {
+  try {
+    const r = await memosApi.unreadCount()
+    memoUnread.value = r?.unread || 0
+  } catch {
+    // 静默：未登录或请求失败时不打扰
+  }
+}
+
 /** 与库存页等一致：(max-width: 768px) */
 let mqMobile = null
 
@@ -191,9 +212,13 @@ onMounted(() => {
   mqMobile = window.matchMedia('(max-width: 768px)')
   syncMobileFromMedia()
   mqMobile.addEventListener('change', syncMobileFromMedia)
+  refreshMemoUnread()
+  // 周期刷新未处理数量，及时反映其他用户新发来的备忘录
+  memoTimer = setInterval(refreshMemoUnread, 30000)
 })
 onUnmounted(() => {
   mqMobile?.removeEventListener('change', syncMobileFromMedia)
+  if (memoTimer) clearInterval(memoTimer)
 })
 
 const userName = computed(() => {
@@ -296,6 +321,8 @@ watch(
     if (owner) {
       activeWithChildren.value = owner.path
     }
+    // 切换路由时刷新未处理数量（例如在 /memos 处理完返回其它页）
+    refreshMemoUnread()
   },
   { immediate: true }
 )
@@ -522,6 +549,31 @@ const handleLogout = async () => {
 .menu-title {
   flex: 1;
   min-width: 0;
+}
+
+/* 备忘录未处理徽标：红色圆圈显示在「备忘录」文字右上角 */
+.menu-title--badge {
+  flex: 0 0 auto;
+  position: relative;
+  overflow: visible;
+}
+.memo-badge {
+  position: absolute;
+  top: 50%;
+  right: -30px;
+  transform: translateY(-50%);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: #f56c6c;
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .menu-arrow {
