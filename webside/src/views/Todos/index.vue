@@ -24,9 +24,14 @@
               :value="k"
             />
           </el-select>
-          <el-checkbox v-model="filters.include_deleted" @change="onFilterChange">
-            {{ t('todos.includeDone') }}
-          </el-checkbox>
+          <div
+            class="search-filter-chip"
+            :class="{ 'search-filter-chip--active': filters.include_deleted }"
+            role="button"
+            tabindex="0"
+            @click="toggleFilterChip('include_deleted')"
+            @keyup.enter="toggleFilterChip('include_deleted')"
+          >{{ t('todos.includeDone') }}</div>
         </el-col>
         <el-col :xs="24" :md="8" class="search-actions">
           <el-tooltip :disabled="!syncLockStore.locked" :content="syncLockStore.label" placement="top">
@@ -163,9 +168,9 @@
               />
             </div>
 
-            <!-- 「発送をしてください」：按商品 ID 反查到的本地库存图片与关联订单号 -->
+            <!-- 关联商品：按商品 ID 反查到的本地库存图片与关联订单号（待发货 / 待回复都展示） -->
             <div
-              v-if="String(currentRow?.title || '').trim() === WAIT_SHIPPING_TITLE"
+              v-if="showInventoryMatch"
               class="detail-inv-match"
             >
               <div class="detail-label">{{ t('todos.matchedInventory') }}</div>
@@ -197,8 +202,8 @@
                   </div>
                 </div>
 
-                <!-- 出库明细：与关联本地库存合并展示 -->
-                <div class="detail-ship-outbound" v-loading="shipOutbound.loading">
+                <!-- 出库明细：仅待发货展示（待回复只显示关联商品，不显示发货/出库） -->
+                <div v-if="isWaitShipping" class="detail-ship-outbound" v-loading="shipOutbound.loading">
                   <div class="detail-label">{{ t('todos.outboundLines') }}</div>
                   <el-table
                     v-if="shipOutbound.lines.length"

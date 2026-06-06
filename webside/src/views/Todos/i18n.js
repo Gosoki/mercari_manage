@@ -16,7 +16,7 @@ export default {
       saveSuccess: "保存成功",
       searchPlaceholder: "搜索标题 / 消息 / 商品 ID / 商品名",
       accountPlaceholder: "账号",
-      includeDone: "含已完成",
+      includeDone: "已完成",
       selectMercariAccount: "选择煤炉账号",
       syncFromMercari: "从煤炉同步",
       colImage: "图",

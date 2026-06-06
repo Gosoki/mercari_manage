@@ -82,9 +82,7 @@ def list_todos(
         FROM [todo_items] t
         LEFT JOIN [mercari_accounts] a ON a.[id] = t.[account_id]
         WHERE {where_sql}
-        ORDER BY COALESCE(t.[is_delete], 0) ASC,
-                 COALESCE(t.[mercari_updated], t.[mercari_created], 0) DESC,
-                 t.[id] DESC
+        ORDER BY t.[id] ASC
         LIMIT ? OFFSET ?
         """,
         tuple(params + [page_size, offset]),

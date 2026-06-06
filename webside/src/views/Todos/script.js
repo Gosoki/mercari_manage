@@ -579,6 +579,10 @@ export default defineComponent({
       return (currentRow.value?.kind || '').trim() === 'IncomingMessage'
     })
 
+    // 「关联商品」(按商品 ID 反查到的本地库存) 在待发货与待回复都展示；
+    // 待回复仅展示库存卡片，不展示包材/发货/出库明细
+    const showInventoryMatch = computed(() => isWaitShipping.value || isWaitReply.value)
+
     // 仅在「待回复」(IncomingMessage) 类型下，允许给买家消息加 emoji 反应
     const canReactToMessages = computed(() => {
       return (currentRow.value?.kind || '').trim() === 'IncomingMessage'
@@ -703,6 +707,11 @@ export default defineComponent({
     function onFilterChange() {
       page.value = 1
       load()
+    }
+
+    function toggleFilterChip(key) {
+      filters.value[key] = !filters.value[key]
+      onFilterChange()
     }
 
     function onPageChange(p) {
@@ -941,8 +950,11 @@ export default defineComponent({
       })
       resetInvMatch()
       detailDialogVisible.value = true
-      // 「発送をしてください」：按商品 ID 反查本地库存图片与关联订单号
-      if (String(row.title || '').trim() === WAIT_SHIPPING_TITLE) {
+      // 「発送をしてください」(待发货) 与 待回复 (IncomingMessage)：按商品 ID 反查本地库存图片与关联订单号
+      if (
+        String(row.title || '').trim() === WAIT_SHIPPING_TITLE ||
+        (row.kind || '').trim() === 'IncomingMessage'
+      ) {
         loadInventoryMatch(row.item_id)
       }
       // 优先读本地缓存（不开浏览器）；用户点「刷新抓取」才打开浏览器更新
@@ -1606,6 +1618,7 @@ export default defineComponent({
       inventoryThumbUrl,
       loadInventoryMatch,
       isWaitShipping,
+      showInventoryMatch,
       hasInventoryMatch,
       hasLocalInventoryImages,
       showMercariPhoto,
@@ -1650,6 +1663,7 @@ export default defineComponent({
       load,
       loadKindOptions,
       onFilterChange,
+      toggleFilterChip,
       onPageChange,
       onPageSizeChange,
       runSync,

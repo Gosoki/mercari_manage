@@ -2,14 +2,6 @@
   <div>
     <el-card shadow="never" class="list-card" v-loading="loading">
       <el-row :gutter="16">
-        <el-col :xs="24" :sm="12" :md="8" :lg="6" class="card-col">
-          <div class="add-card">
-            <div class="add-card-main" @click="openCreate">
-              <el-icon class="add-card-icon"><Plus /></el-icon>
-              <span>{{ t('mercariAccounts.addAccount') }}</span>
-            </div>
-          </div>
-        </el-col>
         <el-col v-for="row in list" :key="row.id" :xs="24" :sm="12" :md="8" :lg="6" class="card-col">
           <el-card shadow="hover" class="account-card">
             <div class="card-header">
@@ -55,6 +47,14 @@
               <el-button size="small" @click="openEdit(row)">{{ t('common.edit') }}</el-button>
             </div>
           </el-card>
+        </el-col>
+        <el-col :xs="24" :sm="12" :md="8" :lg="6" class="card-col">
+          <div class="add-card">
+            <div class="add-card-main" @click="openCreate">
+              <el-icon class="add-card-icon"><Plus /></el-icon>
+              <span>{{ t('mercariAccounts.addAccount') }}</span>
+            </div>
+          </div>
         </el-col>
       </el-row>
 
