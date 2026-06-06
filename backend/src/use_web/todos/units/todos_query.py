@@ -27,6 +27,7 @@ _LIST_COLS = (
     "mercari_updated",
     "is_delete",
     "synced_at",
+    "qr_image_path",
 )
 
 

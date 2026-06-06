@@ -909,7 +909,13 @@ export default defineComponent({
       const title = isRow ? String(kindOrRow.title || '').trim() : ''
       // Shipped（已发货 / 待买家收货）优先于标题判断：即便标题为「発送をしてください」也按待收货
       if (kind === 'Shipped') return t('todos.kind.waitReceipt')
-      if (title === WAIT_SHIPPING_TITLE) return t('todos.kind.waitShipping')
+      // 待发货：若已发行发货二维码/条形码（qr_image_path），类型显示映射为「已打包」（仅改名称）
+      const isWaitShippingKind =
+        title === WAIT_SHIPPING_TITLE || KIND_LABEL_KEYS[kind] === 'todos.kind.waitShipping'
+      if (isWaitShippingKind) {
+        if (isRow && kindOrRow.qr_image_path) return t('todos.kind.packed')
+        return t('todos.kind.waitShipping')
+      }
       if (!kind) return '-'
       const key = KIND_LABEL_KEYS[kind]
       return key ? t(key) : kind

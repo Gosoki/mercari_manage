@@ -115,6 +115,7 @@ export default {
       kindWaitReply: "待回复",
       kind: {
         waitShipping: "待发货",
+        packed: "已打包",
         merpayActivation: "Merpay 卡激活",
         waitReview: "待评价",
         waitReply: "待回复",
@@ -301,6 +302,7 @@ export default {
       kindWaitReply: "返信待ち",
       kind: {
         waitShipping: "発送待ち",
+        packed: "梱包済み",
         merpayActivation: "Merpay カード有効化",
         waitReview: "評価待ち",
         waitReply: "返信待ち",
@@ -487,6 +489,7 @@ export default {
       kindWaitReply: "Awaiting reply",
       kind: {
         waitShipping: "Awaiting shipping",
+        packed: "Packed",
         merpayActivation: "Merpay card activation",
         waitReview: "Awaiting review",
         waitReply: "Awaiting reply",
