@@ -1,5 +1,5 @@
 import { defineComponent, ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/notify'
 import { useI18n } from 'vue-i18n'
 import { categoryApi } from '@/api/index.js'
 

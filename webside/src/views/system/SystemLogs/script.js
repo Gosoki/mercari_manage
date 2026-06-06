@@ -1,6 +1,7 @@
 import { defineComponent, ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { ElMessage } from '@/utils/notify'
 import { systemLogApi, mercariAccountApi } from '@/api/index.js'
 import { formatUnixSecLocal } from '@/utils/timeDisplay.js'
 
@@ -18,11 +19,13 @@ export default defineComponent({
 
     const categoryConfig = computed(() => ({
       auto_relist: { label: t('system.logCatAutoRelist'), tag: 'success' },
-      auto_fetch: { label: t('system.logCatAutoFetch'), tag: 'primary' }
+      auto_fetch: { label: t('system.logCatAutoFetch'), tag: 'primary' },
+      operation: { label: t('system.logCatOperation'), tag: 'warning' }
     }))
 
     const levelConfig = computed(() => ({
       info: { label: t('system.logLevelInfo'), tag: 'info' },
+      success: { label: t('system.logLevelSuccess'), tag: 'success' },
       warning: { label: t('system.logLevelWarning'), tag: 'warning' },
       error: { label: t('system.logLevelError'), tag: 'danger' }
     }))

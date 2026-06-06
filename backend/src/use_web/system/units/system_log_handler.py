@@ -9,9 +9,44 @@ URL（挂在 system 下）：
 import json
 from typing import Any, Dict, Optional
 
+from fastapi import Depends
+from pydantic import BaseModel
+
+from ....auth import require_auth
 from ....db_manage.database import DatabaseManager
+from ....db_manage.models.system_log import SystemLogModel
 
 db = DatabaseManager()
+
+
+class OperationLogIn(BaseModel):
+    level: str = "info"
+    message: str = ""
+    detail: Optional[Any] = None
+
+
+def create_operation_log(
+    body: OperationLogIn,
+    auth: Dict[str, Any] = Depends(require_auth),
+) -> Dict[str, Any]:
+    """记录一条「操作日志」(category='operation')，用户取自登录令牌。
+
+    供前端提示统一上报使用；写入失败不抛错，避免影响页面交互。
+    """
+    user_id: Optional[int] = None
+    try:
+        user_id = int(auth.get("sub"))
+    except (TypeError, ValueError):
+        user_id = None
+    SystemLogModel.add(
+        category="operation",
+        level=(body.level or "info"),
+        message=(body.message or ""),
+        user_id=user_id,
+        username=auth.get("username"),
+        detail=body.detail,
+    )
+    return {"ok": True}
 
 _COLS = [
     "id",
@@ -19,6 +54,8 @@ _COLS = [
     "level",
     "account_id",
     "account_name",
+    "user_id",
+    "username",
     "message",
     "detail",
     "created_at",

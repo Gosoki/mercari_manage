@@ -7,6 +7,7 @@
           <el-select v-model="filters.category" :placeholder="t('system.logCategoryFilter')" clearable @change="onFilterChange" style="width:100%">
             <el-option :label="t('system.logCatAutoRelist')" value="auto_relist" />
             <el-option :label="t('system.logCatAutoFetch')" value="auto_fetch" />
+            <el-option :label="t('system.logCatOperation')" value="operation" />
           </el-select>
           <el-select v-model="filters.account_id" :placeholder="t('system.logAccountFilter')" clearable filterable @change="onFilterChange" style="width:100%">
             <el-option v-for="a in accounts" :key="a.id" :label="a.account_name || `#${a.id}`" :value="a.id" />
@@ -45,6 +46,9 @@
         </el-table-column>
         <el-table-column :label="t('system.logAccount')" width="150">
           <template #default="{ row }">{{ row.account_name || (row.account_id != null ? `#${row.account_id}` : '-') }}</template>
+        </el-table-column>
+        <el-table-column :label="t('system.logUser')" width="130">
+          <template #default="{ row }">{{ row.username || (row.user_id != null ? `#${row.user_id}` : '-') }}</template>
         </el-table-column>
         <el-table-column :label="t('system.logMessage')" prop="message" min-width="240" show-overflow-tooltip />
       </el-table>

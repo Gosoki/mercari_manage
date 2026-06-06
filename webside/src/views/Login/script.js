@@ -1,6 +1,6 @@
 import { defineComponent, reactive, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/notify'
 import { useI18n } from 'vue-i18n'
 import { authApi } from '@/api'
 import { setLocale, SUPPORTED_LOCALES } from '@/i18n'

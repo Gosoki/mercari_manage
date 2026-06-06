@@ -1,5 +1,6 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { ElLoading } from 'element-plus'
+import { ElMessage } from '@/utils/notify'
 
 /**
  * V2 API axios 实例
@@ -11,6 +12,48 @@ const http = axios.create({
   timeout: 15000
 })
 
+// ---- 后端断连：全屏提示（单例，避免反复弹窗）----
+let offlineLoading = null
+let healthTimer = null
+
+function isNetworkError(err) {
+  return err.code === 'ERR_NETWORK' || err.message === 'Network Error'
+}
+
+function startHealthPolling() {
+  if (healthTimer) return
+  healthTimer = setInterval(async () => {
+    try {
+      const resp = await fetch('/api/health', { cache: 'no-store' })
+      if (resp.ok) hideOfflineOverlay()
+    } catch (_) {
+      // 仍处于断连状态，继续等待下一次探测
+    }
+  }, 3000)
+}
+
+function showOfflineOverlay() {
+  if (offlineLoading) return
+  offlineLoading = ElLoading.service({
+    fullscreen: true,
+    lock: true,
+    text: '系统无法连接，请检查网络与服务器',
+    background: 'rgba(0, 0, 0, 0.7)'
+  })
+  startHealthPolling()
+}
+
+function hideOfflineOverlay() {
+  if (offlineLoading) {
+    offlineLoading.close()
+    offlineLoading = null
+  }
+  if (healthTimer) {
+    clearInterval(healthTimer)
+    healthTimer = null
+  }
+}
+
 http.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth_token')
   if (token) {
@@ -21,9 +64,18 @@ http.interceptors.request.use((config) => {
 })
 
 http.interceptors.response.use(
-  (res) => res.data,
+  (res) => {
+    // 任意请求成功即视为后端已恢复，关闭断连提示
+    hideOfflineOverlay()
+    return res.data
+  },
   (err) => {
     if (err.code === 'ERR_CANCELED' || err.name === 'CanceledError') {
+      return Promise.reject(err)
+    }
+    // 后端无法连接：仅展示一次全屏提示，不再反复弹消息
+    if (isNetworkError(err)) {
+      showOfflineOverlay()
       return Promise.reject(err)
     }
     if (err.response?.status === 401) {

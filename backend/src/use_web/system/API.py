@@ -25,6 +25,7 @@ from .units.app_config_handler import (
 from .units.system_log_handler import (
     list_system_logs,
     clear_system_logs,
+    create_operation_log,
 )
 from .units.ssl_mitm_handler import (
     download_ca_cert,
@@ -57,9 +58,11 @@ router.add_api_route("/change-password", change_password, methods=["POST"])
 router.add_api_route("/listing-defaults", get_listing_defaults, methods=["GET"], response_model=ListingDefaultsOut)
 router.add_api_route("/listing-defaults", put_listing_defaults, methods=["PUT"], response_model=ListingDefaultsOut)
 
-# 系统日志（自动上架 / 自动获取）
+# 系统日志（自动上架 / 自动获取 / 操作日志）
 router.add_api_route("/system-logs", list_system_logs, methods=["GET"])
 router.add_api_route("/system-logs/clear", clear_system_logs, methods=["POST"])
+# 操作日志上报（前端提示统一写入，记录登录用户）
+router.add_api_route("/operation-logs", create_operation_log, methods=["POST"])
 
 # SSL MITM 代理控制
 router.add_api_route("/ssl-mitm/status", get_status, methods=["GET"])

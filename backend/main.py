@@ -6,12 +6,14 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.db_manage.db_manager import init_database
 from src.use_web.image_storage import ensure_image_dir
 from src.API import router as v2_router
 from src.app_paths import backend_root
+from src.readiness import is_ready, mark_ready
 
 # ─────────────────────────────────────────────────────────────────────────
 # 全局调试开关：强制所有自动化浏览器「有头」
@@ -99,6 +101,10 @@ async def startup():
     ):
         asyncio.create_task(_startup_web_drive_browsers())
 
+    # 全部启动步骤完成（同步初始化 + 后台任务已调度），标记系统就绪。
+    mark_ready()
+    logging.getLogger(__name__).info("系统启动完成，健康检查已就绪")
+
 
 @app.on_event("shutdown")
 async def shutdown_web_drive():
@@ -116,7 +122,15 @@ async def shutdown_web_drive():
 
 @app.get("/api/health")
 def health():
-    """兼容旧的健康检查路径（部分调用方仍使用 /api/health）。V2 路径为 /mercariV2/health。"""
+    """兼容旧的健康检查路径（部分调用方仍使用 /api/health）。V2 路径为 /mercariV2/health。
+
+    仅在系统完全启动后才返回 ok；启动过程中返回 503，避免被误判为就绪。
+    """
+    if not is_ready():
+        return JSONResponse(
+            status_code=503,
+            content={"status": "starting", "message": "mercari 系统启动中，请稍候"},
+        )
     return {"status": "ok", "message": "mercari 订单管理运行中"}
 
 

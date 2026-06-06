@@ -1,6 +1,6 @@
 import { defineComponent, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/notify'
 import { productTypeCategoryMappingApi } from '@/api/index.js'
 
 export default defineComponent({

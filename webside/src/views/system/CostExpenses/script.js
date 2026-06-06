@@ -1,5 +1,5 @@
 import { defineComponent, onMounted, ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/notify'
 import { useI18n } from 'vue-i18n'
 import { authApi, costExpenseApi, costRecordApi } from '@/api/index.js'
 

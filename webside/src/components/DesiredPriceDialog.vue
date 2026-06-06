@@ -165,7 +165,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/notify'
 import { Star } from '@element-plus/icons-vue'
 import { notificationsApi } from '@/api'
 import { useSyncOverlay } from '@/composables/useSyncOverlay'

@@ -1,5 +1,5 @@
 import { defineComponent, ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/notify'
 import { Search, EditPen, Check, Plus, Picture } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { memosApi } from '@/api/index.js'

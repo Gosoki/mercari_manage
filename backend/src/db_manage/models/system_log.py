@@ -16,8 +16,9 @@ from typing import Any, Dict, List, Optional
 from ..base_model import BaseModel
 
 # 允许的取值（仅用于内部约束/文档，不强制校验）
-LOG_CATEGORIES = ("auto_relist", "auto_fetch")
-LOG_LEVELS = ("info", "warning", "error")
+# operation: 前端用户操作日志（来自页面提示）
+LOG_CATEGORIES = ("auto_relist", "auto_fetch", "operation")
+LOG_LEVELS = ("info", "warning", "error", "success")
 
 
 class SystemLogModel(BaseModel):
@@ -59,6 +60,18 @@ class SystemLogModel(BaseModel):
                 "not_null": False,
                 "default": None,
             },
+            # 操作用户 ID（operation 类日志记录触发用户）
+            "user_id": {
+                "type": "INTEGER",
+                "not_null": False,
+                "default": None,
+            },
+            # 冗余用户名：用户删除后日志仍可展示
+            "username": {
+                "type": "TEXT",
+                "not_null": False,
+                "default": None,
+            },
             # 人类可读摘要
             "message": {
                 "type": "TEXT",
@@ -96,6 +109,8 @@ class SystemLogModel(BaseModel):
         message: str = "",
         account_id: Optional[int] = None,
         account_name: Optional[str] = None,
+        user_id: Optional[int] = None,
+        username: Optional[str] = None,
         detail: Any = None,
     ) -> None:
         """写入一条系统日志。失败仅吞掉，不影响调用方主流程。"""
@@ -112,17 +127,25 @@ class SystemLogModel(BaseModel):
                     aid = int(account_id)
                 except (TypeError, ValueError):
                     aid = None
+            uid: Optional[int] = None
+            if user_id is not None:
+                try:
+                    uid = int(user_id)
+                except (TypeError, ValueError):
+                    uid = None
             cls().db.execute_insert(
                 """
                 INSERT INTO [system_logs]
-                    (category, level, account_id, account_name, message, detail, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (category, level, account_id, account_name, user_id, username, message, detail, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(category or "").strip() or "info",
                     str(level or "info").strip() or "info",
                     aid,
                     (str(account_name).strip() if account_name else None),
+                    uid,
+                    (str(username).strip() if username else None),
                     str(message or ""),
                     detail_str,
                     int(time.time()),

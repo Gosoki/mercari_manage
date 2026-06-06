@@ -1,6 +1,7 @@
 import { defineComponent, computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { ElMessage } from '@/utils/notify'
 import { Download, Loading, Plus, Minus } from '@element-plus/icons-vue'
 import { todosApi, costRecordApi, costExpenseApi, orderApi } from '@/api'
 import { useMercariAccountStore } from '@/stores/mercariAccount.js'

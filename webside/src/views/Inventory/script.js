@@ -1,5 +1,5 @@
 import { defineComponent, ref, computed, watch, onMounted, onBeforeUnmount, nextTick, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/notify'
 import { Loading, WarningFilled } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import {

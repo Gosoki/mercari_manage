@@ -1,6 +1,7 @@
 import { defineComponent, reactive, ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { ElMessage } from '@/utils/notify'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
 import { authApi, configApi, mercariAccountApi, systemApi } from '@/api/index.js'
 import {

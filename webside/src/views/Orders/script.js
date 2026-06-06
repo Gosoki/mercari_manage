@@ -1,6 +1,7 @@
 import { defineComponent, ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { ElMessage } from '@/utils/notify'
 import { RefreshRight, Refresh, Plus, Minus, Loading } from '@element-plus/icons-vue'
 import {
   orderApi,
