@@ -82,13 +82,17 @@ def listing_post_progress(job_id: str):
         return {"success": True, "data": {"step": None, "label_zh": None, "ts": None}}
     return {"success": True, "data": row}
 
-async def post_to_market(body: PostToMarketBody):
+async def post_to_market(body: PostToMarketBody, *, already_in_queue: bool = False):
     """
     在账号主 profile（``mercari_{id}``）经 SSL 中间人代理打开 https://jp.mercari.com/sell/create，
     并自动完成全部表单步骤（与订单页「更新列表」同模式，cookie 由 Edge 持久化自动维护）：
       · Switch 检查 → 图片上传 → 商品名/说明填写
       · 商品类型选择 → 販売タイプ+价格 → 发货天数 → 发货地址
     经 ``run_mercari_serial_async`` 串行执行；浏览器在队列空闲后由队列自动关闭。
+
+    ``already_in_queue``：调用方**已持有该账号的串行队列槽**时传 True（如自动补挂在订单
+    同步任务内联执行）——此时直接运行出品流程，不再重复入队，避免同账号队列的自我死锁，
+    也确保在调用方关闭浏览器之前就完成出品（不与同步收尾的强制关浏览器竞态）。
     """
     from .....web_drive.core.account_serial_queue import (
         queue_key_for_mercari_account,
@@ -140,10 +144,14 @@ async def post_to_market(body: PostToMarketBody):
                 progress_job_id=jid,
             )
 
-        data = await run_mercari_serial_async(
-            queue_key_for_mercari_account(account_id),
-            _run,
-        )
+        if already_in_queue:
+            # 调用方已持有该账号队列槽：直接运行，避免再次入队自我死锁
+            data = await _run()
+        else:
+            data = await run_mercari_serial_async(
+                queue_key_for_mercari_account(account_id),
+                _run,
+            )
         return {"success": True, "data": data}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

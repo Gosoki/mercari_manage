@@ -260,15 +260,18 @@ async def sync_new_data(
 
     # 自动出品（售出即补挂）：仅增量路径触发，按总开关 / 单品开关 / 剩余库存层层把关。
     # 历史全量同步不接此 hook，避免首次导入海量旧订单触发批量上架。
+    # 内联执行（本函数始终在该账号串行队列内运行）：补挂复用当前浏览器会话、在调用方
+    # 关闭浏览器之前完成，避免与同步收尾的强制关浏览器竞态。
     if inserted_relist_nos:
+        report("auto_relist", f"检测到 {len(inserted_relist_nos)} 笔新售出，正在自动重新上架…")
         try:
-            from ..auto_relist import schedule_auto_relist_for_orders
+            from ..auto_relist import run_auto_relist_for_orders
 
-            schedule_auto_relist_for_orders(
+            await run_auto_relist_for_orders(
                 inserted_relist_nos, seller_id=seller_key, account_id=aid
             )
         except Exception as exc:
-            print(f"[sync_new_data] 调度自动出品失败：{exc}")
+            print(f"[sync_new_data] 自动出品失败：{exc}")
 
     print(
         f"[sync_new_data] watermark_order_no={watermark_order_no!r} "

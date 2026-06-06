@@ -17,7 +17,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from typing import Iterable, List, Optional, Set
@@ -31,9 +30,6 @@ from ..db_manage.models.system_log import SystemLogModel
 from .mgmt_id_cipher import encode_mgmt_id, is_cipher_mgmt_line
 
 log = logging.getLogger(__name__)
-
-# 持有 fire-and-forget task 的强引用，避免被 GC 提前回收
-_RELIST_TASKS: Set["asyncio.Task"] = set()
 
 # 出品说明总长上限（与手动出品 SingleListingFormDialog 一致）
 _DESCRIPTION_MAX_LEN = 1000
@@ -50,35 +46,33 @@ def _account_relist_enabled(account_id: Optional[int]) -> bool:
         return False
 
 
-def schedule_auto_relist_for_orders(
+async def run_auto_relist_for_orders(
     order_nos: Iterable[str],
     *,
     seller_id: Optional[str] = None,
     account_id: Optional[int] = None,
 ) -> None:
     """
-    为若干新售出订单调度补挂（fire-and-forget）。
+    为若干新售出订单**内联**执行补挂（不再 fire-and-forget）。
 
-    每个订单一个独立 ``asyncio.create_task``：它内部会 ``await`` 账号串行队列，
-    排在当前同步任务之后执行，从而避免在持有同账号队列槽的同步任务内再次入队导致的自我死锁。
+    必须在该账号的串行队列槽内调用（``sync_new_data`` 即如此）：补挂的出品自动化
+    复用当前队列槽与已打开的浏览器会话、不再单独入队（``post_to_market(already_in_queue=True)``），
+    从而既避免同账号队列的自我死锁，又确保补挂在调用方「同步收尾强制关浏览器」之前就完成
+    ——这是之前 fire-and-forget 方案会与关浏览器竞态导致「会话不可用」的根因修复。
+
+    全程吞异常，绝不影响同步主流程。
     """
     nos = [str(x).strip() for x in (order_nos or []) if str(x or "").strip()]
     if not nos:
         return
-    # 账号级「自动上架」开关：传入了 account_id 且未开启 → 直接跳过调度
+    # 账号级「自动上架」开关：传入了 account_id 且未开启 → 直接跳过
     if account_id is not None and not _account_relist_enabled(account_id):
         return
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        log.warning("[auto_relist] 无运行中的事件循环，跳过调度：%s", nos)
-        return
     for ono in nos:
-        task = loop.create_task(
-            _relist_for_order(ono, seller_id=seller_id, account_id=account_id)
-        )
-        _RELIST_TASKS.add(task)
-        task.add_done_callback(_RELIST_TASKS.discard)
+        try:
+            await _relist_for_order(ono, seller_id=seller_id, account_id=account_id)
+        except Exception as exc:  # 单个订单失败不影响其余订单与同步主流程
+            log.exception("[auto_relist] 订单 %s 补挂异常：%s", ono, exc)
 
 
 def _resolve_account_id(seller_id: Optional[str], account_id: Optional[int]) -> Optional[int]:
@@ -312,7 +306,9 @@ async def _relist_single_inventory(inventory_id: int, account_id: int) -> None:
         inventory_id, account_id, price, name,
     )
     try:
-        res = await post_to_market(body)
+        # already_in_queue=True：补挂在订单同步任务的队列槽内联执行，复用当前浏览器会话、
+        # 不再重复入队（避免自我死锁，且在同步收尾关浏览器之前完成）
+        res = await post_to_market(body, already_in_queue=True)
     except Exception as exc:
         log.exception("[auto_relist] 商品 %s 出品自动化失败：%s", inventory_id, exc)
         SystemLogModel.add(
