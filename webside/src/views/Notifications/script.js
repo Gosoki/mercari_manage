@@ -139,6 +139,10 @@ export default defineComponent({
       page.value = 1
       load()
     }
+    function toggleFilterChip(key) {
+      filters.value[key] = !filters.value[key]
+      onFilterChange()
+    }
     function onPageChange(p) {
       page.value = p
       load()
@@ -482,6 +486,7 @@ export default defineComponent({
       load,
       loadKindOptions,
       onFilterChange,
+      toggleFilterChip,
       onPageChange,
       onPageSizeChange,
       runSync,

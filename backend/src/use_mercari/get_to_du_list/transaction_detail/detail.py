@@ -15,6 +15,7 @@ from ._cache import _clear_qr_image, _persist_transaction_detail
 from ._captures import _wait_for_both_captures
 from ._common import _WAIT_REPLY_KINDS, _is_wait_shipping_todo, _parse_messages, _parse_shipping_info
 from ._messages_media import cache_message_images
+from ._messages_store import replace_order_messages
 from ._qr_facility import _extract_delivery_address, _extract_post_ship_ready, _extract_shipping_facility, _qr_code_exists, _save_qr_code_image
 
 log = logging.getLogger(__name__)
@@ -128,7 +129,11 @@ async def fetch_transaction_detail(
     messages_part = _parse_messages(messages, local_sender_id)
     # 消息里的图片（storage.googleapis.com 签名 URL，会过期）下载到本地 /imges 持久化，
     # 前端只显示本地图、不直连煤炉/谷歌签名 URL。原地把 messages[i].images 换成本地路径。
-    await cache_message_images(int(todo_id), messages_part.get("messages") or [])
+    await cache_message_images(item_id, int(todo_id), messages_part.get("messages") or [])
+    # 消息按订单ID写入 transaction_messages（唯一来源）：仅在确实截获到消息接口时整体替换，
+    # 避免待发货等未取消息的抓取把已存的对话清空。
+    if messages is not None:
+        replace_order_messages(item_id, aid, messages_part.get("messages") or [])
 
     result = {
         "todo_id": int(todo_id),
@@ -225,7 +230,10 @@ async def fetch_transaction_detail(
     else:
         capture_ok = page_loaded
     if capture_ok:
-        _persist_transaction_detail(int(todo_id), result)
+        # 消息已落 transaction_messages 表（唯一来源），detail_json 不再存 messages；
+        # buyer_name 等标量仍保留在 detail_json。返回给前端的 result 仍带 messages。
+        to_store = {k: v for k, v in result.items() if k != "messages"}
+        _persist_transaction_detail(int(todo_id), to_store)
     else:
         log.warning(
             "[txdetail] 关键 API 未截获（kind=%s），跳过缓存以便下次同步重试 todo_id=%s",

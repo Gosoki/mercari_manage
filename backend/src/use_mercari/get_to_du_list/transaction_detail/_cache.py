@@ -105,6 +105,13 @@ def get_cached_transaction_detail(todo_id: int) -> Dict[str, Any]:
     data["detail_synced_at"] = synced_at
     if qr_path and not data.get("qr_image_url"):
         data["qr_image_url"] = qr_path
+    # 消息以 transaction_messages 表为唯一来源（按订单ID关联），始终覆盖 detail_json 里的残留。
+    from ._messages_store import load_order_buyer_name, load_order_messages
+
+    order_no = (item_id or "").strip()
+    data["messages"] = load_order_messages(order_no) if order_no else []
+    if not data.get("buyer_name") and order_no:
+        data["buyer_name"] = load_order_buyer_name(order_no)
     return data
 
 def list_uncached_detail_todo_ids(account_id: int) -> List[int]:

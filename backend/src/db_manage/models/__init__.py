@@ -14,6 +14,7 @@ from .order_outbound_line import OrderOutboundLineModel
 from .product_type_category_mapping import ProductTypeCategoryMappingModel
 from .config_entry import ConfigEntryModel
 from .todo_item import TodoItemModel
+from .transaction_message import TransactionMessageModel
 from .notification import NotificationModel
 from .bundle_purchase_request import BundlePurchaseRequestModel
 from .desired_price_offer import DesiredPriceOfferModel
@@ -36,6 +37,7 @@ __all__ = [
     'ProductTypeCategoryMappingModel',
     'ConfigEntryModel',
     'TodoItemModel',
+    'TransactionMessageModel',
     'NotificationModel',
     'BundlePurchaseRequestModel',
     'DesiredPriceOfferModel',

@@ -197,12 +197,18 @@ def _parse_messages(
         msg_id_raw = m.get("id")
         msg_id = str(msg_id_raw).strip() if msg_id_raw is not None else ""
         reaction = (m.get("reaction") or "").strip()
+        try:
+            created_ms = int(m.get("created") or 0) * 1000
+        except (TypeError, ValueError):
+            created_ms = 0
         out["messages"].append(
             {
                 "id": msg_id or None,
                 "from": (user.get("name") or "").strip() or None,
                 "text": body_text,
                 "at": _format_ts(m.get("created")),
+                # 排序用毫秒时间戳（前端忽略；transaction_messages 表据此排序）
+                "created_ms": created_ms,
                 "is_buyer": is_buyer,
                 "user_id": uid or None,
                 "reaction": reaction or None,

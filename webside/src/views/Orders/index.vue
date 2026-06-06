@@ -75,7 +75,6 @@
             <div class="stat-info">
               <div class="stat-value-row">
                 <span class="stat-value" :class="card.valueClass">{{ card.display }}</span>
-                <span class="stat-today">{{ t('orders.todayAddedSuffix', { count: card.todayDisplay }) }}</span>
               </div>
               <div class="stat-label">{{ card.label }}</div>
             </div>

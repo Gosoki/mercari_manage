@@ -17,7 +17,6 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
 
-from ....db_manage.database import DatabaseManager
 from ....use_web.image_storage import delete_image_file, get_image_root, save_image_bytes
 
 log = logging.getLogger(__name__)
@@ -76,25 +75,11 @@ def _imges_abs(path: str) -> Optional[str]:
     return os.path.join(get_image_root(), name)
 
 
-def _load_old_messages(todo_id: int) -> List[Dict[str, Any]]:
-    """读取上次缓存的 detail_json.messages（用于复用已下载的本地图）。"""
-    try:
-        rows = DatabaseManager().execute_query(
-            "SELECT [detail_json] FROM [todo_items] WHERE [id]=?", (int(todo_id),)
-        )
-    except Exception:
-        return []
-    if not rows or not rows[0] or not rows[0][0]:
-        return []
-    try:
-        import json
+def _load_old_messages(order_no: str) -> List[Dict[str, Any]]:
+    """读取该订单上次已存的消息（transaction_messages 表，用于复用已下载的本地图）。"""
+    from ._messages_store import load_order_messages
 
-        d = json.loads(rows[0][0])
-    except Exception:
-        return []
-    if isinstance(d, dict) and isinstance(d.get("messages"), list):
-        return [m for m in d["messages"] if isinstance(m, dict)]
-    return []
+    return load_order_messages(order_no)
 
 
 def _old_local_by_id(old_messages: List[Dict[str, Any]]) -> Dict[str, List[str]]:
@@ -114,15 +99,20 @@ def _old_local_by_id(old_messages: List[Dict[str, Any]]) -> Dict[str, List[str]]
     return out
 
 
-async def cache_message_images(todo_id: int, messages: List[Dict[str, Any]]) -> None:
+async def cache_message_images(
+    order_no: str, todo_id: int, messages: List[Dict[str, Any]]
+) -> None:
     """把每条消息的图片（远程签名 URL）下载到本地，并把 message["images"] 原地替换为
-    本地 /imges 路径。失败的单张图被丢弃（避免前端引用失效的远程 URL）。"""
+    本地 /imges 路径。失败的单张图被丢弃（避免前端引用失效的远程 URL）。
+
+    复用上次已下载的本地图按 ``order_no`` 从 transaction_messages 表读取。
+    """
     if not messages:
         return
     if not any(m.get("images") for m in messages if isinstance(m, dict)):
         return
 
-    old_by_id = _old_local_by_id(_load_old_messages(int(todo_id)))
+    old_by_id = _old_local_by_id(_load_old_messages(order_no))
     referenced: set[str] = set()
 
     for m in messages:

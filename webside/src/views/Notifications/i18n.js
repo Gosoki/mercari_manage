@@ -23,7 +23,7 @@ export default {
       colMessage: "消息",
       colSender: "发件人",
       open: "打开",
-      viewDetail: "查看详情",
+      viewDetail: "详情",
       markUnread: "取消已读",
       pleaseWait: "请稍候…",
       pleaseSelectMercariAccount: "请先在右上角选择煤炉账号",

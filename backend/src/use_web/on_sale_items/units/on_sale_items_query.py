@@ -258,6 +258,7 @@ def list_on_sale_items(
     keyword: Optional[str] = None,
     seller_id: Optional[str] = None,
     status: Optional[str] = None,
+    auction: Optional[str] = None,
     page: int = 1,
     page_size: int = 20,
     sort_by: Optional[str] = None,
@@ -284,6 +285,16 @@ def list_on_sale_items(
         if not rows or len(all_items) >= total:
             break
         fetch_page += 1
+
+    # 出品方式筛选：auction='1' 仅拍卖（存在 auction_info_json），'0' 仅一口价（无）。
+    aval = str(auction or "").strip()
+    if aval in ("0", "1"):
+        want_auction = aval == "1"
+        all_items = [
+            r
+            for r in all_items
+            if bool(str(r.get("auction_info_json") or "").strip()) == want_auction
+        ]
 
     _attach_seller_name(all_items)
     _attach_inventory_by_item_id(all_items)

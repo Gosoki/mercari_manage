@@ -21,6 +21,7 @@ from .models import (
     ProductTypeCategoryMappingModel,
     ConfigEntryModel,
     TodoItemModel,
+    TransactionMessageModel,
     NotificationModel,
     BundlePurchaseRequestModel,
     DesiredPriceOfferModel,
@@ -406,6 +407,102 @@ class DBManager:
         print("[OK] 组合来源库存已补回（组合改为不扣减库存，仅展示拉走件数）")
         return True
 
+    def _migrate_todo_messages_to_table(self) -> bool:
+        """一次性：把内嵌在 todo_items.detail_json.messages 的交流消息搬入 transaction_messages
+        表（按订单ID = item_id 关联），并从 detail_json 中摘除 messages。
+
+        同一 item_id 可能对应多个待办行（如先待发货、后待回复）；按 detail_synced_at 升序处理，
+        以「按订单整体替换」语义保证最新一次抓取的对话覆盖较早的。用 config 标记保证只执行一次。
+        """
+        import json
+        import time
+
+        db = self.db
+        if not db.table_exists("todo_items") or not db.table_exists("transaction_messages"):
+            return True
+        FLAG = "todo_messages_migrated_to_table"
+        if ConfigEntryModel.get_value(FLAG):
+            return True
+        try:
+            rows = db.execute_query(
+                "SELECT [id],[item_id],[account_id],[detail_json] FROM [todo_items] "
+                "WHERE [detail_json] IS NOT NULL AND [detail_json] LIKE '%\"messages\"%' "
+                "ORDER BY [detail_synced_at] ASC, [id] ASC"
+            )
+        except Exception as e:
+            print(f"[错误] todo 消息迁移：读取 todo_items 失败: {e}")
+            return False
+
+        migrated_orders = 0
+        migrated_msgs = 0
+        try:
+            with db.get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute("BEGIN IMMEDIATE")
+                now_ms = int(time.time() * 1000)
+                for todo_id, item_id, account_id, detail_json in rows or []:
+                    if not detail_json:
+                        continue
+                    try:
+                        d = json.loads(detail_json)
+                    except Exception:
+                        continue
+                    if not isinstance(d, dict) or "messages" not in d:
+                        continue
+                    msgs = d.get("messages")
+                    ono = (item_id or "").strip()
+                    # 仅当有订单ID + 有消息时才搬入；整体替换该订单旧行
+                    if ono and isinstance(msgs, list) and msgs:
+                        cur.execute(
+                            "DELETE FROM [transaction_messages] WHERE TRIM([order_no])=TRIM(?)",
+                            (ono,),
+                        )
+                        batch = []
+                        for idx, m in enumerate(msgs):
+                            if not isinstance(m, dict):
+                                continue
+                            images = [p for p in (m.get("images") or []) if isinstance(p, str) and p.strip()]
+                            batch.append(
+                                (
+                                    ono,
+                                    int(account_id) if account_id is not None else None,
+                                    (str(m.get("id")).strip() or None) if m.get("id") is not None else None,
+                                    (m.get("from") or None),
+                                    (m.get("user_id") or None),
+                                    1 if m.get("is_buyer") else 0,
+                                    (m.get("text") or ""),
+                                    json.dumps(images, ensure_ascii=False),
+                                    (m.get("reaction") or None),
+                                    (m.get("at") or None),
+                                    int(m.get("created_ms") or 0),
+                                    idx,
+                                    now_ms,
+                                )
+                            )
+                        if batch:
+                            cur.executemany(
+                                "INSERT INTO [transaction_messages] "
+                                "([order_no],[account_id],[msg_id],[sender_name],[user_id],[is_buyer],"
+                                "[text],[images_json],[reaction],[at_text],[created_ms],[sort_index],[synced_at]) "
+                                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                batch,
+                            )
+                            migrated_orders += 1
+                            migrated_msgs += len(batch)
+                    # 从 detail_json 摘除 messages（无论是否有订单ID/消息）
+                    d.pop("messages", None)
+                    cur.execute(
+                        "UPDATE [todo_items] SET [detail_json]=? WHERE [id]=?",
+                        (json.dumps(d, ensure_ascii=False), int(todo_id)),
+                    )
+                conn.commit()
+        except Exception as e:
+            print(f"[错误] todo 消息迁移失败: {e}")
+            return False
+        ConfigEntryModel.set_value(FLAG, "1")
+        print(f"[OK] todo 交流消息已迁移到 transaction_messages（订单 {migrated_orders} 个 / 消息 {migrated_msgs} 条）")
+        return True
+
     def _get_all_models(self) -> List[Type[BaseModel]]:
         """按依赖顺序返回所有模型类"""
         return [
@@ -422,6 +519,7 @@ class DBManager:
             MercariAccountModel,  # 煤炉账号
             OnSaleItemModel,  # 在售商品缓存
             TodoItemModel,  # 待办事项缓存（依赖 mercari_accounts，仅顺序习惯）
+            TransactionMessageModel,  # 交易消息/交流缓存（按订单ID关联，与 todo_items 解耦）
             NotificationModel,  # お知らせ通知缓存（依赖 mercari_accounts，仅顺序习惯）
             BundlePurchaseRequestModel,  # 合并购买请求缓存（依赖 notifications，仅顺序习惯）
             DesiredPriceOfferModel,  # 降价请求(値下げ依頼)缓存（依赖 notifications，仅顺序习惯）
@@ -497,6 +595,8 @@ class DBManager:
         if not self._migrate_warehouses_drop_shelf_code_unique():
             return False
         if not self._migrate_restore_combined_source_stock():
+            return False
+        if not self._migrate_todo_messages_to_table():
             return False
         return True
 

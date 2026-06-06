@@ -38,6 +38,20 @@
               :value="s.value"
             />
           </el-select>
+          <el-select
+            v-model="filters.listing_type"
+            :placeholder="t('onSaleItems.listingTypePlaceholder')"
+            clearable
+            style="min-width: 140px; width: 100%"
+            @change="onFilterChange"
+          >
+            <el-option
+              v-for="s in listingTypeOptions"
+              :key="s.value"
+              :label="s.label"
+              :value="s.value"
+            />
+          </el-select>
         </el-col>
         <el-col :xs="24" :md="10" class="search-actions">
           <el-tooltip :disabled="!syncLockStore.locked" :content="syncLockStore.label" placement="top">

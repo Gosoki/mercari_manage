@@ -21,7 +21,6 @@ import {
 import {
   localYmdToDayStartTs,
   localYmdToDayEndTs,
-  localTodayRangeTs,
 } from '@/utils/orderStatsTime.js'
 import { decodeMgmtIdCipher, parseMgmtIdsFromDescription } from '@/utils/mgmtIdCipher.js'
 import { mercariImageUrlList } from '@/utils/mercariImage.js'
@@ -194,12 +193,6 @@ export default defineComponent({
       sum_shipping_fee: 0,
       sum_net_income: 0,
       sum_packaging: 0,
-      today_total_count: 0,
-      today_sum_amount: 0,
-      today_sum_service_fee: 0,
-      today_sum_shipping_fee: 0,
-      today_sum_net_income: 0,
-      today_sum_packaging: 0,
     })
 
     const packagingState = ref({})
@@ -213,7 +206,6 @@ export default defineComponent({
         {
           label: t('dashboard.orderCount'),
           display: o.total_count ?? 0,
-          todayDisplay: o.today_total_count ?? 0,
           icon: 'Document',
           color: '#409EFF',
           cardClass: '',
@@ -222,7 +214,6 @@ export default defineComponent({
         {
           label: t('dashboard.totalAmount'),
           display: Math.round(Number(o.sum_amount || 0)),
-          todayDisplay: Math.round(Number(o.today_sum_amount || 0)),
           icon: 'Money',
           color: '#E6A23C',
           cardClass: '',
@@ -231,7 +222,6 @@ export default defineComponent({
         {
           label: t('dashboard.serviceFee'),
           display: Math.round(Number(o.sum_service_fee || 0)),
-          todayDisplay: Math.round(Number(o.today_sum_service_fee || 0)),
           icon: 'Histogram',
           color: '#F56C6C',
           cardClass: '',
@@ -240,7 +230,6 @@ export default defineComponent({
         {
           label: t('dashboard.shippingFee'),
           display: Math.round(Number(o.sum_shipping_fee || 0)),
-          todayDisplay: Math.round(Number(o.today_sum_shipping_fee || 0)),
           icon: 'Box',
           color: '#F56C6C',
           cardClass: '',
@@ -249,7 +238,6 @@ export default defineComponent({
         {
           label: t('dashboard.packaging'),
           display: Math.round(Number(o.sum_packaging || 0)),
-          todayDisplay: Math.round(Number(o.today_sum_packaging || 0)),
           icon: 'ShoppingCart',
           color: '#909399',
           cardClass: '',
@@ -258,7 +246,6 @@ export default defineComponent({
         {
           label: t('dashboard.netIncome'),
           display: Math.round(Number(o.sum_net_income || 0)),
-          todayDisplay: Math.round(Number(o.today_sum_net_income || 0)),
           icon: 'TrendCharts',
           color: '#67C23A',
           cardClass: '',
@@ -734,11 +721,8 @@ export default defineComponent({
       if (isMobile.value) return
       statsLoading.value = true
       try {
-        const { today_start_ts, today_end_ts } = localTodayRangeTs()
         const res = await orderApi.stats({
           ...listFilterParams(),
-          today_start_ts,
-          today_end_ts,
         })
         stats.value = {
           total_count: res.total_count ?? 0,
@@ -747,12 +731,6 @@ export default defineComponent({
           sum_shipping_fee: res.sum_shipping_fee ?? 0,
           sum_net_income: res.sum_net_income ?? 0,
           sum_packaging: res.sum_packaging ?? 0,
-          today_total_count: res.today_total_count ?? 0,
-          today_sum_amount: res.today_sum_amount ?? 0,
-          today_sum_service_fee: res.today_sum_service_fee ?? 0,
-          today_sum_shipping_fee: res.today_sum_shipping_fee ?? 0,
-          today_sum_net_income: res.today_sum_net_income ?? 0,
-          today_sum_packaging: res.today_sum_packaging ?? 0,
         }
       } finally {
         statsLoading.value = false
@@ -1626,7 +1604,6 @@ export default defineComponent({
       productTypeCascaderProps,
       localYmdToDayStartTs,
       localYmdToDayEndTs,
-      localTodayRangeTs,
       decodeMgmtIdCipher,
       parseMgmtIdsFromDescription,
       mercariImageUrlList,

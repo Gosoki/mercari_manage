@@ -25,8 +25,8 @@ def order_stats(
     筛选时间区间：start_ts / end_ts 为 Unix 秒（与列表一致），按
     COALESCE(order_updated_at, purchase_time, order_date)（最后更新优先，缺省回退购入/下单）比较；
     建议由前端按本地自然日 0 点～当日结束换算。
-    可选 today_start_ts / today_end_ts（同为 Unix 秒，本地「今天」起止）：在相同 keyword、status 下汇总「今日」
-    （同上时间口径），不受 start_ts/end_ts 影响。
+    可选 today_start_ts / today_end_ts（同为 Unix 秒，本地「今天」起止）：在相同 keyword、status 下汇总「今日新增」
+    （按 purchase_time「购入时间」落在今天，而非最后更新时间），不受 start_ts/end_ts 影响。
 
     sum_packaging / today_sum_packaging：关联订单的「包装材料」支出合计（日元），筛选条件与上述一致。
     """
@@ -46,12 +46,14 @@ def order_stats(
         owner_user_id=owner_user_id,
     )
     if today_start_ts is not None and today_end_ts is not None:
+        # 今日新增：按「购入时间」落在今天的订单统计（不按最后更新时间）
         t = OrderModel.aggregate_sums(
             keyword=keyword,
             status=status,
             start_ts=int(today_start_ts),
             end_ts=int(today_end_ts),
             owner_user_id=owner_user_id,
+            by_purchase_time=True,
         )
         out["today_total_count"] = t["total_count"]
         out["today_sum_amount"] = t["sum_amount"]
@@ -64,6 +66,7 @@ def order_stats(
             start_ts=int(today_start_ts),
             end_ts=int(today_end_ts),
             owner_user_id=owner_user_id,
+            by_purchase_time=True,
         )
     return out
 

@@ -24,15 +24,30 @@
               :value="k"
             />
           </el-select>
-          <el-checkbox v-model="filters.only_unread" @change="onFilterChange">
-            {{ t('notifications.onlyUnread') }}
-          </el-checkbox>
-          <el-checkbox v-model="filters.show_likes" @change="onFilterChange">
-            {{ t('notifications.showLikes') }}
-          </el-checkbox>
-          <el-checkbox v-model="filters.show_private_messages" @change="onFilterChange">
-            {{ t('notifications.showPrivateMessages') }}
-          </el-checkbox>
+          <div
+            class="search-filter-chip"
+            :class="{ 'search-filter-chip--active': filters.only_unread }"
+            role="button"
+            tabindex="0"
+            @click="toggleFilterChip('only_unread')"
+            @keyup.enter="toggleFilterChip('only_unread')"
+          >{{ t('notifications.onlyUnread') }}</div>
+          <div
+            class="search-filter-chip"
+            :class="{ 'search-filter-chip--active': filters.show_likes }"
+            role="button"
+            tabindex="0"
+            @click="toggleFilterChip('show_likes')"
+            @keyup.enter="toggleFilterChip('show_likes')"
+          >{{ t('notifications.showLikes') }}</div>
+          <div
+            class="search-filter-chip"
+            :class="{ 'search-filter-chip--active': filters.show_private_messages }"
+            role="button"
+            tabindex="0"
+            @click="toggleFilterChip('show_private_messages')"
+            @keyup.enter="toggleFilterChip('show_private_messages')"
+          >{{ t('notifications.showPrivateMessages') }}</div>
         </el-col>
         <el-col :xs="24" :md="8" class="search-actions">
           <el-tooltip :disabled="!syncLockStore.locked" :content="syncLockStore.label" placement="top">

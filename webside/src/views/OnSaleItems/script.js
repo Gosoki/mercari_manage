@@ -125,6 +125,7 @@ export default defineComponent({
       keyword: '',
       seller_id: '',
       status: '',
+      listing_type: '',
     })
 
     /** 表头排序状态：prop 为列字段，order 为 'ascending' | 'descending' | null */
@@ -134,6 +135,12 @@ export default defineComponent({
     const statusFilterOptions = computed(() => [
       { value: 'on_sale', label: t('onSaleItems.statusOnSale') },
       { value: 'stop', label: t('onSaleItems.statusStop') },
+    ])
+
+    /** 出品方式筛选：拍卖（存在 auction_info_json）/ 一口价 */
+    const listingTypeOptions = computed(() => [
+      { value: 'auction', label: t('onSaleItems.auction') },
+      { value: 'normal', label: t('onSaleItems.listingTypeNormal') },
     ])
 
     const sellerFromAccounts = ref([])
@@ -193,6 +200,8 @@ export default defineComponent({
       if (filters.value.keyword?.trim()) p.keyword = filters.value.keyword.trim()
       if (filters.value.seller_id?.trim()) p.seller_id = filters.value.seller_id.trim()
       if (filters.value.status?.trim()) p.status = filters.value.status.trim()
+      if (filters.value.listing_type === 'auction') p.auction = '1'
+      else if (filters.value.listing_type === 'normal') p.auction = '0'
       if (sort.value.prop && sort.value.order) {
         p.sort_by = sort.value.prop
         p.sort_order = sort.value.order === 'ascending' ? 'asc' : 'desc'
@@ -1141,6 +1150,7 @@ export default defineComponent({
       pageSize,
       filters,
       statusFilterOptions,
+      listingTypeOptions,
       sellerFromAccounts,
       isOnSaleOverListed,
       onSaleAlertReasons,

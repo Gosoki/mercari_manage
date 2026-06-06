@@ -17,78 +17,81 @@
       </el-row>
     </el-card>
 
-    <el-card shadow="never" class="search-card">
-      <el-row :gutter="0" align="middle" class="search-row">
-        <el-col :xs="24" :md="14" class="search-left-group">
-          <div class="search-left-row1">
-            <el-input v-model="keyword" class="search-input-control" :placeholder="t('inventory.searchProductOrMgmtId')" clearable @change="load" prefix-icon="Search" />
-            <div class="search-filters-row">
-              <el-select v-model="filterCat" class="search-select-control" :placeholder="t('inventory.allCategories')" clearable @change="load">
-                <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
-              </el-select>
-              <el-cascader
-                v-model="filterWarehousePath"
-                :options="warehouseCascaderOptions"
-                :props="warehouseCascaderProps"
-                :show-all-levels="false"
-                class="search-select-control"
-                :placeholder="t('inventory.warehouseShelfNamePlaceholder')"
-                popper-class="product-type-cascader-popper"
-                clearable
-                filterable
-                @change="handleFilterWarehouseChange"
-              />
-              <el-cascader
-                v-model="filterProductTypePath"
-                :options="productTypeCascaderOptions"
-                :props="productTypeCascaderProps"
-                :show-all-levels="false"
-                class="search-select-control"
-                :placeholder="t('inventory.productType')"
-                popper-class="product-type-cascader-popper"
-                clearable
-                filterable
-                @change="handleFilterProductTypeChange"
-              />
-              <el-select v-model="filterOwnerUserId" class="search-select-control" :placeholder="t('inventory.allOwners')" clearable @change="load">
-                <el-option v-for="u in ownerUsers" :key="u.id" :label="u.display_name || u.username" :value="u.id" />
-              </el-select>
-              <div
-                class="search-filter-chip"
-                :class="{ 'search-filter-chip--active': hideNoWarehouseSlot }"
-                role="button"
-                tabindex="0"
-                @click="hideNoWarehouseSlot = !hideNoWarehouseSlot"
-                @keyup.enter="hideNoWarehouseSlot = !hideNoWarehouseSlot"
-              >{{ t('inventory.hideNoStock') }}</div>
-              <div
-                class="search-filter-chip"
-                :class="{ 'search-filter-chip--active': viewNoImageOnly }"
-                role="button"
-                tabindex="0"
-                @click="viewNoImageOnly = !viewNoImageOnly"
-                @keyup.enter="viewNoImageOnly = !viewNoImageOnly"
-              >{{ t('inventory.viewNoImageOnly') }}</div>
-              <div
-                class="search-filter-chip"
-                :class="{ 'search-filter-chip--active': viewCombinedOnly }"
-                role="button"
-                tabindex="0"
-                @click="viewCombinedOnly = !viewCombinedOnly"
-                @keyup.enter="viewCombinedOnly = !viewCombinedOnly"
-              >{{ t('inventory.viewCombinedOnly') }}</div>
-              <div
-                class="search-filter-chip"
-                :class="{ 'search-filter-chip--active': viewAutoListingOnly }"
-                role="button"
-                tabindex="0"
-                @click="viewAutoListingOnly = !viewAutoListingOnly"
-                @keyup.enter="viewAutoListingOnly = !viewAutoListingOnly"
-              >{{ t('inventory.viewAutoListingOnly') }}</div>
-            </div>
+    <el-card shadow="never" class="search-card" :class="{ 'search-card--ios': isIOS }">
+      <div class="search-row">
+        <!-- 第一行：搜索框 + 下拉筛选 -->
+        <div class="search-controls-row">
+          <el-input v-model="keyword" class="search-input-control" :placeholder="t('inventory.searchProductOrMgmtId')" clearable @change="load" prefix-icon="Search" />
+          <div class="search-filters-row">
+            <el-select v-model="filterCat" class="search-select-control" :placeholder="t('inventory.allCategories')" clearable @change="load">
+              <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
+            </el-select>
+            <el-cascader
+              v-model="filterWarehousePath"
+              :options="warehouseCascaderOptions"
+              :props="warehouseCascaderProps"
+              :show-all-levels="false"
+              class="search-select-control"
+              :placeholder="t('inventory.warehouseShelfNamePlaceholder')"
+              popper-class="product-type-cascader-popper"
+              clearable
+              filterable
+              @change="handleFilterWarehouseChange"
+            />
+            <el-cascader
+              v-model="filterProductTypePath"
+              :options="productTypeCascaderOptions"
+              :props="productTypeCascaderProps"
+              :show-all-levels="false"
+              class="search-select-control"
+              :placeholder="t('inventory.productType')"
+              popper-class="product-type-cascader-popper"
+              clearable
+              filterable
+              @change="handleFilterProductTypeChange"
+            />
+            <el-select v-model="filterOwnerUserId" class="search-select-control" :placeholder="t('inventory.allOwners')" clearable @change="load">
+              <el-option v-for="u in ownerUsers" :key="u.id" :label="u.display_name || u.username" :value="u.id" />
+            </el-select>
           </div>
-        </el-col>
-        <el-col :xs="24" :md="10" class="search-actions" :class="{ 'search-actions--ios': isIOS }">
+        </div>
+        <!-- 第二行：筛选卡片（居左） + 操作按钮（居右） -->
+        <div class="search-bottom-row">
+          <div class="search-chips-row">
+            <div
+              class="search-filter-chip"
+              :class="{ 'search-filter-chip--active': hideNoWarehouseSlot }"
+              role="button"
+              tabindex="0"
+              @click="hideNoWarehouseSlot = !hideNoWarehouseSlot"
+              @keyup.enter="hideNoWarehouseSlot = !hideNoWarehouseSlot"
+            >{{ t('inventory.hideNoStock') }}</div>
+            <div
+              class="search-filter-chip"
+              :class="{ 'search-filter-chip--active': viewNoImageOnly }"
+              role="button"
+              tabindex="0"
+              @click="viewNoImageOnly = !viewNoImageOnly"
+              @keyup.enter="viewNoImageOnly = !viewNoImageOnly"
+            >{{ t('inventory.viewNoImageOnly') }}</div>
+            <div
+              class="search-filter-chip"
+              :class="{ 'search-filter-chip--active': viewCombinedOnly }"
+              role="button"
+              tabindex="0"
+              @click="viewCombinedOnly = !viewCombinedOnly"
+              @keyup.enter="viewCombinedOnly = !viewCombinedOnly"
+            >{{ t('inventory.viewCombinedOnly') }}</div>
+            <div
+              class="search-filter-chip"
+              :class="{ 'search-filter-chip--active': viewAutoListingOnly }"
+              role="button"
+              tabindex="0"
+              @click="viewAutoListingOnly = !viewAutoListingOnly"
+              @keyup.enter="viewAutoListingOnly = !viewAutoListingOnly"
+            >{{ t('inventory.viewAutoListingOnly') }}</div>
+          </div>
+          <div class="search-actions" :class="{ 'search-actions--ios': isIOS }">
           <template v-if="isIOS">
             <template v-if="!listingPickMode">
               <div class="search-actions-ios-row">
@@ -119,8 +122,9 @@
               <el-button @click="exitListingPickMode">{{ t('inventory.cancelSelection') }}</el-button>
             </template>
           </template>
-        </el-col>
-      </el-row>
+          </div>
+        </div>
+      </div>
     </el-card>
 
     <el-card shadow="never" class="table-card">

@@ -98,9 +98,9 @@ export default defineComponent({
       } catch {
         /* ignore */
       }
-      return true
+      return false
     }
-    /** 默认开启（不展示 quantity=0）；写入 localStorage；watch 内会立即重新拉取列表 */
+    /** 默认关闭（展示全部，含 quantity=0）；写入 localStorage；watch 内会立即重新拉取列表 */
     const hideNoWarehouseSlot = ref(readHideNoWarehouseSlotPreference())
     /** localStorage：勾选后仅展示无商品图的条目 */
     const VIEW_NO_IMAGE_ONLY_STORAGE_KEY = 'mercari.inventory.viewNoImageOnly'
