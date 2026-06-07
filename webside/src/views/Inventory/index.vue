@@ -578,21 +578,31 @@
           <el-row :gutter="16">
             <el-col :span="24">
               <el-form-item :label="t('inventory.mercariItemId')">
-                <div class="mercari-id-editor">
-                  <div
-                    v-for="(mid, idx) in mercariIdList.filter((v) => String(v || '').trim() !== '')"
-                    :key="idx"
-                    class="mercari-id-row"
+                <el-collapse class="mercari-id-collapse">
+                  <el-collapse-item
+                    :title="
+                      t('inventory.mercariItemIdCount', {
+                        count: mercariIdList.filter((v) => String(v || '').trim() !== '').length
+                      })
+                    "
                   >
-                    <el-input
-                      :model-value="mid"
-                      size="small"
-                      class="mercari-id-input"
-                      readonly
-                      disabled
-                    />
-                  </div>
-                </div>
+                    <div class="mercari-id-editor">
+                      <div
+                        v-for="(mid, idx) in mercariIdList.filter((v) => String(v || '').trim() !== '')"
+                        :key="idx"
+                        class="mercari-id-row"
+                      >
+                        <el-input
+                          :model-value="mid"
+                          size="small"
+                          class="mercari-id-input"
+                          readonly
+                          disabled
+                        />
+                      </div>
+                    </div>
+                  </el-collapse-item>
+                </el-collapse>
               </el-form-item>
             </el-col>
           </el-row>

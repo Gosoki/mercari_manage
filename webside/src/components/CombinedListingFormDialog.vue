@@ -126,10 +126,11 @@
           :loading="mercariAccountsLoading"
         >
           <el-option
-            v-for="a in mercariAccountOptions"
+            v-for="a in mercariAccountOptionsSorted"
             :key="a.id"
             :label="mercariAccountOptionLabel(a)"
             :value="a.id"
+            :disabled="a.status === 'disabled'"
           />
         </el-select>
       </el-form-item>
@@ -504,6 +505,14 @@ const saleTypeOptions = computed(() => [
   { label: t('dialogs.combinedListing.saleInstant'), value: 'instant_buy' },
   { label: t('dialogs.combinedListing.saleAuction'), value: 'auction' }
 ])
+
+// 停用账号(status==='disabled')底置，其余保持原有顺序（sort 稳定，组内顺序不变）
+const mercariAccountOptionsSorted = computed(() => {
+  const list = Array.isArray(mercariAccountOptions.value) ? mercariAccountOptions.value : []
+  return [...list].sort(
+    (a, b) => (a?.status === 'disabled' ? 1 : 0) - (b?.status === 'disabled' ? 1 : 0)
+  )
+})
 
 function mercariAccountOptionLabel(a) {
   const name = (a?.account_name || '').trim() || `ID ${a?.id}`
