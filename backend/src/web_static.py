@@ -39,7 +39,15 @@ def _webside_dist_dir() -> Path:
         return Path(override)
     root = backend_root()
     if getattr(sys, "frozen", False):
-        return root / "webside" / "dist"
+        # 打包后优先读 exe 同级的 webside 目录（便于不重打 exe 即可热替换前端）；
+        # 若不存在，则回退到打进 exe 内的前端（PyInstaller onefile 解压到 _MEIPASS/webside）。
+        external = root / "webside"
+        if external.is_dir():
+            return external
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            return Path(meipass) / "webside"
+        return external
     # 开发目录：仓库内 webside 与 backend 同级
     return root.parent / "webside" / "dist"
 

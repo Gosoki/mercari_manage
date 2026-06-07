@@ -64,6 +64,20 @@ datas.append((
     os.path.join("src", "ssl_mitm_proxy"),
 ))
 
+# 前端构建产物 webside/dist 整体打入 exe（onefile 运行时解压到 _MEIPASS/webside；
+# web_static.py 优先读 exe 同级 webside/，缺失时回退到此打入产物）
+WEBSIDE_DIST = os.path.join(os.path.abspath(os.getcwd()), "webside", "dist")
+if os.path.isdir(WEBSIDE_DIST):
+    for _dp, _ds, _fs in os.walk(WEBSIDE_DIST):
+        for _f in _fs:
+            _full = os.path.join(_dp, _f)
+            _rel = os.path.relpath(_dp, WEBSIDE_DIST)
+            _dest = "webside" if _rel == "." else os.path.join("webside", _rel)
+            datas.append((_full, _dest))
+    print("[mercari.spec] 已打入前端 webside/dist -> webside")
+else:
+    print("[mercari.spec] 警告：未找到 webside/dist，前端未打入（请先 npm run build）")
+
 # 可选：打入 OCR（torch 体系，约 2GB，启动变慢）
 if os.environ.get("BUNDLE_OCR", "0").strip() == "1":
     for pkg in ("easyocr", "torch", "torchvision", "cv2", "skimage",
@@ -94,7 +108,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="mercari",
+    name="backend",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

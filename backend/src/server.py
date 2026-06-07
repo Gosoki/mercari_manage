@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -55,7 +56,10 @@ def run(app: FastAPI) -> None:
     import uvicorn
 
     host = (os.environ.get("MERCARI_HOST") or "0.0.0.0").strip()
-    port = int((os.environ.get("MERCARI_PORT") or "9601").strip())
+    # 打包后（frozen）同端口提供 API+前端，默认 9600（无独立 Vite，端口空闲）；
+    # 开发态默认 9601，避开 Vite 占用的 9600。MERCARI_PORT 可覆盖。
+    default_port = "9600" if getattr(sys, "frozen", False) else "9601"
+    port = int((os.environ.get("MERCARI_PORT") or default_port).strip())
     forwarded_allow_ips = (os.environ.get("MERCARI_FORWARDED_ALLOW_IPS") or "127.0.0.1").strip()
     certfile, keyfile = resolve_ssl_config()
     key_password = (os.environ.get("MERCARI_SSL_KEY_PASSWORD") or "").strip() or None
