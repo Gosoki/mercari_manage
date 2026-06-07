@@ -34,7 +34,7 @@ hiddenimports = list(dict.fromkeys(hiddenimports))
 
 
 a = Analysis(
-    [os.path.join("backend", "_mitmdump_entry.py")],
+    [os.path.join("backend", "src", "_mitmdump_entry.py")],
     pathex=["backend"],
     binaries=binaries,
     datas=datas,

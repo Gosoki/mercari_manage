@@ -76,7 +76,6 @@ mercari/
 │       ├── i18n/locales/             # zh-CN / ja / en
 │       ├── router/
 │       └── views/                    # Dashboard、Inventory、Orders、… 及 system/*
-├── scripts/                          # 辅助脚本
 ├── start.bat                         # 一键拉起后端 + 前端
 ├── restart.bat
 ├── pyinstaller.bat                   # 后端 PyInstaller 打包
