@@ -93,7 +93,6 @@ def mitm_status() -> Dict[str, Any]:
         "confdir": conf,
         "ca_cert_path": ca,
         "ca_cert_exists": os.path.isfile(ca),
-        "stderr_log": os.path.join(conf, "mitmdump_stderr.log"),
     }
     if sys.platform == "win32" and _mitm_windows_trust.last_windows_trust_result:
         out["windows_ca_trust"] = dict(_mitm_windows_trust.last_windows_trust_result)
@@ -121,7 +120,6 @@ def start_mitm_proxy() -> Dict[str, Any]:
     env = os.environ.copy()
     env["MERCARI_BACKEND_ROOT"] = os.path.abspath(backend_root())
     port = mitm_listen_port()
-    err_log = os.path.join(conf, "mitmdump_stderr.log")
     try:
         mitm_bin = _mitmdump_executable()
     except FileNotFoundError as exc:
@@ -142,39 +140,23 @@ def start_mitm_proxy() -> Dict[str, Any]:
         addon,
     ]
     try:
-        err_f = open(err_log, "ab", buffering=0)
-    except OSError:
-        err_f = subprocess.DEVNULL  # type: ignore
-    try:
         _mitm_proc = subprocess.Popen(
             cmd,
             env=env,
             cwd=backend_root(),
             stdout=subprocess.DEVNULL,
-            stderr=err_f,
+            stderr=subprocess.DEVNULL,
         )
     except Exception as exc:
-        if err_f is not subprocess.DEVNULL:
-            try:
-                err_f.close()
-            except Exception:
-                pass
         return {"started": False, "error": str(exc)}
 
     time.sleep(0.4)
     if _mitm_proc.poll() is not None:
         _mitm_proc = None
-        tail = ""
-        try:
-            if os.path.isfile(err_log):
-                with open(err_log, "rb") as rf:
-                    tail = rf.read()[-800:].decode("utf-8", errors="replace")
-        except Exception:
-            pass
-        msg = "mitmdump 启动后立即退出，请检查端口占用或插件错误。"
-        if tail.strip():
-            msg += f" 详见 {err_log} 末尾: {tail.strip()[:400]}"
-        return {"started": False, "error": msg}
+        return {
+            "started": False,
+            "error": "mitmdump 启动后立即退出，请检查端口占用或插件错误。",
+        }
 
     if not _wait_proxy_listen("127.0.0.1", port, timeout=10.0):
         try:
@@ -183,20 +165,10 @@ def start_mitm_proxy() -> Dict[str, Any]:
         except Exception:
             pass
         _mitm_proc = None
-        tail = ""
-        try:
-            if os.path.isfile(err_log):
-                with open(err_log, "rb") as rf:
-                    tail = rf.read()[-800:].decode("utf-8", errors="replace")
-        except Exception:
-            pass
-        msg = (
-            f"mitmdump 未在 127.0.0.1:{port} 监听（代理连不上）。"
-            f" 请查看日志: {err_log}"
-        )
-        if tail.strip():
-            msg += f" 末尾输出: {tail.strip()[:400]}"
-        return {"started": False, "error": msg}
+        return {
+            "started": False,
+            "error": f"mitmdump 未在 127.0.0.1:{port} 监听（代理连不上），请检查端口占用或插件错误。",
+        }
 
     log.info("mitmdump 已启动 port=%s", port)
     return {"started": True, **mitm_status()}
