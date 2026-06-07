@@ -40,9 +40,13 @@ def _local_ips() -> List[str]:
     return sorted(ips)
 
 
-def ensure_cert() -> Tuple[Optional[str], Optional[str]]:
-    """确保自签证书存在，返回 (cert_path, key_path)；cryptography 不可用时返回 (None, None)。"""
-    d = cert_dir()
+def ensure_cert(target_dir: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
+    """确保自签证书存在，返回 (cert_path, key_path)；cryptography 不可用时返回 (None, None)。
+
+    target_dir 指定证书存放目录（如打包后 exe 同级根目录）；不传则用默认 data/mercari_proxy。
+    """
+    d = os.path.abspath(target_dir) if target_dir else cert_dir()
+    os.makedirs(d, exist_ok=True)
     cert_path = os.path.join(d, "cert.pem")
     key_path = os.path.join(d, "key.pem")
     if os.path.isfile(cert_path) and os.path.isfile(key_path):

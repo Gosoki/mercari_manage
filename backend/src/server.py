@@ -20,6 +20,10 @@ from pathlib import Path
 from fastapi import FastAPI
 
 
+def _truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def resolve_ssl_config() -> tuple[str | None, str | None]:
     certfile = (os.environ.get("MERCARI_SSL_CERTFILE") or "").strip()
     keyfile = (os.environ.get("MERCARI_SSL_KEYFILE") or "").strip()
@@ -43,6 +47,21 @@ def resolve_ssl_config() -> tuple[str | None, str | None]:
             "MERCARI_SSL_CERT_DIR=%s 中未找到匹配的证书/私钥（cert=%s, key=%s），将以 HTTP 启动",
             cert_dir, found_cert, found_key,
         )
+
+    # 打包后（frozen）默认 HTTPS：检查 exe 同级根目录是否已有自签证书，没有则自动生成。
+    # 设置 MERCARI_FORCE_HTTP=1 可关闭此行为，以纯 HTTP 启动。
+    if getattr(sys, "frozen", False) and not _truthy(os.environ.get("MERCARI_FORCE_HTTP")):
+        try:
+            from .app_paths import backend_root
+            from .mercari_proxy.cert import ensure_cert
+
+            c, k = ensure_cert(str(backend_root()))
+            if c and k:
+                return c, k
+            logging.getLogger(__name__).warning("cryptography 不可用，无法生成自签证书，将以 HTTP 启动")
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).warning("自签证书生成失败，将以 HTTP 启动", exc_info=True)
+
     return None, None
 
 

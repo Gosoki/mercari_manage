@@ -90,6 +90,6 @@ echo ========================================
 dir /b "%RELEASE%"
 echo ----------------------------------------
 echo   Put mercariDB.db next to backend.exe, then run backend.exe
-echo   Then open http://localhost:9600 in your browser
+echo   Then open https://localhost:9600 in your browser (self-signed cert auto-generated)
 echo ========================================
 pause

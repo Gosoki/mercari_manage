@@ -64,6 +64,13 @@ datas.append((
     os.path.join("src", "ssl_mitm_proxy"),
 ))
 
+# mercari_proxy/server.js 由 `node server.js` 子进程加载，需以磁盘文件形式打入
+# （server_js_path() 用 os.path.dirname(__file__)/server.js，冻结后即 _MEIPASS/src/mercari_proxy/）
+datas.append((
+    os.path.join(BACKEND, "src", "mercari_proxy", "server.js"),
+    os.path.join("src", "mercari_proxy"),
+))
+
 # 前端构建产物 webside/dist 整体打入 exe（onefile 运行时解压到 _MEIPASS/webside；
 # web_static.py 优先读 exe 同级 webside/，缺失时回退到此打入产物）
 WEBSIDE_DIST = os.path.join(os.path.abspath(os.getcwd()), "webside", "dist")
