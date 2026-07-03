@@ -88,6 +88,7 @@ class MercariAccountCreate(PydanticModel):
     value: Optional[Dict[str, Any]] = None
     login_id: Optional[str] = None
     seller_id: Optional[str] = None
+    avatar: Optional[str] = None
     status: str = "disabled"
     remark: Optional[str] = None
     is_open: int = 0
@@ -110,6 +111,7 @@ class MercariAccountUpdate(PydanticModel):
     account_name: Optional[str] = None
     login_id: Optional[str] = None
     seller_id: Optional[str] = None
+    avatar: Optional[str] = None
     value: Optional[Dict[str, Any]] = None
     status: Optional[str] = None
     remark: Optional[str] = None

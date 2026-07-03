@@ -42,12 +42,12 @@ def create_inventory(data: InventoryCreate, _claims: dict = Depends(require_auth
             """
             INSERT INTO [inventory] (
                 name, barcode, category_id, product_type_id, owner_user_id, warehouse_id, price, quantity,
-                mercari_item_id, on_sale_quantity, pending_outbound_qty, auto_listing_enabled,
+                mercari_item_id, on_sale_quantity, pending_outbound_qty, auto_listing_enabled, auto_listing_watermark,
                 description, listing_title, listing_body,
                 listing_status, listing_account_id, shipping_payer, shipping_method,
                 shipping_from_area_id, shipping_days, sale_type, auction_duration,
                 image, image_front, image_back, images_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data.name,
@@ -62,6 +62,7 @@ def create_inventory(data: InventoryCreate, _claims: dict = Depends(require_auth
                 int(data.on_sale_quantity) if data.on_sale_quantity is not None else 0,
                 0,
                 1 if int(data.auto_listing_enabled or 0) == 1 else 0,
+                1 if (data.auto_listing_watermark is None or int(data.auto_listing_watermark) == 1) else 0,
                 data.description,
                 data.listing_title,
                 data.listing_body,
@@ -149,10 +150,12 @@ def update_inventory(pid: int, data: InventoryUpdate, _claims: dict = Depends(re
             raise HTTPException(status_code=400, detail="商品归属用户不存在")
     if "auto_listing_enabled" in update_data:
         update_data["auto_listing_enabled"] = 1 if int(update_data.get("auto_listing_enabled") or 0) == 1 else 0
+    if "auto_listing_watermark" in update_data:
+        update_data["auto_listing_watermark"] = 1 if int(update_data.get("auto_listing_watermark") or 0) == 1 else 0
     allowed_fields = {
         "name", "barcode", "category_id", "product_type_id", "owner_user_id", "warehouse_id", "price",
         "quantity",
-        "mercari_item_id", "on_sale_quantity", "auto_listing_enabled",
+        "mercari_item_id", "on_sale_quantity", "auto_listing_enabled", "auto_listing_watermark",
         "description", "listing_title", "listing_body",
         "listing_status", "listing_account_id", "shipping_payer", "shipping_method",
         "shipping_from_area_id", "shipping_days", "sale_type", "auction_duration",

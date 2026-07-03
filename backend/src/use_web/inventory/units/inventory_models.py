@@ -33,6 +33,7 @@ class InventoryCreate(PydanticModel):
     mercari_item_id: Optional[str] = None
     on_sale_quantity: Optional[int] = None
     auto_listing_enabled: Optional[int] = 0
+    auto_listing_watermark: Optional[int] = 1
     image_front: Optional[str] = None
     image_back: Optional[str] = None
     images: Optional[List[str]] = None
@@ -108,6 +109,7 @@ class InventoryUpdate(PydanticModel):
     mercari_item_id: Optional[str] = None
     on_sale_quantity: Optional[int] = None
     auto_listing_enabled: Optional[int] = None
+    auto_listing_watermark: Optional[int] = None
     image_front: Optional[str] = None
     image_back: Optional[str] = None
     images: Optional[List[str]] = None

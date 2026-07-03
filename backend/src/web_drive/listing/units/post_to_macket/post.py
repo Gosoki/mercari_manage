@@ -83,14 +83,19 @@ async def post_to_market(
         raise ValueError(f"无效的 account_key: {account_key}")
     main_key = mercari_account_key(account_id)
 
-    # ── 可选：为图片右下角叠加「出品账号名 + 日期」水印（每次出品按需生成） ── #
+    # ── 可选：为图片右下角 45° 叠加「头像 + 账号名 + 日期」水印（每次出品按需生成） ── #
     if watermark and local_images:
-        from ._watermark import apply_watermark_to_images, build_watermark_text
+        from ._watermark import (
+            account_avatar_path,
+            apply_watermark_to_images,
+            build_watermark_text,
+        )
 
         wm_text = build_watermark_text(account_id)
-        if wm_text:
+        wm_avatar = account_avatar_path(account_id)
+        if wm_text or wm_avatar:
             report("watermark", f"正在为 {len(local_images)} 张图片添加水印…")
-            local_images = apply_watermark_to_images(local_images, wm_text)
+            local_images = apply_watermark_to_images(local_images, wm_text, wm_avatar)
 
     report("open_session", "正在初始化独立无头出品浏览器并进入出品页…")
 

@@ -764,6 +764,16 @@
               </el-form-item>
             </el-col>
           </el-row>
+          <el-row v-if="form.auto_listing_enabled === 1" :gutter="16">
+            <el-col :span="24">
+              <el-form-item :label="t('inventory.autoListingMethod')">
+                <el-radio-group v-model="form.auto_listing_watermark">
+                  <el-radio :value="1">{{ t('inventory.watermarkListing') }}</el-radio>
+                  <el-radio :value="0">{{ t('inventory.originalListing') }}</el-radio>
+                </el-radio-group>
+              </el-form-item>
+            </el-col>
+          </el-row>
           <el-row v-if="form.sale_type === 'auction'" :gutter="16">
             <el-col :xs="24" :sm="12">
               <el-form-item :label="t('dialogs.singleListing.auctionDuration')">
@@ -1093,12 +1103,44 @@
               placement="top"
             >
               <span>
-                <el-button
-                  type="warning"
-                  @click="submitListingFromEditForm"
-                  :loading="listingSubmitting"
-                  :disabled="inventorySaveBlockedByImageUpload || listableQuantity(form) <= 0 || syncLockStore.locked || currentEditRowIsAlert"
-                >{{ t('inventory.list') }}</el-button>
+                <el-popconfirm
+                  :title="t('inventory.listOriginalConfirm')"
+                  :confirm-button-text="t('common.confirm')"
+                  :cancel-button-text="t('common.cancel')"
+                  @confirm="submitListingFromEditForm(false)"
+                >
+                  <template #reference>
+                    <el-button
+                      type="warning"
+                      plain
+                      :loading="listingSubmitting"
+                      :disabled="inventorySaveBlockedByImageUpload || listableQuantity(form) <= 0 || syncLockStore.locked || currentEditRowIsAlert"
+                    >{{ t('inventory.listOriginal') }}</el-button>
+                  </template>
+                </el-popconfirm>
+              </span>
+            </el-tooltip>
+            <el-tooltip
+              v-if="form.id"
+              :disabled="!syncLockStore.locked && !currentEditRowIsAlert"
+              :content="syncLockStore.locked ? syncLockStore.label : currentEditRowAlertReason"
+              placement="top"
+            >
+              <span>
+                <el-popconfirm
+                  :title="t('inventory.listWatermarkConfirm')"
+                  :confirm-button-text="t('common.confirm')"
+                  :cancel-button-text="t('common.cancel')"
+                  @confirm="submitListingFromEditForm(true)"
+                >
+                  <template #reference>
+                    <el-button
+                      type="warning"
+                      :loading="listingSubmitting"
+                      :disabled="inventorySaveBlockedByImageUpload || listableQuantity(form) <= 0 || syncLockStore.locked || currentEditRowIsAlert"
+                    >{{ t('inventory.listWatermark') }}</el-button>
+                  </template>
+                </el-popconfirm>
               </span>
             </el-tooltip>
           </div>

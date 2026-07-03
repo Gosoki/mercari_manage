@@ -193,6 +193,12 @@ class InventoryModel(BaseModel):
                 'not_null': True,
                 'default': 0,
             },
+            # 自动出品的出品方式：1=水印出品（默认），0=原图出品
+            'auto_listing_watermark': {
+                'type': 'INTEGER',
+                'not_null': True,
+                'default': 1,
+            },
             # 假删除标记：0=正常，1=已删除（前端不可见，可通过数据库手动恢复）
             'is_delete': {
                 'type': 'INTEGER',

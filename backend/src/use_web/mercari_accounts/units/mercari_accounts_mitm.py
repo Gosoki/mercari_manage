@@ -146,6 +146,93 @@ async def _wait_capture_with_progress(
     return None
 
 
+def _avatar_ext_from(url: str, content_type: str) -> str:
+    """依据 Content-Type 或 URL 后缀推断头像文件扩展名。"""
+    ct = (content_type or "").lower()
+    if "webp" in ct:
+        return "webp"
+    if "png" in ct:
+        return "png"
+    if "gif" in ct:
+        return "gif"
+    if "jpeg" in ct or "jpg" in ct:
+        return "jpg"
+    tail = (url or "").split("?", 1)[0].rsplit(".", 1)
+    ext = tail[-1].lower() if len(tail) == 2 else ""
+    if ext in {"webp", "png", "gif"}:
+        return ext
+    return "jpg"
+
+
+async def _download_avatar_local(page: Any, url: str) -> Optional[str]:
+    """经浏览器上下文下载头像并存入 backend/imges，返回 ``/imges/xxx.ext``；失败返回 None。"""
+    u = (url or "").strip()
+    if not u:
+        return None
+    try:
+        from ...image_storage import save_image_bytes
+
+        resp = await page.request.get(u, timeout=15000)
+        if not resp.ok:
+            log.info("[MITM] 下载头像失败 status=%s url=%s", resp.status, u)
+            return None
+        body = await resp.body()
+        if not body:
+            return None
+        ext = _avatar_ext_from(u, resp.headers.get("content-type", ""))
+        return save_image_bytes(body, ext=ext, prefix="mercari_avatar")
+    except Exception as exc:
+        log.info("[MITM] 下载头像异常（忽略）：%s", exc)
+        return None
+
+
+async def _read_seller_profile_from_dom(
+    mgr: Any, session_key: str, *, timeout_ms: int = 8000
+) -> Dict[str, str]:
+    """从出品一覧页顶部账号按钮读取卖家头像与用户名（用户名同步为账号名称）。
+
+    对应 DOM：``[data-testid="account-button"]`` 内的 ``<img>``（头像，alt="XXXの画像"）
+    与 ``<p>``（用户名）。头像会经浏览器下载并存入本地 ``/imges``；读取失败时返回空字典
+    （不影响 seller_id 主流程）。
+    """
+    out: Dict[str, str] = {}
+    try:
+        page = await mgr.active_tab_page(session_key)
+        locator = page.locator('[data-testid="account-button"]').first
+        try:
+            await locator.wait_for(state="attached", timeout=timeout_ms)
+        except Exception:
+            pass
+        try:
+            avatar = await locator.locator("img").first.get_attribute("src")
+            avatar = (avatar or "").strip()
+            if avatar:
+                # 只存本地图片路径：下载成功才写入 avatar（供保存时覆盖旧头像）；
+                # 下载失败则不同步本次头像，保留账号原有本地头像，绝不落远程 URL。
+                local = await _download_avatar_local(page, avatar)
+                if local:
+                    out["avatar"] = local
+                else:
+                    log.info("[MITM] 头像本地下载失败，跳过本次头像同步：%s", avatar)
+        except Exception:
+            pass
+        try:
+            name = await locator.locator("p").first.text_content()
+            name = (name or "").strip()
+            if not name:
+                alt = await locator.locator("img").first.get_attribute("alt")
+                alt = (alt or "").strip()
+                # 头像 alt 形如「Williamc2の画像」：去掉尾部「の画像」得到用户名
+                name = alt[:-3].strip() if alt.endswith("の画像") else alt
+            if name:
+                out["account_name"] = name
+        except Exception:
+            pass
+    except Exception as exc:
+        log.info("[MITM] 读取卖家头像/用户名失败（忽略）：%s", exc)
+    return out
+
+
 async def _click_first_match_xpath(mgr: Any, account_key: str, xpaths: List[str], timeout_ms: int = 25000) -> str:
     """按顺序尝试点击多个 XPath，返回成功的 XPath。"""
     last_exc: Optional[Exception] = None
@@ -194,6 +281,7 @@ async def fetch_seller_id_via_mitm(
             from ....web_drive.core.paths import mercari_automation_key
 
             auto_key = mercari_automation_key(aid)
+            session_key = auto_key
             await mgr.close_session(auto_key, force=True)
             await mgr.open_session(
                 auto_key,
@@ -205,6 +293,7 @@ async def fetch_seller_id_via_mitm(
             await clone_main_profile_cookies(mgr, aid, auto_key)
             await mgr.reload_active_tab(auto_key, MERCARI_LISTINGS_URL)
         else:
+            session_key = account_key
             # 新增账号预登录：prepare 专用 profile 自带登录态，关闭后带 MITM 代理重开以截获请求
             await mgr.close_session(account_key, force=True)
             await mgr.open_session(
@@ -236,9 +325,14 @@ async def fetch_seller_id_via_mitm(
         if not sid:
             raise HTTPException(status_code=500, detail="截获请求中未解析到有效 seller_id")
 
+        # 顺带从出品一覧页顶部账号按钮读取卖家头像与用户名（用户名同步账号名称）
+        profile = await _read_seller_profile_from_dom(mgr, session_key)
+
         log.info(
-            "[MITM] 已解析 seller_id=%s account_key=%s url=%s",
+            "[MITM] 已解析 seller_id=%s account_name=%s avatar=%s account_key=%s url=%s",
             sid,
+            profile.get("account_name") or "",
+            profile.get("avatar") or "",
             account_key,
             cap.get("url") or "",
         )
@@ -246,6 +340,8 @@ async def fetch_seller_id_via_mitm(
             "success": True,
             "data": {
                 "seller_id": sid,
+                "avatar": profile.get("avatar") or "",
+                "account_name": profile.get("account_name") or "",
                 "url": cap.get("url"),
                 "ts": cap.get("ts"),
                 "account_key": account_key,

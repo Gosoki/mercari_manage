@@ -5,7 +5,15 @@
         <el-col v-for="row in list" :key="row.id" :xs="24" :sm="12" :md="8" :lg="6" class="card-col">
           <el-card shadow="hover" class="account-card">
             <div class="card-header">
-              <div class="card-title">{{ row.account_name || '-' }}</div>
+              <div class="card-header-main">
+                <el-avatar
+                  v-if="row.avatar"
+                  :src="mercariImageUrl(row.avatar)"
+                  :size="28"
+                  class="card-avatar"
+                />
+                <div class="card-title">{{ row.account_name || '-' }}</div>
+              </div>
               <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small" effect="light">
                 {{ row.status === 'active' ? t('mercariAccounts.enabled') : t('mercariAccounts.disabled') }}
               </el-tag>
@@ -85,28 +93,45 @@
       </p>
       <el-form :model="form" :rules="formRules" ref="formRef" label-width="120px" class="mercari-form">
         <el-divider content-position="left">{{ t('mercariAccounts.sectionBasicInfo') }}</el-divider>
-        <el-form-item :label="t('mercariAccounts.accountNameLabel')" prop="account_name">
-          <el-input v-model="form.account_name" maxlength="60" clearable />
-        </el-form-item>
-        <el-form-item :label="t('mercariAccounts.sellerId')" prop="seller_id">
-          <el-input
-            v-model="form.seller_id"
-            maxlength="30"
-            clearable
-            :placeholder="t('mercariAccounts.sellerIdPlaceholder')"
-          >
-            <template #append>
-              <el-button
-                :loading="fetchSellerIdLoading"
-                @click="fetchSellerIdViaMitm"
-              >{{ t('mercariAccounts.fetch') }}</el-button>
-            </template>
-          </el-input>
-        </el-form-item>
-        <el-form-item :label="t('mercariAccounts.accountStatus')" prop="status">
-          <el-select v-model="form.status" style="width: 100%">
-            <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
+        <div class="basic-info-row">
+          <div class="basic-info-fields">
+            <el-form-item :label="t('mercariAccounts.accountNameLabel')" prop="account_name">
+              <el-input v-model="form.account_name" maxlength="60" clearable />
+            </el-form-item>
+            <el-form-item :label="t('mercariAccounts.sellerId')" prop="seller_id">
+              <el-input
+                v-model="form.seller_id"
+                maxlength="30"
+                clearable
+                :placeholder="t('mercariAccounts.sellerIdPlaceholder')"
+              />
+            </el-form-item>
+            <el-form-item :label="t('mercariAccounts.accountStatus')" prop="status">
+              <el-select v-model="form.status" style="width: 100%">
+                <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+          </div>
+          <div class="basic-info-avatar">
+            <el-image
+              v-if="form.avatar"
+              :src="mercariImageUrl(form.avatar)"
+              fit="cover"
+              class="avatar-preview"
+              :preview-src-list="[mercariImageUrl(form.avatar)]"
+              :preview-teleported="true"
+              hide-on-click-modal
+            />
+            <div v-else class="avatar-placeholder">{{ t('mercariAccounts.avatarPlaceholder') }}</div>
+          </div>
+        </div>
+        <el-form-item label-width="120px">
+          <el-button
+            type="primary"
+            plain
+            :loading="fetchSellerIdLoading"
+            @click="fetchSellerIdViaMitm"
+          >{{ t('mercariAccounts.fetchBasicInfo') }}</el-button>
         </el-form-item>
         <el-divider content-position="left">{{ t('mercariAccounts.sectionAutoFetch') }}</el-divider>
         <el-form-item :label="t('mercariAccounts.syncItems')">

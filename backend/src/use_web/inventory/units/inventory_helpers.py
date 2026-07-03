@@ -24,6 +24,7 @@ INVENTORY_COLUMNS = [
     "pending_outbound_qty",
     "listable_quantity",
     "auto_listing_enabled",
+    "auto_listing_watermark",
     "is_delete",
     "is_combined",
     "combined_items",

@@ -332,6 +332,8 @@ async def _relist_single_inventory(
         getattr(inv, "shipping_from_area_id", None), ld.get("shipping_from_area_id"), ""
     )
     auction_duration = str(getattr(inv, "auction_duration", None) or "normal").strip() or "normal"
+    # 自动出品的出品方式：1=水印出品（默认），0=原图出品
+    watermark = int(getattr(inv, "auto_listing_watermark", 1) or 0) == 1
     if not shipping_from_area_id:
         log.warning(
             "[auto_relist] 商品 %s：系统出品默认未配置发货地，出品可能失败（仍尝试）",
@@ -359,6 +361,7 @@ async def _relist_single_inventory(
         price=price,
         shipping_days=shipping_days,
         shipping_from_area_id=shipping_from_area_id,
+        watermark=watermark,
         use_mitm_proxy=True,
     )
 

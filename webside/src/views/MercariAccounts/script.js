@@ -7,6 +7,7 @@ import { mercariAccountApi, mercariApi, webDriveApi } from '@/api/index.js'
 import { useSyncOverlay } from '@/composables/useSyncOverlay'
 import SyncOverlay from '@/components/SyncOverlay.vue'
 import { useSyncLockStore } from '@/stores/syncLock.js'
+import { mercariImageUrl } from '@/utils/mercariImage.js'
 
 export default defineComponent({
   components: { SyncOverlay },
@@ -120,6 +121,7 @@ export default defineComponent({
       id: null,
       account_name: '',
       seller_id: '',
+      avatar: '',
       status: 'disabled',
       remark: '',
       auto_fetch_relist: 0,
@@ -223,6 +225,11 @@ export default defineComponent({
           return
         }
         form.value.seller_id = sid
+        // 同步卖家头像与用户名（用户名写入账号名称）
+        const avatar = String(res?.data?.avatar || '').trim()
+        if (avatar) form.value.avatar = avatar
+        const sellerName = String(res?.data?.account_name || '').trim()
+        if (sellerName) form.value.account_name = sellerName
         await nextTick()
         formRef.value?.validateField('seller_id').catch(() => {})
         ElMessage.success(t('mercariAccounts.msgSellerIdFilled', { sid }))
@@ -239,6 +246,7 @@ export default defineComponent({
         id: row.id,
         account_name: row.account_name || '',
         seller_id: row.seller_id != null ? String(row.seller_id) : '',
+        avatar: row.avatar || '',
         status: row.status || 'active',
         remark: row.remark || '',
         auto_fetch_relist: row.auto_fetch_relist === 1 ? 1 : 0,
@@ -259,6 +267,7 @@ export default defineComponent({
         account_name: name,
         login_id: name,
         seller_id: String(form.value.seller_id || '').trim() || null,
+        avatar: String(form.value.avatar || '').trim() || null,
         status: form.value.status,
         remark: form.value.remark || null,
         auto_fetch_relist: form.value.auto_fetch_relist === 1 ? 1 : 0,
@@ -596,6 +605,7 @@ export default defineComponent({
       anyTaskEnabled,
       taskIntervalSummary,
       pauseWindowLabel,
+      mercariImageUrl,
       createDefaultForm,
       form,
       sellerIdRules,

@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import HTTPException
 
 from ....db_manage.models.mercari_account import MercariAccountModel
+from ...image_storage import delete_image_file
 from .mercari_accounts_helpers import (
     _item_api_dict,
     _norm_headers_dict,
@@ -67,6 +68,7 @@ def create_mercari_account(data: MercariAccountCreate):
         account_name=name,
         login_id=lid,
         seller_id=_norm_seller_id(data.seller_id),
+        avatar=(data.avatar or "").strip() or None,
         login_password=None,
         value=value_json,
         status=data.status,
@@ -98,6 +100,13 @@ def update_mercari_account(aid: int, data: MercariAccountUpdate):
         item.login_id = (data.login_id or "").strip() or item.account_name
     if data.seller_id is not None:
         item.seller_id = _norm_seller_id(data.seller_id)
+    if data.avatar is not None:
+        new_avatar = (data.avatar or "").strip() or None
+        old_avatar = (getattr(item, "avatar", None) or "").strip() or None
+        # 头像更换：清理旧的本地文件（仅限 /imges/ 内文件）避免残留
+        if old_avatar and old_avatar != new_avatar:
+            delete_image_file(old_avatar)
+        item.avatar = new_avatar
     if data.status is not None:
         _validate_status(data.status)
         item.status = data.status
@@ -157,6 +166,9 @@ def delete_mercari_account(aid: int):
     item = MercariAccountModel.find_by_id(id=aid)
     if not item:
         raise HTTPException(status_code=404, detail="账号不存在")
+    avatar = (getattr(item, "avatar", None) or "").strip() or None
     if not item.delete():
         raise HTTPException(status_code=500, detail="删除失败")
+    # 账号删除后清理其本地头像文件（仅限 /imges/ 内文件）
+    delete_image_file(avatar)
     return {"message": "删除成功"}

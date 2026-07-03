@@ -40,6 +40,12 @@ class MercariAccountModel(BaseModel):
                 'not_null': False,
                 'default': None,
             },
+            # 卖家头像 URL（获取卖家 ID 时一并从出品一覧页解析）
+            'avatar': {
+                'type': 'TEXT',
+                'not_null': False,
+                'default': None,
+            },
             'login_password': {
                 'type': 'TEXT',
                 'not_null': False,
@@ -325,12 +331,12 @@ class MercariAccountModel(BaseModel):
 
         total = db.execute_query(f"SELECT COUNT(*) {base_sql}", tuple(params))[0][0]
         select_sql = f"""
-            SELECT m.id, m.account_name, m.login_id, m.seller_id, m.login_password, m.status, m.remark, m.[value], m.is_open, m.fetch_interval, m.auto_fetch_last_at, m.auto_fetch_order_list, m.auto_fetch_on_sale, m.auto_fetch_todos, m.auto_fetch_notifications, m.auto_fetch_order_list_interval, m.auto_fetch_on_sale_interval, m.auto_fetch_todos_interval, m.auto_fetch_notifications_interval, m.auto_fetch_relist, m.pause_start_time, m.pause_end_time
+            SELECT m.id, m.account_name, m.login_id, m.seller_id, m.avatar, m.login_password, m.status, m.remark, m.[value], m.is_open, m.fetch_interval, m.auto_fetch_last_at, m.auto_fetch_order_list, m.auto_fetch_on_sale, m.auto_fetch_todos, m.auto_fetch_notifications, m.auto_fetch_order_list_interval, m.auto_fetch_on_sale_interval, m.auto_fetch_todos_interval, m.auto_fetch_notifications_interval, m.auto_fetch_relist, m.pause_start_time, m.pause_end_time
             {base_sql}
             ORDER BY m.id ASC
             LIMIT ? OFFSET ?
         """
-        keys = ['id', 'account_name', 'login_id', 'seller_id', 'login_password', 'status', 'remark', 'value', 'is_open', 'fetch_interval', 'auto_fetch_last_at', 'auto_fetch_order_list', 'auto_fetch_on_sale', 'auto_fetch_todos', 'auto_fetch_notifications', 'auto_fetch_order_list_interval', 'auto_fetch_on_sale_interval', 'auto_fetch_todos_interval', 'auto_fetch_notifications_interval', 'auto_fetch_relist', 'pause_start_time', 'pause_end_time']
+        keys = ['id', 'account_name', 'login_id', 'seller_id', 'avatar', 'login_password', 'status', 'remark', 'value', 'is_open', 'fetch_interval', 'auto_fetch_last_at', 'auto_fetch_order_list', 'auto_fetch_on_sale', 'auto_fetch_todos', 'auto_fetch_notifications', 'auto_fetch_order_list_interval', 'auto_fetch_on_sale_interval', 'auto_fetch_todos_interval', 'auto_fetch_notifications_interval', 'auto_fetch_relist', 'pause_start_time', 'pause_end_time']
         rows = db.execute_query(select_sql, tuple(params + [page_size, (page - 1) * page_size]))
         items = []
         for row in rows:

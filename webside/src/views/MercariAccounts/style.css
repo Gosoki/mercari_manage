@@ -1,6 +1,44 @@
 .list-card {
   border-radius: 8px;
 }
+.basic-info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.basic-info-fields {
+  flex: 1;
+  min-width: 0;
+}
+.basic-info-avatar {
+  flex: none;
+  width: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 4px;
+}
+.basic-info-avatar .avatar-preview {
+  width: 140px;
+  height: 140px;
+  border-radius: 8px;
+  border: 1px solid #3a4a65;
+  background: rgba(19, 28, 47, 0.6);
+}
+.basic-info-avatar .avatar-placeholder {
+  width: 140px;
+  height: 140px;
+  border-radius: 8px;
+  border: 1px dashed #3a4a65;
+  background: rgba(19, 28, 47, 0.6);
+  color: #6b7890;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 8px;
+}
 .sync-data-cards {
   margin-top: 4px;
 }
@@ -55,10 +93,22 @@
   justify-content: space-between;
   margin-bottom: 12px;
 }
+.card-header-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.card-avatar {
+  flex: none;
+}
 .card-title {
   font-size: 15px;
   font-weight: 600;
   color: #e6edf7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .card-item {
   margin-bottom: 8px;

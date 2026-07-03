@@ -837,6 +837,7 @@ export default defineComponent({
       mercari_item_id: '',
       on_sale_quantity: 0,
       auto_listing_enabled: 0,
+      auto_listing_watermark: 1,
       description: '',
       listing_title: '',
       listing_body: '',
@@ -2461,6 +2462,7 @@ export default defineComponent({
             mercari_item_id: row.mercari_item_id ?? '',
             on_sale_quantity: Number(row.on_sale_quantity ?? 0),
             auto_listing_enabled: Number(row.auto_listing_enabled || 0) === 1 ? 1 : 0,
+            auto_listing_watermark: Number(row.auto_listing_watermark ?? 1) === 0 ? 0 : 1,
             description: row.description || null,
             listing_title: row.listing_title ?? '',
             listing_body: stripTrailingMgmtBlock(row.listing_body ?? ''),
@@ -2494,6 +2496,7 @@ export default defineComponent({
             mercari_item_id: '',
             on_sale_quantity: 0,
             auto_listing_enabled: 0,
+            auto_listing_watermark: 1,
             description: null,
             listing_title: '',
             listing_body: '',
@@ -3141,8 +3144,9 @@ export default defineComponent({
       currentEditRow.value ? inventoryAlertReasons(currentEditRow.value).join('；') : ''
     )
 
-    /** 编辑弹窗内「出品」：用当前表单字段派发出品自动化（单条库存） */
-    async function submitListingFromEditForm() {
+    /** 编辑弹窗内「出品」：用当前表单字段派发出品自动化（单条库存）
+     *  watermark=true 水印出品，false 原图出品（由两个按钮分别触发） */
+    async function submitListingFromEditForm(watermark = false) {
       const id = Number(form.value?.id)
       if (!Number.isFinite(id) || id <= 0) return
       applyPriceEditToForm()
@@ -3193,29 +3197,9 @@ export default defineComponent({
       }
       const fullDescription = foot ? (body ? `${body}\n\n${foot}` : foot) : body
 
-      // ── 出品方式确认：水印出品（图片右下角叠加账号名+日期）/ 原图出品 ── //
-      // 水印出品暂时屏蔽，统一走原图出品；恢复时取消下方注释即可。
-      const watermark = false
-      // try {
-      //   await ElMessageBox.confirm(
-      //     t('inventory.watermarkConfirmMessage'),
-      //     t('inventory.watermarkConfirmTitle'),
-      //     {
-      //       type: 'info',
-      //       distinguishCancelAndClose: true,
-      //       confirmButtonText: t('inventory.watermarkListing'),
-      //       cancelButtonText: t('inventory.originalListing')
-      //     }
-      //   )
-      //   watermark = true
-      // } catch (action) {
-      //   if (action !== 'cancel') return // 关闭/ESC → 取消出品
-      //   watermark = false // 「原图出品」
-      // }
-
       const data = {
         inventory_ids: ids,
-        watermark,
+        watermark: watermark === true,
         listing_title: listingTitle,
         description: fullDescription,
         price,
