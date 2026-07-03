@@ -4,11 +4,14 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
+
+from ....auth import require_auth
 
 from ....db_manage.models.mercari_account import MercariAccountModel
 from ...image_storage import delete_image_file
 from .mercari_accounts_helpers import (
+    _ensure_seller_id_unique,
     _item_api_dict,
     _norm_headers_dict,
     _norm_interval,
@@ -26,29 +29,31 @@ from .mercari_accounts_models import (
 
 log = logging.getLogger(__name__)
 
-# 「新增账号」预登录共用的 WebDrive 会话键（与前端 MERCARI_PREPARE_KEY 约定一致）
-_PREPARE_PROFILE_KEY = "mercari_prepare"
+async def _adopt_prepare_login(account_id: int, user_id) -> None:
+    """把「新增账号」预登录用的 ``mercari_prepare_{user_id}`` profile 迁移为账号主 profile ``mercari_{id}``。
 
-
-async def _adopt_prepare_login(account_id: int) -> None:
-    """把「新增账号」预登录用的 ``mercari_prepare`` profile 迁移为账号主 profile ``mercari_{id}``。
-
-    创建流程中用户在 ``mercari_prepare`` 手动登录煤炉后，登录态只落在该 profile；
+    创建流程中用户在预登录 profile 手动登录煤炉后，登录态只落在该 profile；
     若不迁移，后续同步/抓取从主 profile ``mercari_{id}`` 克隆 Cookie 会读不到登录态，
     用户需在卡片「打开浏览器」重新登录一遍。此处创建成功后把预登录 profile 归属到新账号。
 
+    预登录会话键按用户隔离（``resolve_prepare_alias``），避免多用户并发新增时错绑登录态。
     失败不阻断账号创建（仅记录日志）：用户仍可手动重新登录后再启用账号。
     """
     try:
         from ....web_drive import get_web_drive_manager
-        from ....web_drive.core.paths import mercari_account_key
+        from ....web_drive.core.paths import (
+            MERCARI_PREPARE_ALIAS,
+            mercari_account_key,
+            resolve_prepare_alias,
+        )
 
+        prepare_key = resolve_prepare_alias(MERCARI_PREPARE_ALIAS, user_id)
         mgr = get_web_drive_manager()
-        moved = await mgr.adopt_profile(_PREPARE_PROFILE_KEY, mercari_account_key(account_id))
+        moved = await mgr.adopt_profile(prepare_key, mercari_account_key(account_id))
         if moved:
             log.info(
                 "[mercari_accounts] 已迁移预登录 profile %s → %s",
-                _PREPARE_PROFILE_KEY,
+                prepare_key,
                 mercari_account_key(account_id),
             )
         else:
@@ -88,7 +93,10 @@ def _value_json_for_create(data: MercariAccountCreate) -> str:
     return json.dumps(headers, ensure_ascii=False)
 
 
-async def create_mercari_account(data: MercariAccountCreate):
+async def create_mercari_account(
+    data: MercariAccountCreate,
+    user: dict = Depends(require_auth),
+):
     _validate_status(data.status)
     value_json = _value_json_for_create(data)
     name = _norm_required_text(data.account_name, "账号名称")
@@ -102,10 +110,13 @@ async def create_mercari_account(data: MercariAccountCreate):
     # 自动上架（售出即补挂）账号级开关：保留用户选择
     rl = 1 if _normalize_is_open(data.auto_fetch_relist) else 0
     pause_s, pause_e = _norm_pause_window(data.pause_start_time, data.pause_end_time)
+    sid = _norm_seller_id(data.seller_id)
+    # 卖家 ID 全表唯一：同一煤炉卖家重复建号会导致重复同步/重复补挂
+    _ensure_seller_id_unique(sid)
     kwargs = dict(
         account_name=name,
         login_id=lid,
-        seller_id=_norm_seller_id(data.seller_id),
+        seller_id=sid,
         avatar=(data.avatar or "").strip() or None,
         login_password=None,
         value=value_json,
@@ -124,8 +135,8 @@ async def create_mercari_account(data: MercariAccountCreate):
     item = MercariAccountModel(**kwargs)
     if not item.save():
         raise HTTPException(status_code=500, detail="保存失败")
-    # 把预登录的 mercari_prepare 登录态归属到新账号主 profile，避免创建后需二次登录
-    await _adopt_prepare_login(int(item.id))
+    # 把该用户预登录 profile 的登录态归属到新账号主 profile，避免创建后需二次登录
+    await _adopt_prepare_login(int(item.id), user.get("sub"))
     return _item_api_dict(item)
 
 
@@ -139,7 +150,10 @@ def update_mercari_account(aid: int, data: MercariAccountUpdate):
     if data.login_id is not None:
         item.login_id = (data.login_id or "").strip() or item.account_name
     if data.seller_id is not None:
-        item.seller_id = _norm_seller_id(data.seller_id)
+        new_sid = _norm_seller_id(data.seller_id)
+        # 卖家 ID 全表唯一（排除自身）：防止把已有账号的卖家 ID 改到另一条记录上
+        _ensure_seller_id_unique(new_sid, exclude_id=aid)
+        item.seller_id = new_sid
     if data.avatar is not None:
         new_avatar = (data.avatar or "").strip() or None
         old_avatar = (getattr(item, "avatar", None) or "").strip() or None

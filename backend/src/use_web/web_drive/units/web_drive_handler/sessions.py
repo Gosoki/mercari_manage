@@ -2,9 +2,11 @@
 """浏览器会话端点：列举 / 打开 / 关闭 / profiles 根目录"""
 
 from typing import Optional
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 from pydantic import BaseModel as PydanticModel, Field
+from .....auth import require_auth
 from .....web_drive import get_web_drive_manager, profiles_root
+from .....web_drive.core.paths import resolve_prepare_alias
 
 
 class OpenSessionBody(PydanticModel):
@@ -40,7 +42,9 @@ def get_profiles_root():
 async def list_sessions():
     return {"sessions": get_web_drive_manager().list_sessions()}
 
-async def open_session(body: OpenSessionBody):
+async def open_session(body: OpenSessionBody, user: dict = Depends(require_auth)):
+    # 「新增账号」预登录会话按用户隔离：mercari_prepare → mercari_prepare_{user_id}
+    account_key = resolve_prepare_alias(body.account_key, user.get("sub"))
     try:
         proxy = None
         if body.use_mitm_proxy:
@@ -50,7 +54,7 @@ async def open_session(body: OpenSessionBody):
         return {
             "success": True,
             "data": await get_web_drive_manager().open_session(
-                body.account_key,
+                account_key,
                 headless=body.headless,
                 start_url=body.start_url,
                 proxy_server=proxy,
@@ -64,8 +68,9 @@ async def open_session(body: OpenSessionBody):
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-async def close_session(body: CloseSessionBody):
+async def close_session(body: CloseSessionBody, user: dict = Depends(require_auth)):
+    account_key = resolve_prepare_alias(body.account_key, user.get("sub"))
     try:
-        return {"success": True, "data": await get_web_drive_manager().close_session(body.account_key)}
+        return {"success": True, "data": await get_web_drive_manager().close_session(account_key)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

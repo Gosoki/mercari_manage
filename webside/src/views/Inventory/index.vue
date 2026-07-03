@@ -1081,7 +1081,14 @@
                 plain
                 @click="openSplitDialog(form)"
               >{{ t('inventory.split') }}</el-button>
-              <el-popconfirm :title="t('inventory.deleteConfirm')" @confirm="remove(form.id); dialogVisible = false">
+              <el-popconfirm
+                title=""
+                hide-icon
+                popper-class="listing-confirm-popper"
+                :confirm-button-text="t('common.confirm')"
+                :cancel-button-text="t('common.cancel')"
+                @confirm="remove(form.id); dialogVisible = false"
+              >
                 <template #reference>
                   <el-button type="danger">{{ t('common.delete') }}</el-button>
                 </template>
@@ -1104,7 +1111,9 @@
             >
               <span>
                 <el-popconfirm
-                  :title="t('inventory.listOriginalConfirm')"
+                  title=""
+                  hide-icon
+                  popper-class="listing-confirm-popper"
                   :confirm-button-text="t('common.confirm')"
                   :cancel-button-text="t('common.cancel')"
                   @confirm="submitListingFromEditForm(false)"
@@ -1128,7 +1137,9 @@
             >
               <span>
                 <el-popconfirm
-                  :title="t('inventory.listWatermarkConfirm')"
+                  title=""
+                  hide-icon
+                  popper-class="listing-confirm-popper"
                   :confirm-button-text="t('common.confirm')"
                   :cancel-button-text="t('common.cancel')"
                   @confirm="submitListingFromEditForm(true)"

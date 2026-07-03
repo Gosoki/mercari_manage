@@ -1,3 +1,24 @@
+/* 出品/删除二次确认：无标题、无图标，仅保留「取消 / 确认」按钮；折叠空白提示区 */
+.listing-confirm-popper .el-popconfirm__main {
+  display: none;
+}
+.listing-confirm-popper .el-popconfirm__action {
+  margin-top: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.listing-confirm-popper .el-popconfirm__action .el-button + .el-button {
+  margin-left: 0;
+}
+/* 弹层按钮默认 small，放大到与主按钮（默认尺寸）一致 */
+.listing-confirm-popper .el-popconfirm__action .el-button {
+  height: 32px;
+  padding: 8px 15px;
+  font-size: 14px;
+  border-radius: var(--el-border-radius-base);
+}
+
 /* 无 scoped：须覆盖 App.vue 全局 `.el-input { width: 180px !important }`，否则标题与商品说明不同宽 */
 .product-dialog .listing-field-fullwidth.el-input {
   width: 100% !important;

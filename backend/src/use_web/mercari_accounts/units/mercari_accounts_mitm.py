@@ -5,8 +5,9 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from fastapi import Body, HTTPException
+from fastapi import Body, Depends, HTTPException
 
+from ....auth import require_auth
 from ....ssl_mitm_proxy.capture_config import read_capture_file
 from ....ssl_mitm_proxy.runner import (
     default_mitm_proxy_url,
@@ -170,6 +171,7 @@ async def _read_seller_profile_from_dom(
 
 async def fetch_seller_id_via_mitm(
     body: FetchSellerIdViaMitmBody = Body(default_factory=FetchSellerIdViaMitmBody),
+    user: dict = Depends(require_auth),
 ):
     """
     启动 MITM，用指定 WebDrive 会话（如 mercari_prepare / mercari_{id}）经代理打开
@@ -178,14 +180,22 @@ async def fetch_seller_id_via_mitm(
 
     会话隔离（与「打开浏览器」的有头主 profile ``mercari_{id}`` 互不冲突）：
     - 已有账号：用同步专用无头 profile ``mercari_{id}__sync`` + 克隆主 profile 登录态；
-    - 新增账号预登录：用 ``mercari_prepare`` 专用 profile（自带登录态），关闭后带 MITM 代理重开。
+    - 新增账号预登录：用 ``mercari_prepare_{user_id}`` 按用户隔离的 profile
+      （自带登录态），关闭后带 MITM 代理重开。
 
     全流程通过 ``run_mercari_serial_async`` 进入账号队列；队列空闲后由队列层
     自动关闭浏览器（``WEB_DRIVE_QUEUE_IDLE_CLOSE_SEC`` 秒延迟）。
     """
-    from ....web_drive.core.paths import mercari_id_from_account_key
+    from ....web_drive.core.paths import (
+        MERCARI_PREPARE_ALIAS,
+        mercari_id_from_account_key,
+        resolve_prepare_alias,
+    )
 
-    account_key = (body.account_key or "mercari_prepare").strip()
+    # 预登录会话按用户隔离：mercari_prepare → mercari_prepare_{user_id}
+    account_key = resolve_prepare_alias(
+        (body.account_key or MERCARI_PREPARE_ALIAS).strip(), user.get("sub")
+    )
     aid = mercari_id_from_account_key(account_key)
 
     async def _do_fetch():
@@ -271,5 +281,12 @@ async def fetch_seller_id_via_mitm(
             "mitm": mitm_status(),
         }
 
-    queue_key = queue_key_for_mercari_account(aid) if aid is not None else account_key
+    if aid is not None:
+        queue_key = queue_key_for_mercari_account(aid)
+    elif account_key.startswith(MERCARI_PREPARE_ALIAS):
+        # 所有用户的 prepare 抓取共用一个全局串行队列：MITM capture 文件全局共享，
+        # profile 虽已按用户隔离，抓取本身仍须串行以防并发互抢捕获结果
+        queue_key = MERCARI_PREPARE_ALIAS
+    else:
+        queue_key = account_key
     return await run_mercari_serial_async(queue_key, _do_fetch)

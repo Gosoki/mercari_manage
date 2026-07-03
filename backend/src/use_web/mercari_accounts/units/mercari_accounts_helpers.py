@@ -28,9 +28,32 @@ def _norm_seller_id(value: Optional[str]) -> Optional[str]:
     text = (value or "").strip()
     if not text:
         return None
-    if not text.isdigit():
+    # isascii 防止 isdigit 放行全角数字（「１２３」）/上标（「²」）等非 ASCII 数字：
+    # 存入后与抓包 URL 中的半角 seller_id 比对将永不相等
+    if not (text.isascii() and text.isdigit()):
         raise HTTPException(status_code=400, detail="卖家ID必须为数字")
     return text
+
+
+def _ensure_seller_id_unique(sid: Optional[str], exclude_id: Optional[int] = None) -> None:
+    """卖家 ID 全表唯一（空值不校验）：同一煤炉卖家重复建号会导致重复同步/重复补挂。
+
+    ``exclude_id``：更新时排除自身记录。命中重复时抛 409。
+    """
+    if not sid:
+        return
+    rows = MercariAccountModel.find_all(where="[seller_id] = ?", params=(sid,))
+    for r in rows:
+        rid = getattr(r, "id", None)
+        if exclude_id is not None and rid is not None and int(rid) == int(exclude_id):
+            continue
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"卖家 ID {sid} 已被账号「{getattr(r, 'account_name', '') or ''}」"
+                f"(id={rid}) 使用，同一煤炉账号不能重复添加"
+            ),
+        )
 
 
 def _normalize_is_open(v: Any) -> int:
