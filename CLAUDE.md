@@ -103,7 +103,6 @@ backend/
     ├── use_mercari/           # Mercari API & sync logic
     │   ├── API.py                   # FastAPI router for /api/mercari endpoints
     │   ├── sync_data.py             # Mercari API client wrapper
-    │   ├── mercari_req_scheduling.py # Async request scheduling
     │   ├── on_sale_items_sync.py    # Fetch & sync item listings
     │   └── mgmt_id_cipher.py        # Encode/decode secret code from descriptions
     ├── web_drive/                   # Playwright browser automation

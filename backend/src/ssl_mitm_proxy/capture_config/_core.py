@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""capture 基础：路径解析 / session marker / 请求目标解析 / 原子读写 / item_id 规范化"""
+"""capture 基础：路径解析 / 请求目标解析 / 原子读写 / item_id 规范化"""
 from __future__ import annotations
 
 import json
@@ -36,33 +36,6 @@ def capture_json_path(capture_type: str = "") -> str:
     """每种 capture_type 对应独立文件，避免并发请求互相覆盖。"""
     name = f"capture_{capture_type}.json" if capture_type else "items_get_items_capture.json"
     return os.path.join(ssl_mitm_data_dir(), name)
-
-def session_marker_path(account_id: int) -> str:
-    return os.path.join(ssl_mitm_data_dir(), f"capture_marker_{account_id}.txt")
-
-def write_session_marker_ms(account_id: int, ts_ms: int) -> None:
-    os.makedirs(ssl_mitm_data_dir(), exist_ok=True)
-    p = session_marker_path(account_id)
-    with open(p, "w", encoding="utf-8") as f:
-        f.write(str(ts_ms))
-
-def read_session_marker_ms(account_id: int) -> Optional[int]:
-    p = session_marker_path(account_id)
-    if not os.path.isfile(p):
-        return None
-    try:
-        with open(p, "r", encoding="utf-8") as f:
-            return int((f.read() or "0").strip())
-    except (ValueError, OSError):
-        return None
-
-def clear_session_marker(account_id: int) -> None:
-    p = session_marker_path(account_id)
-    try:
-        if os.path.isfile(p):
-            os.remove(p)
-    except OSError:
-        pass
 
 def parse_capture_target(
     flow_url: str, path: str, host: str, raw_query: str = "", method: str = ""

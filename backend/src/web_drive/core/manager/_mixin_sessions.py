@@ -89,6 +89,42 @@ class _SessionsMixin:
         return not os.path.isdir(path)
 
 
+    async def adopt_profile(self, src_key: str, dst_key: str) -> bool:
+        """把 ``src`` profile 目录整体迁移为 ``dst``，保留完整登录态（Cookie/LocalStorage/标签快照）。
+
+        用于「新增账号」：把预登录用的 ``mercari_prepare`` 登录态归属到账号主 profile
+        ``mercari_{id}``，避免账号创建后主 profile 未登录、还需二次登录。
+
+        两侧会话都会先关闭并等待 Edge 释放文件句柄；``dst`` 已存在则先清空再改名。
+        ``src`` 目录不存在（无预登录态可迁移）或迁移失败时返回 False，调用方据此回退到
+        「手动重新登录」。
+        """
+        src = validate_account_key(src_key)
+        dst = validate_account_key(dst_key)
+        if src == dst:
+            return False
+        root = profiles_root()
+        src_path = os.path.join(root, src)
+        dst_path = os.path.join(root, dst)
+        # 关闭源会话，释放 Edge 对 profile 目录的文件锁
+        async with self._serialize_profile(src):
+            await self._close_session_unlocked(src, force=True)
+        if not os.path.isdir(src_path):
+            return False
+        async with self._serialize_profile(dst):
+            # 目标账号刚创建，理论上无已开会话/旧目录；仍兜底关闭并清空以保证改名成功
+            await self._close_session_unlocked(dst, force=True)
+            if os.path.isdir(dst_path):
+                await self._wipe_profile_dir(dst)
+            for _ in range(3):
+                try:
+                    await asyncio.to_thread(os.rename, src_path, dst_path)
+                    return True
+                except OSError:
+                    await asyncio.sleep(self._profile_release_delay_sec())
+        return os.path.isdir(dst_path) and not os.path.isdir(src_path)
+
+
     async def open_session(
         self,
         account_key: str,

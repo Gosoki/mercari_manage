@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """煤炉账号管理 CRUD 端点：列表 / 创建 / 更新 / 删除。"""
 import json
+import logging
 from typing import Optional
 
 from fastapi import HTTPException
@@ -22,6 +23,43 @@ from .mercari_accounts_models import (
     MercariAccountCreate,
     MercariAccountUpdate,
 )
+
+log = logging.getLogger(__name__)
+
+# 「新增账号」预登录共用的 WebDrive 会话键（与前端 MERCARI_PREPARE_KEY 约定一致）
+_PREPARE_PROFILE_KEY = "mercari_prepare"
+
+
+async def _adopt_prepare_login(account_id: int) -> None:
+    """把「新增账号」预登录用的 ``mercari_prepare`` profile 迁移为账号主 profile ``mercari_{id}``。
+
+    创建流程中用户在 ``mercari_prepare`` 手动登录煤炉后，登录态只落在该 profile；
+    若不迁移，后续同步/抓取从主 profile ``mercari_{id}`` 克隆 Cookie 会读不到登录态，
+    用户需在卡片「打开浏览器」重新登录一遍。此处创建成功后把预登录 profile 归属到新账号。
+
+    失败不阻断账号创建（仅记录日志）：用户仍可手动重新登录后再启用账号。
+    """
+    try:
+        from ....web_drive import get_web_drive_manager
+        from ....web_drive.core.paths import mercari_account_key
+
+        mgr = get_web_drive_manager()
+        moved = await mgr.adopt_profile(_PREPARE_PROFILE_KEY, mercari_account_key(account_id))
+        if moved:
+            log.info(
+                "[mercari_accounts] 已迁移预登录 profile %s → %s",
+                _PREPARE_PROFILE_KEY,
+                mercari_account_key(account_id),
+            )
+        else:
+            log.info(
+                "[mercari_accounts] 无预登录 profile 可迁移（account_id=%s），跳过",
+                account_id,
+            )
+    except Exception as exc:  # noqa: BLE001 迁移失败不应阻断账号创建
+        log.warning(
+            "[mercari_accounts] 预登录 profile 迁移失败（忽略，可手动重新登录）: %s", exc
+        )
 
 
 def list_mercari_accounts(
@@ -50,7 +88,7 @@ def _value_json_for_create(data: MercariAccountCreate) -> str:
     return json.dumps(headers, ensure_ascii=False)
 
 
-def create_mercari_account(data: MercariAccountCreate):
+async def create_mercari_account(data: MercariAccountCreate):
     _validate_status(data.status)
     value_json = _value_json_for_create(data)
     name = _norm_required_text(data.account_name, "账号名称")
@@ -86,6 +124,8 @@ def create_mercari_account(data: MercariAccountCreate):
     item = MercariAccountModel(**kwargs)
     if not item.save():
         raise HTTPException(status_code=500, detail="保存失败")
+    # 把预登录的 mercari_prepare 登录态归属到新账号主 profile，避免创建后需二次登录
+    await _adopt_prepare_login(int(item.id))
     return _item_api_dict(item)
 
 

@@ -48,15 +48,7 @@ def normalize_interval(value):
     if s.endswith("m"):
         return s[:-1]
     return s
-MERCARI_IN_PROGRESS_URL = "https://jp.mercari.com/mypage/listings/in_progress"
 MERCARI_LISTINGS_URL = "https://jp.mercari.com/mypage/listings"
-IN_PROGRESS_FIRST_LINK_XPATH = '//*[@id="my-page-main-content"]/div/div/div/div/ul/li[1]/a/div[1]/div'
-LISTINGS_FIRST_ITEM_XPATH = '//*[@id="my-page-main-content"]/div/div/div/div/ul/li[1]/a/div[1]/div/span[1]'
-IN_PROGRESS_CLICK_XPATH_CANDIDATES = (
-    IN_PROGRESS_FIRST_LINK_XPATH,
-    '//*[@id="my-page-main-content"]/div/div/div/div/ul/li[1]/a/div[1]/div/span[1]',
-    '//*[@id="my-page-main-content"]//ul/li[1]//a',
-)
 
 # 与 jp.mercari.com Web 抓包一致；可选：在售列表 / 单件详情专用 DPoP
 _HEADER_FIELD_LABELS = [
@@ -129,15 +121,6 @@ class MercariAccountUpdate(PydanticModel):
     auto_fetch_relist: Optional[int] = None
     pause_start_time: Optional[str] = None
     pause_end_time: Optional[str] = None
-
-
-class FetchAuthViaMitmBody(PydanticModel):
-    """通过 MITM 按顺序抓取 4 个 DPoP 字段并写回账号。"""
-
-    wait_seconds: int = Field(15, ge=5, le=300)
-    open_browser: bool = True
-    in_progress_xpath: str = IN_PROGRESS_FIRST_LINK_XPATH
-    first_item_xpath: str = LISTINGS_FIRST_ITEM_XPATH
 
 
 class FetchSellerIdViaMitmBody(PydanticModel):
