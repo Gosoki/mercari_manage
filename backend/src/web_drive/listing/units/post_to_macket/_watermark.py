@@ -238,7 +238,11 @@ def _build_watermark_tile(text: str, avatar_path: Optional[str], w: int, Image, 
 
 
 def _watermark_one(src: str, text: str, avatar_path: Optional[str], Image, ImageDraw) -> str:
+    from PIL import ImageOps
+
     with Image.open(src) as im:
+        # 按 EXIF 方向摆正像素并清除方向标记，避免保存后图片被旋转 90°
+        im = ImageOps.exif_transpose(im)
         im = im.convert("RGBA")
         w, h = im.size
 
