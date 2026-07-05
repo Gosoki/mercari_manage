@@ -410,7 +410,7 @@
     <el-dialog
       v-model="dialogVisible"
       :title="t('orders.editOrder')"
-      width="1440px"
+      width="1120px"
       destroy-on-close
       class="order-edit-dialog"
     >
@@ -418,7 +418,7 @@
       <el-form :model="form" :rules="rules" ref="formRef" label-position="top" size="small" hide-required-asterisk class="order-edit-form order-edit-form--tiled order-edit-form--main" disabled>
         <!-- 基本信息 -->
         <el-divider content-position="left" class="order-edit-section">{{ t('orders.sectionBasic') }}</el-divider>
-        <el-row :gutter="16" class="order-edit-row5 order-row-plain">
+        <el-row :gutter="16" class="order-edit-row5">
           <el-col v-if="form.id != null" :xs="24" :sm="12" :md="6">
             <el-form-item :label="t('orders.dbId')">
               <el-input :model-value="String(form.id)" disabled />
@@ -449,7 +449,7 @@
 
         <!-- 时间 -->
         <el-divider content-position="left" class="order-edit-section">{{ t('orders.sectionTime') }}</el-divider>
-        <el-row :gutter="16" class="order-edit-row5 order-row-plain order-row-plain--date">
+        <el-row :gutter="16" class="order-edit-row5 order-row-plain--date">
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item :label="t('orders.orderTime')" prop="order_date">
               <el-date-picker
@@ -490,7 +490,7 @@
 
         <!-- 交易双方 -->
         <el-divider content-position="left" class="order-edit-section">{{ t('orders.sectionParties') }}</el-divider>
-        <el-row :gutter="16" class="order-edit-row5 order-row-plain">
+        <el-row :gutter="16" class="order-edit-row5">
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item :label="t('orders.sellerId')">
               <el-input v-model="form.data_user" placeholder="data_user（Mercari seller.id）" maxlength="64" clearable />
@@ -665,6 +665,13 @@
       </div>
       <template #footer>
         <div class="order-dialog-footer">
+          <div class="order-dialog-footer-left">
+            <el-button
+              :icon="RefreshRight"
+              :loading="rematching"
+              @click="rematchProducts"
+            >{{ t('orders.rematchProducts') }}</el-button>
+          </div>
           <div class="order-dialog-footer-right">
             <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
             <el-button type="primary" :loading="submitting" @click="submit">{{ t('common.save') }}</el-button>

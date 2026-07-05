@@ -1535,6 +1535,25 @@ export default defineComponent({
       }
     }
 
+    const rematching = ref(false)
+    /** 根据商品说明重新匹配商品（重建出库明细） */
+    async function rematchProducts() {
+      if (!form.value.id) {
+        ElMessage.warning(t('orders.noOrderSelected'))
+        return
+      }
+      rematching.value = true
+      try {
+        await orderApi.rematch(form.value.id)
+        ElMessage.success(t('orders.rematchSuccess'))
+        clearOutboundExpandCache(String(form.value.order_no || '').trim())
+        load()
+        loadStats()
+      } finally {
+        rematching.value = false
+      }
+    }
+
     async function submit() {
       await formRef.value?.validate()
       if (!form.value.id) {
@@ -1793,6 +1812,8 @@ export default defineComponent({
       stockOutLine,
       openEdit,
       refreshOrder,
+      rematching,
+      rematchProducts,
       submit,
     }
   },

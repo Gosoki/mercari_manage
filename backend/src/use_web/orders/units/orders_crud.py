@@ -116,6 +116,18 @@ def update_order(oid: int, data: OrderUpdate):
     return item.to_dict()
 
 
+def rematch_order_products(oid: int):
+    """根据订单最新商品说明重新匹配商品（重建出库明细），供订单编辑表单「重新匹配商品」按钮调用。"""
+    item = OrderModel.find_by_id(id=oid)
+    if not item:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    ono = (item.order_no or "").strip()
+    if not ono:
+        raise HTTPException(status_code=400, detail="订单号为空")
+    sync_outbound_lines_for_order(ono, item.description)
+    return {"message": "重新匹配完成"}
+
+
 def delete_order(oid: int):
     item = OrderModel.find_by_id(id=oid)
     if not item:

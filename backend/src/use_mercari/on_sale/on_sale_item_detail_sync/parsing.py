@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional, Tuple
 from ....db_manage.models.on_sale_item import OnSaleItemModel
-from ...get_order.description_mgmt_ids import _extract_bundle_product_titles, _inventory_id_by_barcode, _inventory_id_exists, parse_order_description_outbound_tokens, parse_order_description_outbound_tokens_with_quantity
+from ...get_order.description_mgmt_ids import _extract_bundle_product_titles, _inventory_id_by_barcode, _inventory_id_exists, _is_bundle_order_description, parse_order_description_outbound_tokens, parse_order_description_outbound_tokens_with_quantity
 
 
 _MERCARI_ID_SEP_RE = re.compile(r"[\n,，、\s]+")
@@ -106,14 +106,16 @@ def _is_matome_listing_bundle_by_title_and_description(
     description: Optional[str],
 ) -> bool:
     """
-    标题含「まとめ商品」且说明中存在「■ 商品内容」小节及至少一条「・」行时，
-    按订单页同款逻辑用商品内容标题匹配库存（见 _extract_bundle_product_titles）。
+    标题含「まとめ商品」，或说明本身即组合订单说明（こちらはまとめ…商品です + ■ 商品内容），
+    且说明中存在「■ 商品内容」小节及至少一条「・」行时，按订单页同款逻辑用商品内容标题
+    匹配库存（见 _extract_bundle_product_titles）。与订单页 bundle 识别保持一致，
+    兼容「まとめ買い商品 / まとめ割引商品」等写法，使入库/在售联动也能识别。
     """
     name = str(listing_name or "").strip()
-    if _MATOME_LISTING_TITLE_MARK not in name:
-        return False
     desc = str(description or "").strip()
     if not desc:
+        return False
+    if _MATOME_LISTING_TITLE_MARK not in name and not _is_bundle_order_description(desc):
         return False
     titles = _extract_bundle_product_titles(desc)
     return len(titles) > 0

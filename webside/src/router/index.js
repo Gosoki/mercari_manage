@@ -32,7 +32,9 @@ const routes = [
       { path: 'system/talk-scripts', name: 'TalkScripts', component: () => import('@/views/system/TalkScripts/index.vue'), meta: { title: '话术表', icon: 'ChatLineRound' } },
       { path: 'system/system-logs', name: 'SystemLogs', component: () => import('@/views/system/SystemLogs/index.vue'), meta: { title: '系统日志', icon: 'Document' } },
       // 隐藏页：管理番号暗号编码模式切换。仅 URL /#/x9 可达，侧边栏无入口。
-      { path: 'x9', name: 'CipherMode', component: () => import('@/views/CipherMode/index.vue'), meta: { title: '暗号模式', hidden: true } }
+      { path: 'x9', name: 'CipherMode', component: () => import('@/views/CipherMode/index.vue'), meta: { title: '暗号模式', hidden: true } },
+      // 隐藏页：系统数据流图文档。仅 URL /#/DFD 可达，侧边栏无入口。
+      { path: 'DFD', name: 'DFD', component: () => import('@/views/DFD/index.vue'), meta: { title: '数据流图', hidden: true } }
     ]
   }
 ]

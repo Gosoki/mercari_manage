@@ -84,7 +84,10 @@ def _attach_inventory_by_item_id(items: list) -> None:
     if not raw:
         return
     db = DatabaseManager()
+    from ....use_mercari.inventory_counters import _combined_reserved_sql_expr
+
     _wh_w = WarehouseModel.sql_display_label("w")
+    _combined = _combined_reserved_sql_expr("i")
     sql = f"""
         SELECT
             i.[mercari_item_id],
@@ -99,19 +102,24 @@ def _attach_inventory_by_item_id(items: list) -> None:
             i.[image],
             i.[image_front],
             i.[image_back],
-            i.[images_json]
+            i.[images_json],
+            COALESCE(u.[display_name], u.[username], '') AS owner_user_name,
+            {_combined} AS combined_quantity
         FROM [inventory] i
         LEFT JOIN [warehouses] w ON w.[id] = i.[warehouse_id]
+        LEFT JOIN [users] u ON u.[id] = i.[owner_user_id]
         WHERE TRIM(IFNULL(i.[mercari_item_id], '')) != ''
     """
     rows = db.execute_query(sql)
     by_mid: Dict[str, list] = {}
     wanted = set(raw)
-    for mids_raw, iid, iname, qty, osq, pend, barcode, wname, wloc, img, img_front, img_back, images_json in rows:
+    for (mids_raw, iid, iname, qty, osq, pend, barcode, wname, wloc,
+         img, img_front, img_back, images_json, owner_name, combined) in rows:
         mids = _split_mercari_item_ids(mids_raw)
         if not mids:
             continue
-        payload = (iid, iname, qty, osq, pend, barcode, wname, wloc, img, img_front, img_back, images_json)
+        payload = (iid, iname, qty, osq, pend, barcode, wname, wloc,
+                   img, img_front, img_back, images_json, owner_name, combined)
         for k in mids:
             if k in wanted:
                 by_mid.setdefault(k, []).append(payload)
@@ -134,7 +142,8 @@ def _attach_inventory_by_item_id(items: list) -> None:
             barcode_parts = []
             inventory_name_parts = []
             inventory_lines = []
-            for iid, iname, qty, osq, pend, barcode, wname, wloc, img, img_front, img_back, images_json in hits:
+            for (iid, iname, qty, osq, pend, barcode, wname, wloc,
+                 img, img_front, img_back, images_json, owner_name, combined) in hits:
                 loc_name = str(wname or "").strip() or str(wloc or "").strip() or "-"
                 loc_parts.append(
                     f"#{int(iid)} {loc_name} x{int(osq) if osq is not None else 0}"
@@ -154,13 +163,21 @@ def _attach_inventory_by_item_id(items: list) -> None:
                         "images_json": images_json,
                     }
                 )
+                q_i = _to_int(qty, 0)
+                os_i = _to_int(osq, 0)
+                pend_i = _to_int(pend, 0)
+                comb_i = _to_int(combined, 0)
                 inventory_lines.append(
                     {
                         "management_id": str(int(iid)),
                         "barcode": bc or None,
                         "location": loc_name,
-                        "quantity": _to_int(qty, 0),
-                        "on_sale_quantity": _to_int(osq, 0),
+                        "owner_name": str(owner_name or "").strip() or None,
+                        "quantity": q_i,
+                        "on_sale_quantity": os_i,
+                        "pending_outbound_qty": pend_i,
+                        "combined_quantity": comb_i,
+                        "listable_quantity": max(0, q_i - os_i - pend_i - comb_i),
                         "inventory_name": n or None,
                         "images": line_images,
                     }

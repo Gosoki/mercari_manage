@@ -30,6 +30,10 @@ _BUNDLE_PHRASE_A = "こちらはまとめ買い商品です"
 
 _BUNDLE_PHRASE_B = "までに購入してください"
 
+# 组合订单开场白：兼容「こちらはまとめ買い商品です」「こちらはまとめ割引商品です」
+# 「こちらはまとめ商品です」等写法（有/无期限提示均可）。
+_BUNDLE_INTRO_RE = re.compile(r"こちらはまとめ[^\n。]*?商品です")
+
 _BUNDLE_SECTION_HEADER = "■ 商品内容"
 
 _BUNDLE_LINE_RE = re.compile(r"^\s*[・･]\s*(.+?)\s*$")

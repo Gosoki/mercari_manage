@@ -248,17 +248,6 @@
 .order-edit-form--main :deep(.el-input-number .el-input__inner) {
   text-align: left;
 }
-/* 基本信息 / 时间 / 交易双方：数据以纯文本呈现，去掉禁用态底色与边框 */
-.order-edit-form--main :deep(.order-row-plain .el-input.is-disabled .el-input__wrapper) {
-  background-color: transparent;
-  box-shadow: none;
-  padding-left: 0;
-}
-.order-edit-form--main :deep(.order-row-plain .el-input.is-disabled .el-input__inner) {
-  color: var(--el-text-color-primary);
-  -webkit-text-fill-color: var(--el-text-color-primary);
-  cursor: default;
-}
 /* 时间字段：去掉输入框左侧的时钟/日历前缀图标 */
 .order-edit-form--main :deep(.order-row-plain--date .el-input__prefix) {
   display: none;

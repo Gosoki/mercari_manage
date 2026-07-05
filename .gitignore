@@ -13,7 +13,7 @@ pids
 *.pid
 *.pid.lock
 *.seed
-
+backend\imges-T*
 # Coverage
 coverage
 *.lcov
@@ -109,3 +109,4 @@ backend/data/
 backend/mercariDB*
 .agents
 skills-lock.json
+mercariDB.db

@@ -27,6 +27,8 @@ export const orderApi = {
   addManualOutboundLinesBatch: (data) => http.post('/use_web/orders/outbound-lines/manual/batch', data),
   create: (data) => http.post('/use_web/orders', data),
   update: (id, data) => http.put(`/use_web/orders/${id}`, data),
+  /** 根据商品说明重新匹配商品（重建出库明细） */
+  rematch: (id) => http.post(`/use_web/orders/${id}/rematch`),
   remove: (id) => http.delete(`/use_web/orders/${id}`),
   /** 单行 items/get 刷新：传 order_no + data_user（卖家ID），与煤炉账号 seller_id 对应 */
   refreshInfo: (data, axiosConfig = {}) =>

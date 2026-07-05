@@ -194,6 +194,8 @@ export default {
     noOrderSelected: "未选择订单",
     orderDateInvalid: "订单时间（order_date）无效，请检查「订单时间」",
     updateSuccess: "更新成功",
+    rematchProducts: "重新匹配商品",
+    rematchSuccess: "已根据商品说明重新匹配商品",
     },
   },
   ja: {
@@ -391,6 +393,8 @@ export default {
     noOrderSelected: "注文が選択されていません",
     orderDateInvalid: "注文時刻（order_date）が無効です。「注文時刻」を確認してください",
     updateSuccess: "更新に成功しました",
+    rematchProducts: "商品を再マッチング",
+    rematchSuccess: "商品説明に基づいて商品を再マッチングしました",
     },
   },
   en: {
@@ -588,6 +592,8 @@ export default {
     noOrderSelected: "No order selected",
     orderDateInvalid: "Order time (order_date) is invalid; please check 'Order time'",
     updateSuccess: "Update successful",
+    rematchProducts: "Re-match products",
+    rematchSuccess: "Products re-matched from item description",
     },
   },
 }

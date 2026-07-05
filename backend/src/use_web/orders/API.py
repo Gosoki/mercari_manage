@@ -7,7 +7,7 @@
 """
 from fastapi import APIRouter
 
-from .units.orders_crud import create_order, delete_order, update_order
+from .units.orders_crud import create_order, delete_order, rematch_order_products, update_order
 from .units.orders_messages import send_order_message
 from .units.orders_outbound import (
     bind_outbound_line_inventory,
@@ -42,5 +42,6 @@ router.add_api_route("/packaging-waive", waive_order_packaging, methods=["POST"]
 router.add_api_route("/refresh-info", refresh_order_info, methods=["POST"])
 router.add_api_route("/refresh-progress/{job_id}", refresh_order_progress, methods=["GET"])
 router.add_api_route("", create_order, methods=["POST"])
+router.add_api_route("/{oid}/rematch", rematch_order_products, methods=["POST"])
 router.add_api_route("/{oid}", update_order, methods=["PUT"])
 router.add_api_route("/{oid}", delete_order, methods=["DELETE"])

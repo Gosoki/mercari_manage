@@ -131,10 +131,10 @@
                     <span v-else class="cell-muted">-</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="t('onSaleItems.barcode')" min-width="180" show-overflow-tooltip>
+                <el-table-column :label="t('onSaleItems.owner')" min-width="120" show-overflow-tooltip>
                   <template #default="{ row: r }">
                     <div v-if="inventoryLines(r).length" class="multi-line-cell">
-                      <div v-for="(ln, idx) in inventoryLines(r)" :key="`bc-${idx}`">{{ ln.barcode || '-' }}</div>
+                      <div v-for="(ln, idx) in inventoryLines(r)" :key="`owner-${idx}`">{{ ln.owner_name || '-' }}</div>
                     </div>
                     <span v-else class="cell-muted">-</span>
                   </template>
@@ -155,10 +155,42 @@
                     <span v-else class="cell-muted">-</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="t('onSaleItems.onSaleQuantity')" width="90" align="center">
+                <el-table-column :label="t('onSaleItems.stockColumn')" width="72" align="center">
                   <template #default="{ row: r }">
                     <div v-if="inventoryLines(r).length" class="multi-line-cell">
-                      <div v-for="(ln, idx) in inventoryLines(r)" :key="`qty-${idx}`">{{ ln.on_sale_quantity ?? 0 }}</div>
+                      <div v-for="(ln, idx) in inventoryLines(r)" :key="`stock-${idx}`">{{ ln.quantity ?? 0 }}</div>
+                    </div>
+                    <span v-else class="cell-muted">-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="t('onSaleItems.onSaleColumn')" width="72" align="center">
+                  <template #default="{ row: r }">
+                    <div v-if="inventoryLines(r).length" class="multi-line-cell">
+                      <div v-for="(ln, idx) in inventoryLines(r)" :key="`onsale-${idx}`">{{ ln.on_sale_quantity ?? 0 }}</div>
+                    </div>
+                    <span v-else class="cell-muted">-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="t('onSaleItems.pendingOutboundColumn')" width="72" align="center">
+                  <template #default="{ row: r }">
+                    <div v-if="inventoryLines(r).length" class="multi-line-cell">
+                      <div v-for="(ln, idx) in inventoryLines(r)" :key="`pend-${idx}`">{{ ln.pending_outbound_qty ?? 0 }}</div>
+                    </div>
+                    <span v-else class="cell-muted">-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="t('onSaleItems.combinedColumn')" width="72" align="center">
+                  <template #default="{ row: r }">
+                    <div v-if="inventoryLines(r).length" class="multi-line-cell">
+                      <div v-for="(ln, idx) in inventoryLines(r)" :key="`comb-${idx}`">{{ ln.combined_quantity ?? 0 }}</div>
+                    </div>
+                    <span v-else class="cell-muted">-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="t('onSaleItems.listableColumn')" width="72" align="center">
+                  <template #default="{ row: r }">
+                    <div v-if="inventoryLines(r).length" class="multi-line-cell">
+                      <div v-for="(ln, idx) in inventoryLines(r)" :key="`listable-${idx}`">{{ ln.listable_quantity ?? 0 }}</div>
                     </div>
                     <span v-else class="cell-muted">-</span>
                   </template>
