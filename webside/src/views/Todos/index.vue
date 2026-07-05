@@ -189,11 +189,17 @@
               v-if="showInventoryMatch"
               class="detail-inv-match"
             >
-              <div class="detail-label">{{ t('todos.matchedInventory') }}</div>
               <div v-if="invMatch.loading" class="detail-empty">{{ t('todos.matching') }}</div>
               <div v-else-if="!invMatch.inventory.length" class="detail-empty">{{ t('todos.noInventoryMatch') }}</div>
-              <template v-else>
+              <div v-else class="detail-inv-list">
                 <div v-for="inv in invMatch.inventory" :key="inv.id" class="detail-inv-card">
+                  <div class="detail-inv-meta">
+                    <span class="detail-inv-id">{{ t('todos.inventoryId') }}: {{ inv.id }}</span>
+                    <span v-if="inv.name" class="detail-inv-name"> · {{ inv.name }}</span>
+                    <span v-if="inv.warehouse_name || inv.shelf_name || inv.shelf_code" class="detail-inv-loc">
+                      {{ [inv.warehouse_name, inv.shelf_name, inv.shelf_code].filter(Boolean).join(' / ') }}
+                    </span>
+                  </div>
                   <div class="detail-inv-images">
                     <el-image
                       v-for="(img, ii) in inv.images"
@@ -209,13 +215,6 @@
                     </el-image>
                     <span v-if="!inv.images.length" class="detail-empty">{{ t('todos.noInventoryImage') }}</span>
                   </div>
-                  <div class="detail-inv-meta">
-                    <span class="detail-inv-id">{{ t('todos.inventoryId') }}: {{ inv.id }}</span>
-                    <span v-if="inv.name" class="detail-inv-name"> · {{ inv.name }}</span>
-                    <span v-if="inv.warehouse_name || inv.shelf_name" class="detail-inv-loc">
-                      {{ [inv.warehouse_name, inv.shelf_name].filter(Boolean).join(' / ') }}
-                    </span>
-                  </div>
 
                   <!-- 组合（捆绑）库存：逐个展示组合内每个商品的仓库位置 -->
                   <div v-if="inv.components && inv.components.length" class="detail-inv-components">
@@ -228,45 +227,12 @@
                       <span class="detail-inv-comp-name">{{ comp.name || ('#' + comp.id) }}</span>
                       <span v-if="comp.quantity > 1" class="detail-inv-comp-qty">×{{ comp.quantity }}</span>
                       <span class="detail-inv-comp-loc">
-                        {{ [comp.warehouse_name, comp.shelf_name].filter(Boolean).join(' / ') || dash }}
+                        {{ [comp.warehouse_name, comp.shelf_name, comp.shelf_code].filter(Boolean).join(' / ') || dash }}
                       </span>
                     </div>
                   </div>
                 </div>
-
-                <!-- 出库明细：仅待发货展示（待回复只显示关联商品，不显示发货/出库） -->
-                <div v-if="isWaitShipping" class="detail-ship-outbound" v-loading="shipOutbound.loading">
-                  <div class="detail-label">{{ t('todos.outboundLines') }}</div>
-                  <el-table
-                    v-if="shipOutbound.lines.length"
-                    :data="shipOutbound.lines"
-                    size="small"
-                    border
-                  >
-                    <el-table-column
-                      :label="t('todos.outboundLocation')"
-                      min-width="140"
-                      show-overflow-tooltip
-                    >
-                      <template #default="{ row: line }">
-                        {{ [line.warehouse_name, line.shelf_name, line.shelf_code].filter(Boolean).join(' - ') || dash }}
-                      </template>
-                    </el-table-column>
-                    <el-table-column :label="t('common.quantity')" prop="quantity" width="64" align="center" />
-                    <el-table-column :label="t('common.status')" width="86" align="center">
-                      <template #default="{ row: line }">
-                        <el-tag
-                          :type="Number(line?.is_stocked_out || 0) === 1 ? 'success' : 'info'"
-                          size="small"
-                        >
-                          {{ Number(line?.is_stocked_out || 0) === 1 ? t('orders.stockedOut') : t('orders.pendingStockOut') }}
-                        </el-tag>
-                      </template>
-                    </el-table-column>
-                  </el-table>
-                  <div v-else class="detail-empty">{{ t('todos.noOutboundLines') }}</div>
-                </div>
-              </template>
+              </div>
             </div>
           </section>
 

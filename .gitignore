@@ -25,7 +25,7 @@ build/Release
 dist
 out
 *.tgz
-
+backend/imges-T
 # Dependencies
 node_modules/
 jspm_packages/

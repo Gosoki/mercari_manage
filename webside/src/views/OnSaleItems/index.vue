@@ -198,6 +198,18 @@
                 <el-table-column :label="t('onSaleItems.updated')" width="140" align="center">
                   <template #default="{ row: r }">{{ displayTs(r.updated) }}</template>
                 </el-table-column>
+                <el-table-column :label="t('common.operate')" width="112" align="center">
+                  <template #default="{ row: r }">
+                    <div v-if="inventoryLines(r).length" class="multi-line-cell">
+                      <div v-for="(ln, idx) in inventoryLines(r)" :key="`invdetail-${idx}`">
+                        <el-button link type="primary" size="small" @click="openInventoryLineDetail(ln.management_id)">
+                          {{ t('onSaleItems.viewInventoryDetail') }}
+                        </el-button>
+                      </div>
+                    </div>
+                    <span v-else class="cell-muted">-</span>
+                  </template>
+                </el-table-column>
               </el-table>
             </div>
           </template>
@@ -489,6 +501,71 @@
             </el-tooltip>
           </div>
         </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="inventoryDetailVisible"
+      :title="t('onSaleItems.inventoryDetailTitle')"
+      width="640px"
+      append-to-body
+      destroy-on-close
+      class="on-sale-inventory-detail-dialog"
+    >
+      <div v-loading="inventoryDetailLoading" class="detail-view-body">
+        <template v-if="inventoryDetailData">
+          <div class="detail-section-title">{{ t('onSaleItems.linkedProductImages') }}</div>
+          <div v-if="inventoryDetailImages.length" class="detail-img-group__list">
+            <el-image
+              v-for="(img, idx) in inventoryDetailImages"
+              :key="idx"
+              class="detail-linked-img"
+              :src="img.thumb"
+              :preview-src-list="inventoryDetailPreviewList"
+              :initial-index="idx"
+              fit="cover"
+              preview-teleported
+              hide-on-click-modal
+              :z-index="4000"
+              referrerpolicy="no-referrer"
+              lazy
+            >
+              <template #error><span class="thumb-fallback">-</span></template>
+            </el-image>
+          </div>
+          <el-empty v-else :description="t('onSaleItems.noLinkedImages')" :image-size="48" />
+
+          <div class="detail-section-title">{{ t('onSaleItems.inventoryDetailTitle') }}</div>
+          <el-descriptions :column="2" border size="small" class="detail-desc">
+            <el-descriptions-item :label="t('onSaleItems.mgmtIdLabel')" :span="1">{{ inventoryDetailData.id ?? '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="t('onSaleItems.barcode')" :span="1">{{ inventoryDetailData.barcode || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="t('onSaleItems.productName')" :span="2">{{ inventoryDetailData.name || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="t('onSaleItems.sku')" :span="1">{{ inventoryDetailData.sku || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="t('onSaleItems.category')" :span="1">{{ inventoryDetailData.category_name || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="t('onSaleItems.productType')" :span="1">{{ inventoryDetailData.product_type_name || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="t('onSaleItems.owner')" :span="1">{{ inventoryDetailData.owner_user_name || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="t('onSaleItems.location')" :span="2">{{ inventoryDetailData.warehouse_name || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="t('onSaleItems.priceLabel')" :span="1">{{ Number(inventoryDetailData.price || 0) }}</el-descriptions-item>
+            <el-descriptions-item :label="t('onSaleItems.stockColumn')" :span="1">{{ inventoryDetailData.quantity ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item :label="t('onSaleItems.onSaleColumn')" :span="1">{{ inventoryDetailData.on_sale_quantity ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item :label="t('onSaleItems.pendingOutboundColumn')" :span="1">{{ inventoryDetailData.pending_outbound_qty ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item :label="t('onSaleItems.combinedColumn')" :span="1">{{ inventoryDetailData.combined_quantity ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item :label="t('onSaleItems.listableColumn')" :span="1">{{ inventoryDetailData.listable_quantity ?? 0 }}</el-descriptions-item>
+          </el-descriptions>
+
+          <template v-if="inventoryDetailData.description">
+            <div class="detail-section-title">{{ t('onSaleItems.inventoryDescription') }}</div>
+            <el-input
+              type="textarea"
+              :model-value="inventoryDetailData.description"
+              readonly
+              :autosize="{ minRows: 3, maxRows: 10 }"
+            />
+          </template>
+        </template>
+      </div>
+      <template #footer>
+        <el-button @click="inventoryDetailVisible = false">{{ t('common.close') }}</el-button>
       </template>
     </el-dialog>
 

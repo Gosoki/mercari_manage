@@ -3,7 +3,7 @@ import { ElMessageBox } from 'element-plus'
 import { ElMessage } from '@/utils/notify'
 import { Download, Refresh, Loading, WarningFilled, Check } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
-import { onSaleItemApi, mercariAccountApi, webDriveApi } from '@/api/index.js'
+import { onSaleItemApi, mercariAccountApi, webDriveApi, inventoryApi } from '@/api/index.js'
 import { parseMgmtIdsFromDescription, isCipherMgmtLine } from '@/utils/mgmtIdCipher.js'
 import { mercariImageUrlList } from '@/utils/mercariImage.js'
 import { useMercariAccountStore } from '@/stores/mercariAccount.js'
@@ -65,6 +65,18 @@ export default defineComponent({
     const deleteItemLoading = ref(false)
     const resumeItemLoading = ref(false)
     const suspendItemLoading = ref(false)
+
+    /** 二级列表「查看库存详情」弹窗 */
+    const inventoryDetailVisible = ref(false)
+    const inventoryDetailLoading = ref(false)
+    const inventoryDetailData = ref(null)
+    const inventoryDetailImages = computed(() => {
+      const imgs = Array.isArray(inventoryDetailData.value?.images)
+        ? inventoryDetailData.value.images.map((s) => String(s || '').trim()).filter(Boolean)
+        : []
+      return imgs.map((p) => ({ thumb: thumbUrl(p, 160), big: thumbUrl(p, 900) }))
+    })
+    const inventoryDetailPreviewList = computed(() => inventoryDetailImages.value.map((img) => img.big))
 
     const detailInventoryLines = computed(() => {
       const items = detailViewOnSaleItems.value
@@ -453,6 +465,22 @@ export default defineComponent({
     function onDetailViewClosed() {
       detailViewBase.value = null
       detailViewOnSaleItems.value = []
+    }
+
+    /** 二级列表「查看库存详情」按钮：按管理 ID（= 库存 id）拉取完整库存记录并展示 */
+    async function openInventoryLineDetail(managementId) {
+      const id = String(managementId || '').trim()
+      if (!id) return
+      inventoryDetailVisible.value = true
+      inventoryDetailLoading.value = true
+      inventoryDetailData.value = null
+      try {
+        inventoryDetailData.value = await inventoryApi.get(id)
+      } catch {
+        inventoryDetailData.value = null
+      } finally {
+        inventoryDetailLoading.value = false
+      }
     }
 
     /** 本地 /imges/ 路径转缩略图接口 URL；非本地图片原样返回（与库存页一致） */
@@ -1464,6 +1492,12 @@ export default defineComponent({
       deleteItemLoading,
       resumeItemLoading,
       suspendItemLoading,
+      inventoryDetailVisible,
+      inventoryDetailLoading,
+      inventoryDetailData,
+      inventoryDetailImages,
+      inventoryDetailPreviewList,
+      openInventoryLineDetail,
       detailInventoryLines,
       detailListingBodyText,
       detailIsAuction,

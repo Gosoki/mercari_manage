@@ -243,11 +243,6 @@
 .detail-ship-pack-btn {
   flex: 0 0 auto;
 }
-.detail-ship-outbound {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 .detail-photo-wrap {
   margin-top: 8px;
 }
@@ -263,8 +258,16 @@
   padding-top: 10px;
   border-top: 1px dashed var(--el-border-color);
 }
+.detail-inv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 .detail-inv-card {
-  margin-top: 6px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--el-fill-color-light);
 }
 .detail-inv-images {
   display: flex;
@@ -278,7 +281,7 @@
   border: 1px solid var(--el-border-color-lighter);
 }
 .detail-inv-meta {
-  margin-top: 6px;
+  margin-bottom: 6px;
   font-size: 12px;
   color: var(--el-text-color-regular);
   line-height: 1.5;
