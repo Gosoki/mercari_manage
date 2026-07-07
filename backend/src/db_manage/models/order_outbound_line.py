@@ -60,6 +60,13 @@ class OrderOutboundLineModel(BaseModel):
                 "not_null": True,
                 "default": None,
             },
+            # 组合(まとめ)标题匹配到的**原始在售商品 ID**（on_sale_items.item_id，如 m14595834704）。
+            # 仅 line_kind=bundle_title 时写入，供页面展示"匹配到的原始在售商品"；其它行为空。
+            "source_item_id": {
+                "type": "TEXT",
+                "not_null": False,
+                "default": None,
+            },
             # mgmt_id：管理番号（inventory.id）；barcode：说明中的条码串（匹配 inventory.barcode）
             "line_kind": {
                 "type": "TEXT",
@@ -146,6 +153,7 @@ class OrderOutboundLineModel(BaseModel):
                 l.order_no,
                 l.inventory_id,
                 l.management_id,
+                l.source_item_id,
                 l.line_kind,
                 l.quantity,
                 l.sort_index,
@@ -179,6 +187,7 @@ class OrderOutboundLineModel(BaseModel):
             "order_no",
             "inventory_id",
             "management_id",
+            "source_item_id",
             "line_kind",
             "quantity",
             "sort_index",

@@ -82,10 +82,17 @@ def detail_sync_inventory_from_item_get_response(
     inv_id: Optional[int] = None
 
     if matome_bundle:
+        # 账号隔离：只在本 listing 所属账号（data.seller.id）的在售记录内匹配
+        seller = data.get("seller")
+        listing_seller_id = (
+            str(seller.get("id") or "").strip() or None
+            if isinstance(seller, dict)
+            else None
+        )
         bundle_titles = _extract_bundle_product_titles(desc_text)
         sync["bundle_titles"] = bundle_titles
         for title in bundle_titles:
-            riv = _resolve_inventory_id_by_bundle_title(title)
+            riv = _resolve_inventory_id_by_bundle_title(title, seller_id=listing_seller_id)
             resolved_lines.append(
                 {
                     "kind": "bundle_title",

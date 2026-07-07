@@ -54,8 +54,10 @@ def resolve_bound_inventory_qty_map_for_item(item_id: str) -> Dict[int, int]:
 
     qty_by_inv: Dict[int, int] = {}
     if _is_matome_listing_bundle_by_title_and_description(name, desc):
+        # 账号隔离：只在本 listing 所属账号的在售记录内匹配
+        listing_seller_id = str(row.get("seller_id") or "").strip() or None
         for title in _extract_bundle_product_titles(desc):
-            riv = _resolve_inventory_id_by_bundle_title(title)
+            riv = _resolve_inventory_id_by_bundle_title(title, seller_id=listing_seller_id)
             if riv is not None:
                 qty_by_inv[int(riv)] = qty_by_inv.get(int(riv), 0) + 1
     else:

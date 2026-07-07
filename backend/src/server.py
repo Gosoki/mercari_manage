@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -22,6 +25,25 @@ from fastapi import FastAPI
 
 def _truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _hard_kill_process_tree() -> None:
+    """强制结束本进程及其所有子进程后退出。
+
+    os._exit 只结束当前进程，不回收子进程；windowed 打包后自调用的 mitmdump 子进程、
+    node 代理、Playwright 启动的 Edge 浏览器都是本进程的子进程，若只退主进程会残留后台
+    进程（表现为「退出不完全」：托盘图标已消失但进程仍在跑）。Windows 用 taskkill /T 连带
+    整棵进程树一并强杀。"""
+    if sys.platform == "win32":
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(os.getpid())],
+                creationflags=0x08000000,  # CREATE_NO_WINDOW，避免闪一个黑框
+                timeout=10,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+    os._exit(0)
 
 
 def _enable_windows_console_ansi() -> None:
@@ -124,21 +146,35 @@ def run(app: FastAPI) -> None:
         port=port,
         proxy_headers=True,
         forwarded_allow_ips=forwarded_allow_ips,
+        # 优雅停机上限：避免在途请求（如浏览器自动化长调用）把停机卡死，
+        # 导致 server.run() 一直不返回、下方的强制退出永远走不到。
+        timeout_graceful_shutdown=5,
         **ssl_kwargs,
     )
     server = uvicorn.Server(config)
 
     # 打包态（windowed）启动系统托盘：点托盘「退出程序」→ 触发 uvicorn 优雅停机。
     if getattr(sys, "frozen", False) and sys.platform == "win32":
+
+        def _on_tray_quit() -> None:
+            server.should_exit = True
+            # 看门狗兜底：若优雅停机被彻底卡住（uvicorn 主循环停不下来），到点直接强杀进程树，
+            # 确保托盘图标消失后进程不会残留在后台。
+            def _watchdog() -> None:
+                time.sleep(8)
+                _hard_kill_process_tree()
+
+            threading.Thread(target=_watchdog, daemon=True).start()
+
         try:
             from .tray import start_tray
 
-            start_tray(on_quit=lambda: setattr(server, "should_exit", True))
+            start_tray(on_quit=_on_tray_quit)
         except Exception:  # noqa: BLE001
             logging.getLogger(__name__).warning("系统托盘启动失败，程序继续运行", exc_info=True)
 
     server.run()
 
-    # 冻结态：优雅停机后可能有后台线程/子进程残留，直接退出确保进程结束。
+    # 冻结态：优雅停机后可能有后台线程/子进程残留，强杀整棵进程树确保彻底退出。
     if getattr(sys, "frozen", False):
-        os._exit(0)
+        _hard_kill_process_tree()

@@ -6,8 +6,25 @@ from typing import List, Optional
 from ....db_manage.database import DatabaseManager
 from ....db_manage.models.order_outbound_line import TERMINAL_ORDER_STATUSES, OrderOutboundLineModel
 from ._common import _normalize_int_id, _normalize_match_text
-from .inventory_resolve import _extract_bundle_product_titles, _inventory_id_by_barcode, _inventory_id_exists, _is_bundle_order_description, _resolve_inventory_id_by_bundle_title
+from .inventory_resolve import _extract_bundle_product_titles, _inventory_id_by_barcode, _inventory_id_exists, _is_bundle_order_description, _resolve_inventory_ids_by_bundle_title
 from .parsing import parse_order_description_outbound_tokens_with_quantity
+
+
+def _order_seller_id(order_no: str) -> Optional[str]:
+    """取订单卖出账号的 Mercari seller.id（orders.data_user），
+    用于把 bundle 标题匹配**限定在同一账号**的在售记录内，绝不跨账号关联。"""
+    ono = (order_no or "").strip()
+    if not ono:
+        return None
+    db = DatabaseManager()
+    r = db.execute_query(
+        "SELECT [data_user] FROM [orders] WHERE [order_no] = ? LIMIT 1",
+        (ono,),
+    )
+    if not r:
+        return None
+    v = str(r[0][0] or "").strip()
+    return v or None
 
 
 def refresh_inventory_pending_outbound_qty(inventory_ids: Optional[List[int]] = None) -> None:
@@ -217,17 +234,30 @@ def _sync_outbound_lines_for_order_impl(
                 int(r.stock_deducted or 0),
             )
         touched_inv_ids = set(old_inv_ids)
-        bundle_inv_written: set[int] = set()
+        # 账号隔离：只在本订单卖出账号（orders.data_user = seller.id）的在售记录中匹配。
+        seller_id = _order_seller_id(ono)
+        # 同名不同「管理番号」：同名标题重复出现时，逐个分配**不同**的候选库存 ID，
+        # 而非重复即整行丢弃。used_inv_ids 预置手动出库行的库存，避免与之重复计。
+        title_candidates: dict = {}
+        used_inv_ids: set = set(manual_inv_ids)
         sort_idx = 0
         for title in titles:
-            inv_id = _resolve_inventory_id_by_bundle_title(title)
-            if inv_id is not None:
-                if inv_id in manual_inv_ids:
-                    continue
-                if inv_id in bundle_inv_written:
-                    continue
-                bundle_inv_written.add(inv_id)
             tnorm = _normalize_match_text(title)
+            if tnorm not in title_candidates:
+                title_candidates[tnorm] = _resolve_inventory_ids_by_bundle_title(
+                    title, seller_id=seller_id
+                )
+            cands = title_candidates[tnorm]  # [(inventory_id, 原始在售 item_id), ...]
+            chosen = next((c for c in cands if c[0] not in used_inv_ids), None)
+            inv_id = chosen[0] if chosen else None
+            # 匹配到的原始在售商品 ID（on_sale_items.item_id），供页面展示来源。
+            source_item_id = chosen[1] if chosen else None
+            # 有候选但都已被手动出库行 / 其它组合行占用 → 该标题库存已覆盖，跳过不重复建行。
+            # 无任何候选（本账号内无同名在售）→ inv_id=None，仍建占位行供人工介入（与原逻辑一致）。
+            if inv_id is None and cands:
+                continue
+            if inv_id is not None:
+                used_inv_ids.add(inv_id)
             stocked, stocked_at, deducted = old_bundle_state_by_norm.get(
                 tnorm, (0, None, 0)
             )
@@ -235,6 +265,7 @@ def _sync_outbound_lines_for_order_impl(
                 order_no=ono,
                 inventory_id=inv_id,
                 management_id=title,
+                source_item_id=source_item_id,
                 line_kind="bundle_title",
                 quantity=1,
                 sort_index=sort_idx,

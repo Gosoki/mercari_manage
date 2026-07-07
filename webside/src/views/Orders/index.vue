@@ -118,6 +118,11 @@
                     </template>
                   </el-table-column>
                   <el-table-column :label="t('orders.inventoryName')" prop="inventory_name" min-width="140" show-overflow-tooltip />
+                  <el-table-column :label="t('orders.sourceItemId')" width="150" align="center" show-overflow-tooltip>
+                    <template #default="{ row: line }">
+                      {{ line.source_item_id || '—' }}
+                    </template>
+                  </el-table-column>
                   <el-table-column :label="t('orders.ownership')" width="110" align="center" show-overflow-tooltip>
                     <template #default="{ row: line }">
                       <span :class="{ 'order-owner-unmatched-text': isOutboundLineOwnerUnmatched(line) }">
