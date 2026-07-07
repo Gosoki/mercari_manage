@@ -107,6 +107,13 @@ class InventoryModel(BaseModel):
                 'not_null': False,
                 'default': None,
             },
+            # 拆分来源：本行由某商品拆分而来时，记录来源商品的管理番号（inventory.id），便于追溯。
+            # 非拆分产生的行为 NULL。
+            'split_parent_id': {
+                'type': 'INTEGER',
+                'not_null': False,
+                'default': None,
+            },
             'description': {
                 'type': 'TEXT',
                 'not_null': False,

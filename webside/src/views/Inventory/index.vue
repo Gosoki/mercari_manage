@@ -232,6 +232,9 @@
               </span>
             </el-tooltip>
             <span v-else>{{ row.id }}</span>
+            <div v-if="row.split_parent_id" class="inventory-split-parent">
+              {{ t('inventory.splitFrom') }} {{ row.split_parent_id }}
+            </div>
           </template>
         </el-table-column>
         <el-table-column v-if="imageSearchActive" :label="t('inventory.matchScore')" width="86" align="center" header-align="center">

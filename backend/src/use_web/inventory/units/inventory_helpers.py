@@ -28,6 +28,7 @@ INVENTORY_COLUMNS = [
     "is_delete",
     "is_combined",
     "combined_items",
+    "split_parent_id",
     "description",
     "listing_title",
     "listing_body",

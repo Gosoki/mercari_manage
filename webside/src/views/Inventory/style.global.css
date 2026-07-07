@@ -162,6 +162,14 @@
   font-size: 16px;
   vertical-align: middle;
 }
+/* 拆分来源：管理番号下方展示父级管理番号，便于追溯 */
+.inventory-split-parent {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--el-text-color-secondary, #909399);
+  white-space: nowrap;
+}
 
 /* 标红行说明 tooltip（teleport 到 body，必须无 scoped）：与项目深蓝暗色主题保持一致 */
 .el-popper.is-dark.inventory-alert-tooltip-popper {

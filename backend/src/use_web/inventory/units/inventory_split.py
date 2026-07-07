@@ -98,13 +98,13 @@ def split_inventory(pid: int, data: InventorySplitRequest, _claims: dict = Depen
                 """
                 INSERT INTO [inventory] (
                     name, barcode, category_id, product_type_id, owner_user_id, warehouse_id, price, quantity,
-                    mercari_item_id, on_sale_quantity, pending_outbound_qty,
+                    mercari_item_id, on_sale_quantity, pending_outbound_qty, split_parent_id,
                     description, listing_title, listing_body, image, image_front, image_back, images_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     src[0], new_barcode, src[2], src[3], new_owner, src[5], src[6], split_qty,
-                    None, 0, 0,
+                    None, 0, 0, pid,
                     src[8], src[9], src[10],
                     img_cols["image"], img_cols["image_front"], img_cols["image_back"], img_cols["images_json"],
                 ),
