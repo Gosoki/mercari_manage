@@ -417,7 +417,11 @@ export default defineComponent({
         }
       }
       if (packFail) ElMessage.warning(t('todos.packagingSyncFailed'))
-      // 2) 出库：关联订单下所有待出库明细
+      // 2) 出库：关联订单下所有待出库明细。
+      // 确认发送过程中后端 finalize 会刷新订单（apply_item_info_to_order → 重写出库明细），
+      // 详情打开时缓存的行 ID / inventory_id / 出库状态可能已变化，出库前重新拉取最新明细，
+      // 避免用旧行 ID 调用 stock-out 命中 404 而被静默忽略（导致「已打包」重开后不出库）。
+      await loadShipOutboundLines(nos)
       let okCount = 0
       let failCount = 0
       for (const line of shipOutbound.lines || []) {

@@ -163,6 +163,8 @@ def start_mitm_proxy() -> Dict[str, Any]:
             cwd=backend_root(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            # windowed 打包后子进程会弹出一个常驻黑色控制台窗口；CREATE_NO_WINDOW 抑制之（非 Windows 为 0）
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except Exception as exc:
         return {"started": False, "error": str(exc)}

@@ -130,6 +130,8 @@ def start_proxy() -> Dict[str, Any]:
             cwd=os.path.dirname(js),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            # windowed 打包后 node 子进程会弹出一个常驻黑色控制台窗口；CREATE_NO_WINDOW 抑制之（非 Windows 为 0）
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except Exception as exc:  # noqa: BLE001
         return {"started": False, "error": str(exc)}
