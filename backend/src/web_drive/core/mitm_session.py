@@ -324,6 +324,11 @@ async def _launch_with_mitm(
         interactive=not headless,
         restore_tabs=False,
         start_minimized=bool(minimized),
+        # 显式导航到 about:blank：触发 manager 的单标签收敛（_navigate_one_tab 会
+        # 关掉持久化 profile「继续浏览上次页面」异步恢复的旧标签，以及 launch 时的
+        # 默认页），避免残留一个 about:blank 标签。空白页不会命中受保护页 → 不会误判
+        # 掉登录；登录态仍由调用方随后 clone Cookie + reload 到目标页注入。
+        start_url="about:blank",
     )
 
     if not await _is_context_alive(mgr, browser_key):
