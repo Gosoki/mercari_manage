@@ -229,6 +229,7 @@
   font-weight: 600;
   color: var(--el-text-color-primary);
   padding: 0 12px 0 0;
+  background-color: transparent;
 }
 /* 第一个分组标题去掉顶部多余间距 */
 .order-edit-form--tiled :deep(.order-edit-section:first-child) {
@@ -247,6 +248,11 @@
 /* 所有数据左对齐（el-input-number 默认居中，统一改为靠左） */
 .order-edit-form--main :deep(.el-input-number .el-input__inner) {
   text-align: left;
+}
+/* 只读详情：字段文本不显示底色（禁用态输入框背景透明） */
+.order-edit-form--main :deep(.el-input.is-disabled .el-input__wrapper),
+.order-edit-form--main :deep(.el-textarea.is-disabled .el-textarea__inner) {
+  background-color: transparent;
 }
 /* 时间字段：去掉输入框左侧的时钟/日历前缀图标 */
 .order-edit-form--main :deep(.order-row-plain--date .el-input__prefix) {

@@ -223,10 +223,6 @@
         <div class="detail-col detail-col-left">
           <section class="detail-section">
             <div class="detail-section-title">{{ t('todos.section.product') }}</div>
-            <div class="detail-row">
-              <div class="detail-label">{{ t('todos.productType') }}</div>
-              <div class="detail-value">{{ inventoryProductType || dash }}</div>
-            </div>
             <div v-if="showMercariPhoto" class="detail-photo-wrap">
               <el-image
                 :src="mercariImageUrl(detail.photo_url)"
@@ -255,18 +251,30 @@
                     </span>
                   </div>
                   <div class="detail-inv-images">
-                    <el-image
-                      v-for="(img, ii) in inv.images"
-                      :key="ii"
-                      :src="inventoryThumbUrl(img)"
-                      :preview-src-list="inv.images"
-                      :initial-index="ii"
-                      :preview-teleported="true"
-                      fit="cover"
-                      class="detail-inv-thumb"
-                    >
-                      <template #error><span class="thumb-fallback">-</span></template>
-                    </el-image>
+                    <template v-for="(img, ii) in visibleInvImages(inv)" :key="ii">
+                      <!-- 超过 6 张时，最后一格叠加「+N」遮罩，点击展开全部（不进入预览） -->
+                      <div
+                        v-if="invMoreCount(inv) > 0 && ii === visibleInvImages(inv).length - 1"
+                        class="detail-inv-thumb detail-inv-thumb-more"
+                        @click="expandInvImages(inv)"
+                      >
+                        <el-image :src="inventoryThumbUrl(img)" fit="cover" class="detail-inv-more-img">
+                          <template #error><span class="thumb-fallback">-</span></template>
+                        </el-image>
+                        <span class="detail-inv-more-mask">+{{ invMoreCount(inv) }}</span>
+                      </div>
+                      <el-image
+                        v-else
+                        :src="inventoryThumbUrl(img)"
+                        :preview-src-list="inv.images"
+                        :initial-index="ii"
+                        :preview-teleported="true"
+                        fit="cover"
+                        class="detail-inv-thumb"
+                      >
+                        <template #error><span class="thumb-fallback">-</span></template>
+                      </el-image>
+                    </template>
                     <span v-if="!inv.images.length" class="detail-empty">{{ t('todos.noInventoryImage') }}</span>
                   </div>
 
@@ -645,11 +653,6 @@
           </section>
         </div>
       </div>
-
-      <template #footer>
-        <el-button @click="detailDialogVisible = false">{{ t('common.close') }}</el-button>
-        <el-button type="primary" :disabled="detailLoading" @click="onDetailSubmit">{{ t('todos.finishProcess') }}</el-button>
-      </template>
     </el-dialog>
 
     <!-- 选择商品尺寸：纯前端硬编码列表，按当前配送方式区分 -->
@@ -730,7 +733,7 @@
           :loading="shippingConfirmLoading"
           @click="onConfirmShippingSelection"
         >
-          {{ shippingNeedsFacility ? t('todos.generateShipCode') : t('todos.confirmAndSend') }}
+          {{ shippingNeedsFacility ? t('todos.generateShipCode') : t('todos.scanShipCode') }}
         </el-button>
       </template>
     </el-dialog>

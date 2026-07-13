@@ -30,6 +30,9 @@ def create_order(data: OrderCreate):
         order_date=int(data.order_date),
         order_updated_at=None if ou is None else int(ou),
         purchase_time=None if pt is None else int(pt),
+        packed_at=None if data.packed_at is None else int(data.packed_at),
+        shipped_at=None if data.shipped_at is None else int(data.shipped_at),
+        completed_at=None if data.completed_at is None else int(data.completed_at),
         customer_name=(data.customer_name or "").strip() or None,
         data_user=(data.data_user or "").strip() or None,
         status=data.status,
@@ -68,6 +71,15 @@ def update_order(oid: int, data: OrderUpdate):
     if "purchase_time" in data.model_fields_set:
         v = data.purchase_time
         item.purchase_time = None if v is None else int(v)
+    if "packed_at" in data.model_fields_set:
+        v = data.packed_at
+        item.packed_at = None if v is None else int(v)
+    if "shipped_at" in data.model_fields_set:
+        v = data.shipped_at
+        item.shipped_at = None if v is None else int(v)
+    if "completed_at" in data.model_fields_set:
+        v = data.completed_at
+        item.completed_at = None if v is None else int(v)
     if data.customer_name is not None:
         item.customer_name = data.customer_name.strip() or None
     if "data_user" in data.model_fields_set:

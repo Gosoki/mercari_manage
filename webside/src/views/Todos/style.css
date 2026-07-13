@@ -275,6 +275,11 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* 固定高度：约可容纳 3 个关联商品卡片（单卡 ~118px + 间距 10px），高度恒定便于定位；
+     超过 3 个时列表内部滚动，避免撑高整列把下方「包材 / 发货」操作区顶出视野 */
+  height: 390px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 .detail-inv-card {
   border: 1px solid var(--el-border-color-lighter);
@@ -283,15 +288,39 @@
   background: var(--el-fill-color-light);
 }
 .detail-inv-images {
-  display: flex;
-  flex-wrap: wrap;
+  /* 固定每行 6 格：折叠时 6 张（第 6 张为「+N」）恰好占满一行，不会把「+N」挤到下一行；
+     展开时按 6 列自动换行。用 grid 而非 flex，避免容器宽度/滚动条差异导致每行格数不定。 */
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
   gap: 6px;
 }
 .detail-inv-thumb {
-  width: 72px;
+  width: 100%;
   height: 72px;
   border-radius: 6px;
   border: 1px solid var(--el-border-color-lighter);
+}
+/* 「+N」折叠格：底图 + 半透明遮罩显示剩余张数，点击展开 */
+.detail-inv-thumb-more {
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+}
+.detail-inv-more-img {
+  width: 100%;
+  height: 100%;
+}
+.detail-inv-more-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 6px;
 }
 .detail-inv-meta {
   margin-bottom: 6px;

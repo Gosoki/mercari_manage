@@ -235,6 +235,7 @@ export default defineComponent({
       invMatch.loading = false
       invMatch.inventory = []
       invMatch.order_nos = []
+      expandedInvImages.clear()
     }
 
     /** 本地库存图（/imges/...）走缩略图端点；非本地路径原样返回 */
@@ -242,6 +243,28 @@ export default defineComponent({
       const s = String(src || '')
       if (!s.startsWith('/imges/')) return s
       return `/mercariV2/src/use_web/inventory/image-thumb?path=${encodeURIComponent(s)}&size=${size}`
+    }
+
+    // 关联商品图片：单个商品默认最多展示 6 张；超过时最后一格叠加「+N」遮罩，点击展开全部
+    const MAX_INV_IMAGES = 6
+    const expandedInvImages = reactive(new Set())
+    function isInvImagesExpanded(inv) {
+      return expandedInvImages.has(inv?.id)
+    }
+    /** 当前应展示的图片：已展开或不足 6 张则全展示，否则只取前 6 张 */
+    function visibleInvImages(inv) {
+      const imgs = Array.isArray(inv?.images) ? inv.images : []
+      if (isInvImagesExpanded(inv) || imgs.length <= MAX_INV_IMAGES) return imgs
+      return imgs.slice(0, MAX_INV_IMAGES)
+    }
+    /** 未展开时被折叠隐藏的图片数量（用于「+N」）；已展开或未超出返回 0 */
+    function invMoreCount(inv) {
+      const imgs = Array.isArray(inv?.images) ? inv.images : []
+      if (isInvImagesExpanded(inv)) return 0
+      return Math.max(0, imgs.length - MAX_INV_IMAGES)
+    }
+    function expandInvImages(inv) {
+      if (inv?.id != null) expandedInvImages.add(inv.id)
     }
 
     // ===== 待发货：包材选择 + 关联订单出库（发货成功后同步到 /#/orders） =====
@@ -457,13 +480,6 @@ export default defineComponent({
     const hasLocalInventoryImages = computed(() =>
       (invMatch.inventory || []).some((inv) => Array.isArray(inv?.images) && inv.images.length > 0),
     )
-    // 关联库存的「商品类型」（去重后合并展示；无匹配时为空）
-    const inventoryProductType = computed(() => {
-      const types = (invMatch.inventory || [])
-        .map((inv) => String(inv?.product_type_name || '').trim())
-        .filter(Boolean)
-      return [...new Set(types)].join(' / ')
-    })
     // 是否展示煤炉缩略图：仅在「非待发货」或「待发货但没关联到本地图片」时回落到煤炉图
     const showMercariPhoto = computed(() => {
       if (!detail.photo_url) return false
@@ -1669,11 +1685,6 @@ export default defineComponent({
     }
 
 
-    function onDetailSubmit() {
-      // TODO: 完成处理 → 本地标完成 + 关闭面板（具体动作待定）
-      ElMessage.info(t('todos.finishActionPending'))
-    }
-
     function onResetReplyDefault() {
       detail.reply_draft = replyDefaultText.value
     }
@@ -1889,6 +1900,9 @@ export default defineComponent({
       WAIT_SHIPPING_TITLE,
       invMatch,
       inventoryThumbUrl,
+      visibleInvImages,
+      invMoreCount,
+      expandInvImages,
       loadInventoryMatch,
       isWaitShipping,
       isPackedDetail,
@@ -1896,7 +1910,6 @@ export default defineComponent({
       hasInventoryMatch,
       hasLocalInventoryImages,
       showMercariPhoto,
-      inventoryProductType,
       PACKAGING_ITEM_NONE,
       packagingItemsOptions,
       shipPackagingRows,
@@ -1983,7 +1996,6 @@ export default defineComponent({
       changeMethodPicked,
       changeMethodLoading,
       onConfirmChangeShippingMethod,
-      onDetailSubmit,
       onResetReplyDefault,
       onSendReply,
       onResetReviewDefault,

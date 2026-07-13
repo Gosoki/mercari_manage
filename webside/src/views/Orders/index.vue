@@ -411,7 +411,7 @@
 
     <el-dialog
       v-model="dialogVisible"
-      :title="t('orders.editOrder')"
+      :title="t('orders.orderDetail')"
       width="1120px"
       destroy-on-close
       class="order-edit-dialog"
@@ -428,7 +428,7 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item :label="t('orders.orderNumber')" prop="order_no">
-              <el-input v-model="form.order_no" :placeholder="t('orders.orderNumberPlaceholder')" maxlength="60" clearable />
+              <el-input v-model="form.order_no" :placeholder="''" maxlength="60" clearable />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6">
@@ -443,7 +443,7 @@
                 :precision="0"
                 :controls="false"
                 style="width: 100%"
-                :placeholder="t('orders.transactionEvidenceIdPlaceholder')"
+                :placeholder="''"
               />
             </el-form-item>
           </el-col>
@@ -453,25 +453,13 @@
         <el-divider content-position="left" class="order-edit-section">{{ t('orders.sectionTime') }}</el-divider>
         <el-row :gutter="16" class="order-edit-row5 order-row-plain--date">
           <el-col :xs="24" :sm="12" :md="6">
-            <el-form-item :label="t('orders.orderTime')" prop="order_date">
+            <el-form-item :label="t('orders.listingTime')" prop="order_date">
               <el-date-picker
                 v-model="form.order_date"
                 type="datetime"
                 value-format="YYYY-MM-DD HH:mm:ss"
                 style="width: 100%"
-                :placeholder="t('orders.orderDatePlaceholder')"
-                clearable
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="12" :md="6">
-            <el-form-item :label="t('orders.updateTime')">
-              <el-date-picker
-                v-model="form.order_updated_at"
-                type="datetime"
-                value-format="YYYY-MM-DD HH:mm:ss"
-                style="width: 100%"
-                :placeholder="t('common.optional')"
+                :placeholder="''"
                 clearable
               />
             </el-form-item>
@@ -483,7 +471,43 @@
                 type="datetime"
                 value-format="YYYY-MM-DD HH:mm:ss"
                 style="width: 100%"
-                :placeholder="t('common.optional')"
+                :placeholder="''"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.packedTime')">
+              <el-date-picker
+                v-model="form.packed_at"
+                type="datetime"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                style="width: 100%"
+                :placeholder="''"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.shippedTime')">
+              <el-date-picker
+                v-model="form.shipped_at"
+                type="datetime"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                style="width: 100%"
+                :placeholder="''"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item :label="t('orders.completedTime')">
+              <el-date-picker
+                v-model="form.completed_at"
+                type="datetime"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                style="width: 100%"
+                :placeholder="''"
                 clearable
               />
             </el-form-item>
@@ -495,12 +519,12 @@
         <el-row :gutter="16" class="order-edit-row5">
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item :label="t('orders.sellerId')">
-              <el-input v-model="form.data_user" placeholder="data_user（Mercari seller.id）" maxlength="64" clearable />
+              <el-input v-model="form.data_user" :placeholder="''" maxlength="64" clearable />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item :label="t('orders.buyerId')">
-              <el-input v-model="form.customer_name" :placeholder="t('orders.buyerIdPlaceholder')" maxlength="30" clearable />
+              <el-input v-model="form.customer_name" :placeholder="''" maxlength="30" clearable />
             </el-form-item>
           </el-col>
         </el-row>
@@ -520,7 +544,7 @@
                 :precision="0"
                 :controls="false"
                 style="width: 100%"
-                :placeholder="t('orders.optionalInteger')"
+                :placeholder="''"
               />
             </el-form-item>
           </el-col>
@@ -536,7 +560,7 @@
                 :precision="0"
                 :controls="false"
                 style="width: 100%"
-                :placeholder="t('orders.optionalInteger')"
+                :placeholder="''"
               />
             </el-form-item>
           </el-col>
@@ -547,7 +571,7 @@
         <el-row :gutter="16" class="order-edit-row5">
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item :label="t('orders.carrier')">
-              <el-input v-model="form.carrier_display_name" clearable placeholder="carrier_display_name" />
+              <el-input v-model="form.carrier_display_name" clearable :placeholder="''" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6">
@@ -557,18 +581,18 @@
                 :precision="0"
                 :controls="false"
                 style="width: 100%"
-                :placeholder="t('orders.optionalInteger')"
+                :placeholder="''"
               />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item :label="t('orders.trackingNo')">
-              <el-input v-model="form.tracking_no" clearable placeholder="tracking_no" />
+              <el-input v-model="form.tracking_no" clearable :placeholder="''" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item :label="t('orders.shipConfirmCode')">
-              <el-input v-model="form.ship_confirm_code" clearable placeholder="ship_confirm_code" />
+              <el-input v-model="form.ship_confirm_code" clearable :placeholder="''" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -578,7 +602,7 @@
         <el-row :gutter="16">
           <el-col :span="24">
             <el-form-item :label="t('orders.itemNameCol')">
-              <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="2000" show-word-limit placeholder="remark" />
+              <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="2000" show-word-limit :placeholder="''" />
             </el-form-item>
           </el-col>
           <el-col :span="24">
@@ -589,7 +613,7 @@
                 :rows="10"
                 maxlength="4000"
                 show-word-limit
-                placeholder="description（transaction_evidences/get）"
+                :placeholder="''"
               />
             </el-form-item>
           </el-col>

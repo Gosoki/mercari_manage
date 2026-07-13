@@ -9,6 +9,9 @@ class OrderCreate(PydanticModel):
     order_date: int
     order_updated_at: Optional[int] = None
     purchase_time: Optional[int] = None
+    packed_at: Optional[int] = None
+    shipped_at: Optional[int] = None
+    completed_at: Optional[int] = None
     customer_name: Optional[str] = None
     data_user: Optional[str] = None
     status: str = "pending"
@@ -52,6 +55,9 @@ class OrderUpdate(PydanticModel):
     order_date: Optional[int] = None
     order_updated_at: Optional[int] = None
     purchase_time: Optional[int] = None
+    packed_at: Optional[int] = None
+    shipped_at: Optional[int] = None
+    completed_at: Optional[int] = None
     customer_name: Optional[str] = None
     data_user: Optional[str] = None
     status: Optional[str] = None

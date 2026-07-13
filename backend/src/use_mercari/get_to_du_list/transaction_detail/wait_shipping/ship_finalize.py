@@ -17,8 +17,9 @@ from ....get_order.get_in_progress_order.get_order_info import (
     apply_post_ship_codes_to_order,
     mark_order_shipped,
 )
+from .....db_manage.database import DatabaseManager
 from .._common import _is_wait_shipping_todo
-from .._cache import get_cached_transaction_detail
+from .._cache import _mark_order_packed, get_cached_transaction_detail
 from .._qr_facility import _detect_already_shipped, _extract_post_ship_ready, _persist_post_ship_ready
 from .._ui import _click_visible_button_by_text
 from .qr_scan import _SCAN_OK_TEXT
@@ -97,6 +98,10 @@ async def read_post_shipping_confirm_info(todo_id: int) -> Dict[str, Any]:
             tracking_no=tracking_no,
             method_label=method_label,
         )
+        # ゆうパケットポスト系（扫码发货）：扫码成功并读到 発送確認符号/追跡番号 即视为已打包，
+        # 记录订单打包时间 packed_at（写一次，不覆盖）。与 generate_code 分支保存二维码时
+        # _persist_qr_image_path 内部调用 _mark_order_packed 保持一致。仅记录打包时间，不改其它状态。
+        _mark_order_packed(DatabaseManager(), int(todo_id))
     return {
         "todo_id": int(todo_id),
         "account_id": aid,
