@@ -178,6 +178,8 @@ def apply_todolist_sync(account_id: int, items: List[Dict[str, Any]]) -> Dict[st
     new_wait_shipping = 0
     # 新插入的「待发货」待办的商品 ID（供同步后用空白浏览器抓取发货期限；仅新数据，不抓全部）
     new_wait_shipping_item_ids: List[str] = []
+    # 本次同步涉及、已存在(updated)的「待发货」商品 ID（用于补抓仍缺发货期限的行；不动历史未涉及的行）
+    updated_wait_shipping_item_ids: List[str] = []
     incoming_uuids: List[str] = []
 
     for item in items:
@@ -209,6 +211,11 @@ def apply_todolist_sync(account_id: int, items: List[Dict[str, Any]]) -> Dict[st
                     new_wait_shipping_item_ids.append(iid)
         elif action == "updated":
             updated += 1
+            # 已存在的待发货行本次同步又出现了：若仍缺发货期限则纳入补抓候选。
+            if _row_is_wait_shipping(row) and not suppressed:
+                iid = (row.get("item_id") or "").strip()
+                if iid:
+                    updated_wait_shipping_item_ids.append(iid)
         else:
             skipped += 1
 
@@ -230,6 +237,23 @@ def apply_todolist_sync(account_id: int, items: List[Dict[str, Any]]) -> Dict[st
             (account_id,),
         )
 
+    # 补抓：本次同步涉及、已存在(updated)、仍缺发货期限的待发货商品 → 重新抓一次。
+    # 仅限本次同步出现的商品；历史静态的旧 NULL 行（本次未涉及）不动。
+    backfill_wait_shipping_item_ids: List[str] = []
+    if updated_wait_shipping_item_ids:
+        uniq = list(dict.fromkeys(updated_wait_shipping_item_ids))
+        placeholders = ",".join(["?"] * len(uniq))
+        rows_missing = db.execute_query(
+            f"SELECT DISTINCT [item_id] FROM [todo_items] "
+            f"WHERE [account_id] = ? AND [item_id] IN ({placeholders}) "
+            f"AND COALESCE([is_delete], 0) = 0 "
+            f"AND ([shipping_duration] IS NULL OR [shipping_duration] = '')",
+            tuple([account_id] + uniq),
+        )
+        backfill_wait_shipping_item_ids = [
+            r[0] for r in rows_missing if r and r[0]
+        ]
+
     return {
         "total": len(items),
         "inserted": inserted,
@@ -237,6 +261,7 @@ def apply_todolist_sync(account_id: int, items: List[Dict[str, Any]]) -> Dict[st
         "skipped": skipped,
         "new_wait_shipping": new_wait_shipping,
         "new_wait_shipping_item_ids": new_wait_shipping_item_ids,
+        "backfill_wait_shipping_item_ids": backfill_wait_shipping_item_ids,
         "marked_deleted": int(marked_deleted or 0),
     }
 
@@ -342,15 +367,18 @@ async def sync_todos_with_details(
     stats["detail_fetched"] = int(fetched)
     stats["detail_failed"] = int(failed)
 
-    # ── 新待发货：用空白账号浏览器访问公开商品页抓取「発送までの日数」(发货期限) ──
-    #    仅对本次**新插入**的待发货待办抓取（新数据），不是每次对全部待发货都抓。
+    # ── 待发货：用空白账号浏览器访问公开商品页抓取「発送までの日数」(发货期限) ──
+    #    本次新插入的待发货 + 本次同步涉及但仍缺发货期限的旧待发货（补抓）；
+    #    都只限本次同步出现的商品，历史未涉及的旧 NULL 行不抓。
     new_ws_item_ids = stats.get("new_wait_shipping_item_ids") or []
-    if new_ws_item_ids and aid:
+    backfill_ws_item_ids = stats.get("backfill_wait_shipping_item_ids") or []
+    fetch_ws_item_ids = list(dict.fromkeys([*new_ws_item_ids, *backfill_ws_item_ids]))
+    if fetch_ws_item_ids and aid:
         from .shipping_duration import fetch_and_store_shipping_durations
 
         try:
             stats["shipping_duration_fetched"] = await fetch_and_store_shipping_durations(
-                aid, new_ws_item_ids, progress_job_id=progress_job_id
+                aid, fetch_ws_item_ids, progress_job_id=progress_job_id
             )
         except Exception as exc:  # noqa: BLE001 抓取失败不影响待办同步结果
             log.warning("[todolist] account_id=%s 抓取发货期限失败: %s", aid, exc)
