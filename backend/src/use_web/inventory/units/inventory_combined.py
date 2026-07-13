@@ -90,16 +90,19 @@ def _validate_combined_sources(items: list[dict], combo_quantity: int) -> None:
         source_id = int(item["inventory_id"])
         per_set = int(item["quantity"])
         info = found[source_id]
+        each = db.dialect.json_array_each("cmb.[combined_items]", "je")
+        qty_expr = db.dialect.json_extract_int("je.value", "quantity")
+        inv_id_expr = db.dialect.json_extract_int("je.value", "inventory_id")
         existing_reserved = db.execute_query(
-            """
+            f"""
             SELECT COALESCE(SUM(
                 COALESCE(cmb.[quantity], 0) *
-                CAST(json_extract(je.value, '$.quantity') AS INTEGER)
+                {qty_expr}
             ), 0)
-            FROM [inventory] cmb, json_each(cmb.[combined_items]) je
+            FROM [inventory] cmb, {each}
             WHERE COALESCE(cmb.[is_combined], 0) = 1
               AND COALESCE(cmb.[is_delete], 0) = 0
-              AND CAST(json_extract(je.value, '$.inventory_id') AS INTEGER) = ?
+              AND {inv_id_expr} = ?
             """,
             (source_id,),
         )
@@ -136,17 +139,20 @@ def _validate_combined_quantity_for_update(combo_id: int, combined_items_raw, ne
             continue
         available = int(rows[0][0] or 0)
         name = rows[0][1]
+        each = db.dialect.json_array_each("cmb.[combined_items]", "je")
+        qty_expr = db.dialect.json_extract_int("je.value", "quantity")
+        inv_id_expr = db.dialect.json_extract_int("je.value", "inventory_id")
         other = db.execute_query(
-            """
+            f"""
             SELECT COALESCE(SUM(
                 COALESCE(cmb.[quantity], 0) *
-                CAST(json_extract(je.value, '$.quantity') AS INTEGER)
+                {qty_expr}
             ), 0)
-            FROM [inventory] cmb, json_each(cmb.[combined_items]) je
+            FROM [inventory] cmb, {each}
             WHERE COALESCE(cmb.[is_combined], 0) = 1
               AND COALESCE(cmb.[is_delete], 0) = 0
               AND cmb.[id] != ?
-              AND CAST(json_extract(je.value, '$.inventory_id') AS INTEGER) = ?
+              AND {inv_id_expr} = ?
             """,
             (int(combo_id), source_id),
         )

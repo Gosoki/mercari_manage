@@ -124,15 +124,18 @@ def list_inventory_used_in_combos(pid: int):
     """
     if not _inventory_exists(pid):
         raise HTTPException(status_code=404, detail="商品不存在")
+    each = db.dialect.json_array_each("cmb.[combined_items]", "je")
+    per_expr = db.dialect.json_extract_int("je.value", "quantity")
+    inv_id_expr = db.dialect.json_extract_int("je.value", "inventory_id")
     rows = db.execute_query(
-        """
+        f"""
         SELECT cmb.[id], cmb.[name], COALESCE(cmb.[quantity], 0) AS combo_quantity,
-               CAST(json_extract(je.value, '$.quantity') AS INTEGER) AS per_combo_quantity,
+               {per_expr} AS per_combo_quantity,
                cmb.[image], cmb.[image_front], cmb.[image_back], cmb.[images_json]
-        FROM [inventory] cmb, json_each(cmb.[combined_items]) je
+        FROM [inventory] cmb, {each}
         WHERE COALESCE(cmb.[is_combined], 0) = 1
           AND COALESCE(cmb.[is_delete], 0) = 0
-          AND CAST(json_extract(je.value, '$.inventory_id') AS INTEGER) = ?
+          AND {inv_id_expr} = ?
         ORDER BY cmb.[id] DESC
         """,
         (pid,),

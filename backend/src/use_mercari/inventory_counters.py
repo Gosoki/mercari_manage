@@ -51,14 +51,18 @@ def _combined_reserved_sql_expr(inv_alias: str = "[inventory]") -> str:
     并在库存页「组合」列展示。``inv_alias`` 为外层 inventory 行的引用（UPDATE 时为
     ``[inventory]``，库存列表查询里别名为 ``p``）。
     """
+    d = DatabaseManager().dialect
+    each = d.json_array_each("cmb.[combined_items]", "je")
+    qty_expr = d.json_extract_int("je.value", "quantity")
+    inv_id_expr = d.json_extract_int("je.value", "inventory_id")
     return (
         "(SELECT COALESCE(SUM("
         "COALESCE(cmb.[quantity], 0) * "
-        "CAST(json_extract(je.value, '$.quantity') AS INTEGER)), 0) "
-        "FROM [inventory] cmb, json_each(cmb.[combined_items]) je "
+        f"{qty_expr}), 0) "
+        f"FROM [inventory] cmb, {each} "
         "WHERE COALESCE(cmb.[is_combined], 0) = 1 "
         "AND COALESCE(cmb.[is_delete], 0) = 0 "
-        f"AND CAST(json_extract(je.value, '$.inventory_id') AS INTEGER) = {inv_alias}.[id])"
+        f"AND {inv_id_expr} = {inv_alias}.[id])"
     )
 
 
@@ -130,10 +134,12 @@ def is_combined_source(inv_id: int) -> bool:
     if inv_id is None:
         return False
     db = DatabaseManager()
+    each = db.dialect.json_array_each("cmb.[combined_items]", "je")
+    inv_id_expr = db.dialect.json_extract_int("je.value", "inventory_id")
     rows = db.execute_query(
-        "SELECT 1 FROM [inventory] cmb, json_each(cmb.[combined_items]) je "
+        f"SELECT 1 FROM [inventory] cmb, {each} "
         "WHERE COALESCE(cmb.[is_combined], 0) = 1 AND COALESCE(cmb.[is_delete], 0) = 0 "
-        "AND CAST(json_extract(je.value, '$.inventory_id') AS INTEGER) = ? LIMIT 1",
+        f"AND {inv_id_expr} = ? LIMIT 1",
         (int(inv_id),),
     )
     return bool(rows)

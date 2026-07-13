@@ -42,11 +42,18 @@ class DBManager:
         self.db = DatabaseManager()
         self.models: List[Type[BaseModel]] = self._get_all_models()
 
+    def _is_sqlite(self) -> bool:
+        """历史迁移仅针对老 SQLite 库。MySQL 始终从最终 schema 全新建库，
+        无需（且不兼容）这些含 sqlite_master / json_each / BEGIN IMMEDIATE 的迁移。"""
+        return getattr(self.db.dialect, "name", "sqlite") == "sqlite"
+
     def _migrate_warehouses_composite_unique(self) -> bool:
         """
         历史表在 [name] 上有全局 UNIQUE，导致不同仓库不能建同名货架。
         重建表为 (warehouse, name) 组合唯一，并保留 id 以维护外键。
         """
+        if not self._is_sqlite():
+            return True
         db = self.db
         if not db.table_exists("warehouses"):
             return True
@@ -152,6 +159,8 @@ class DBManager:
 
     def _migrate_warehouses_name_nullable(self) -> bool:
         """货架号 name 允许为空（添加货架可不填编号）"""
+        if not self._is_sqlite():
+            return True
         db = self.db
         if not db.table_exists("warehouses"):
             return True
@@ -212,6 +221,8 @@ class DBManager:
 
     def _migrate_warehouses_drop_shelf_code_unique(self) -> bool:
         """同一仓库下允许重复货架号：移除 (warehouse, name) 唯一索引，改为普通索引。"""
+        if not self._is_sqlite():
+            return True
         db = self.db
         if not db.table_exists("warehouses"):
             return True
@@ -354,6 +365,8 @@ class DBManager:
         """
         将 product_type_category_mappings 的主键改为 mapping_id（TEXT）。
         """
+        if not self._is_sqlite():
+            return True
         db = self.db
         tn = "product_type_category_mappings"
         if not db.table_exists(tn):
@@ -411,6 +424,8 @@ class DBManager:
         """一次性：历史「组合商品」创建时曾扣减来源库存。改为「组合不扣库存、仅展示拉走件数」后，
         把曾被扣减的来源库存补回（每个来源 += Σ 组合商品库存 × 每套件数，含已软删的组合）。
         用 config 标记保证只执行一次（重复执行会重复加库存）。"""
+        if not self._is_sqlite():
+            return True
         db = self.db
         if not db.table_exists("inventory") or not db.table_exists("config"):
             return True
@@ -460,6 +475,8 @@ class DBManager:
         import json
         import time
 
+        if not self._is_sqlite():
+            return True
         db = self.db
         if not db.table_exists("todo_items") or not db.table_exists("transaction_messages"):
             return True

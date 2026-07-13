@@ -166,7 +166,8 @@ def _user_exists(uid: int) -> bool:
 
 def _sql_inventory_has_image_condition() -> str:
     """与 _inventory_paths_from_parsed_row 一致：任一有效图片路径即视为有图。"""
-    return """
+    each = db.dialect.json_array_each_text("p.images_json", "je")
+    return f"""
         (
             COALESCE(TRIM(p.image_front), TRIM(p.image), '') != ''
             OR COALESCE(TRIM(p.image_back), '') != ''
@@ -176,7 +177,7 @@ def _sql_inventory_has_image_condition() -> str:
                 AND TRIM(p.images_json) != '[]'
                 AND json_valid(p.images_json) = 1
                 AND EXISTS (
-                    SELECT 1 FROM json_each(p.images_json) AS je
+                    SELECT 1 FROM {each}
                     WHERE TRIM(COALESCE(je.value, '')) != ''
                 )
             )

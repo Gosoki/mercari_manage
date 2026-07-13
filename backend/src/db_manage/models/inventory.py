@@ -270,6 +270,8 @@ class InventoryModel(BaseModel):
     def _migrate_price_to_integer_if_needed(cls) -> None:
         """旧库 price 为 REAL 时，重建为 INTEGER（日元整数，四舍五入）。"""
         db = cls().db
+        if getattr(db.dialect, "name", "sqlite") != "sqlite":
+            return  # MySQL 从最终 schema 建库，price 已是 INT，无需重建
         tn = cls.get_table_name()
         if not db.table_exists(tn):
             return

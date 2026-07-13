@@ -16,7 +16,7 @@ Mercari is a **full-stack inventory and order management system** with deep inte
 |-------|-----------|---------|
 | Frontend | Vue 3, Vite, Vue Router, Pinia, Element Plus | Dev: port 9600 (HTTPS), Prod: static SPA |
 | Backend | Python 3.11+, FastAPI, Uvicorn | Port 9601, OpenAPI docs at /docs |
-| Database | SQLite WAL mode | backend/mercariDB.db (auto-created) |
+| Database | SQLite WAL mode (default) / MySQL 8.0+ | backend/mercariDB.db (auto-created); MySQL via `DB_BACKEND=mysql` |
 | Authentication | JWT (Bearer tokens) | 12-hour expiry by default |
 | Image Storage | Local filesystem | backend/imges/ directory |
 | Browser Automation | Playwright | For Mercari listing management |
@@ -173,6 +173,8 @@ Key tables in `backend/src/db_manage/models/`:
 ## Environment Variables
 
 **Backend**:
+- `DB_BACKEND`: Database backend — `sqlite` (default) or `mysql`. The database layer is dialect-abstracted (`src/db_manage/dialects/`); all call sites write SQLite-style SQL (`?` placeholders, `[identifier]` brackets) and the MySQL dialect translates at execution time. Switching backends requires no call-site changes.
+- `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` / `MYSQL_POOL_SIZE`: MySQL 8.0+ connection settings (used only when `DB_BACKEND=mysql`; requires `PyMySQL`). The target database is auto-created on startup. Migrate existing SQLite data with `python -m tools.sqlite_to_mysql` (see that script's header).
 - `JWT_SECRET`: Signing key (change in production)
 - `JWT_EXPIRE_HOURS`: Token validity (default: 12)
 - `SSL_MITM_AUTO_START`: Set to `0` to disable mitmproxy (default: 1)

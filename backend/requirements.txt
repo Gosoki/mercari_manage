@@ -13,3 +13,4 @@ playwright>=1.48.0
 mitmproxy>=10.4.0
 requests
 pystray>=0.19.5
+PyMySQL>=1.1.0  # DB_BACKEND=mysql 时使用；默认 sqlite 无需安装
