@@ -110,3 +110,4 @@ backend/mercariDB*
 .agents
 skills-lock.json
 mercariDB.db
+backend/system.db

@@ -82,10 +82,13 @@ def main() -> int:
         print("[错误] MySQL 建表失败，终止")
         return 3
 
+    from src.db_manage.migrate import _sanitize_datetime_value  # noqa: E402
+
     sconn = sqlite3.connect(src)
     scur = sconn.cursor()
     src_tables = set(_sqlite_tables(scur))
     model_tables = [m.get_table_name() for m in mgr.models]
+    model_by_table = {m.get_table_name(): m for m in mgr.models}
 
     print("\n[2/3] 逐表搬迁数据 ...")
     # 关外键校验，避免导入顺序问题
@@ -106,13 +109,30 @@ def main() -> int:
         ph = ", ".join("?" * len(cols))
         insert_sql = f"INSERT INTO [{table}] ({col_sql}) VALUES ({ph})"
 
+        # DATETIME 列下标：净化非法时间值（如残留的 'CURRENT_TIMESTAMP'）
+        _fdefs = model_by_table[table].get_fields()
+        dt_idx = [
+            i for i, c in enumerate(cols)
+            if 'DATE' in str(_fdefs.get(c, {}).get('type', '')).upper()
+            or 'TIME' in str(_fdefs.get(c, {}).get('type', '')).upper()
+        ]
+
         scur.execute(f"SELECT {col_sql} FROM [{table}]")
         moved = 0
         while True:
             batch = scur.fetchmany(BATCH)
             if not batch:
                 break
-            db.execute_many(insert_sql, [tuple(r) for r in batch])
+            if dt_idx:
+                params = []
+                for r in batch:
+                    row = list(r)
+                    for j in dt_idx:
+                        row[j] = _sanitize_datetime_value(row[j])
+                    params.append(tuple(row))
+            else:
+                params = [tuple(r) for r in batch]
+            db.execute_many(insert_sql, params)
             moved += len(batch)
 
         src_count = scur.execute(f"SELECT COUNT(*) FROM [{table}]").fetchone()[0]

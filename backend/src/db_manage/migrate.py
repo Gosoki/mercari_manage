@@ -16,6 +16,19 @@ from typing import Any, Dict, List
 BATCH = 500
 
 
+def _sanitize_datetime_value(v):
+    """净化 DATETIME 列值：把 SQLite 老数据里残留的字面量 'CURRENT_TIMESTAMP'、空串等
+    非法值转为 None（由目标库列默认/NULL 接管），避免 MySQL 严格模式报 1292。
+    合法时间字符串（含数字）原样保留。"""
+    if v is None:
+        return None
+    if isinstance(v, str):
+        s = v.strip()
+        if not s or not any(ch.isdigit() for ch in s):
+            return None
+    return v
+
+
 class _TargetExecutor:
     """最小执行器：给定一个 dialect，提供其 DDL/内省/写入所需的 execute_* 与 get_connection，
     独立于 DatabaseManager 单例（用于操作迁移「目标库」）。"""
@@ -106,10 +119,27 @@ def copy_all_data(source_db, target: _TargetExecutor, models) -> List[Dict[str, 
         ph = ", ".join(["?"] * len(cols))
         insert_sql = f"INSERT INTO [{table}] ({col_sql}) VALUES ({ph})"
 
+        # DATETIME 列下标：拷贝时净化非法时间值（如残留的 'CURRENT_TIMESTAMP'）
+        fdefs = model.get_fields()
+        dt_idx = [
+            i for i, c in enumerate(cols)
+            if 'DATE' in str(fdefs.get(c, {}).get('type', '')).upper()
+            or 'TIME' in str(fdefs.get(c, {}).get('type', '')).upper()
+        ]
+
         rows = source_db.execute_query(f"SELECT {col_sql} FROM [{table}]")
         for i in range(0, len(rows), BATCH):
             chunk = rows[i:i + BATCH]
-            target.execute_many(insert_sql, [tuple(r) for r in chunk])
+            if dt_idx:
+                params = []
+                for r in chunk:
+                    row = list(r)
+                    for j in dt_idx:
+                        row[j] = _sanitize_datetime_value(row[j])
+                    params.append(tuple(row))
+            else:
+                params = [tuple(r) for r in chunk]
+            target.execute_many(insert_sql, params)
 
         src_count = source_db.execute_query(f"SELECT COUNT(*) FROM [{table}]")[0][0]
         dst_count = target.execute_query(f"SELECT COUNT(*) FROM [{table}]")[0][0]
@@ -124,6 +154,10 @@ def migrate(source_db, target_dialect, models) -> Dict[str, Any]:
     """在目标库建表并从源库拷贝全部数据，返回 {ok, tables, mismatch}。"""
     target = _TargetExecutor(target_dialect)
     target_dialect.setup()
+    # 先删目标旧表再重建：保证列类型与当前模型一致（否则上次失败迁移残留的旧表
+    # 会因 CREATE TABLE IF NOT EXISTS 被跳过，沿用旧列类型）。源库为权威，随后整表回填。
+    for model in models:
+        target_dialect.drop_table(target, model.get_table_name())
     build_target_schema(target, models)
     summary = copy_all_data(source_db, target, models)
     mismatch = [s for s in summary if s["status"] == "行数不一致"]

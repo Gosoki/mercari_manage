@@ -156,10 +156,14 @@ class MysqlDialect(Dialect):
         # autocommit=True：匹配 SQLite 逐语句提交语义，避免池化连接残留未提交读事务
         # （否则复用会拿到过期快照并阻塞 DDL）。transaction() 内以显式 BEGIN 开启事务，
         # 期间覆盖 autocommit，直至 COMMIT/ROLLBACK。
+        # sql_mode：PIPES_AS_CONCAT 让 || 作字符串拼接（代码里多处 SQL 用 || 拼接，
+        # 与 SQLite 一致）；去掉 ONLY_FULL_GROUP_BY 以对齐 SQLite 宽松的 GROUP BY；
+        # 保留 STRICT_TRANS_TABLES 维持数据完整（越界/截断报错而非静默损坏）。
         return pymysql.connect(
             host=self.host, port=self.port, user=self.user,
             password=self.password, database=self.database,
             charset="utf8mb4", collation="utf8mb4_unicode_ci",
+            sql_mode="STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION,PIPES_AS_CONCAT",
             autocommit=True, conv=self._build_conv(),
         )
 
@@ -283,15 +287,20 @@ class MysqlDialect(Dialect):
 
         t = str(col.get('type', 'TEXT')).upper()
         if 'INT' in t:
-            if col.get('primary_key') and col.get('autoincrement'):
-                return 'BIGINT'
-            return 'INT'
+            # SQLite INTEGER 是 64 位；统一映射 BIGINT，避免大 ID（如 Mercari
+            # transaction_evidence_id）超出 MySQL INT(32 位) 范围导致 1264 溢出。
+            # 需要更省的小整数列可在模型标注 mysql_type='INT'/'TINYINT'。
+            return 'BIGINT'
         if t in ('REAL', 'FLOAT', 'DOUBLE') or 'FLOA' in t or 'DOUB' in t:
             return 'DOUBLE'
         if 'DATETIME' in t or 'TIMESTAMP' in t:
             return 'DATETIME'
         if 'DATE' in t:
             return 'DATE'
+        if 'BLOB' in t or 'BINARY' in t:
+            # 二进制列（如图片特征向量 vector）：用 LONGBLOB，避免按 utf8mb4 文本
+            # 校验非法字节导致 1366 Incorrect string value。
+            return 'LONGBLOB'
 
         # 文本：模型标注 max_length 的用 VARCHAR(n)（推荐，精确存储、可索引）
         ml = col.get('max_length')

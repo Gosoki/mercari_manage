@@ -159,9 +159,9 @@ class WarehouseModel(BaseModel):
                     SELECT target_warehouse_id AS wh, inventory_id, quantity AS delta
                     FROM [transactions]
                     WHERE type = 'transfer' AND target_warehouse_id IS NOT NULL
-                )
+                ) AS deltas
                 GROUP BY wh, inventory_id
-            )
+            ) AS per_item
             GROUP BY wh
             """
         )
