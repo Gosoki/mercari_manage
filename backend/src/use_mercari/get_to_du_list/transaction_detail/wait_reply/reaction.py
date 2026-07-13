@@ -64,20 +64,39 @@ async def send_message_reaction_by_index(
     auto_key = mercari_todo_key(aid)
 
     report("attach_browser", "正在连接已打开的浏览器交易页…")
+    # 反应表情（emoji）需唤起**有头**浏览器渲染 picker 才能可靠点击；有头窗口
+    # 最小化到任务栏后台运行，不在桌面前台弹出。若当前已存在**无头** __todo 会话
+    # （如刚加载详情时开的静默会话），先把它关掉，确保下面以有头会话重新打开交易页。
+    try:
+        for sess in mgr.list_sessions():
+            if sess.get("account_key") == auto_key and sess.get("headless"):
+                await mgr.close_session(auto_key, force=True)
+                log.info("[reaction] 已关闭无头 __todo 会话，改用有头浏览器 account_id=%s", aid)
+                break
+    except Exception as exc:
+        log.debug("[reaction] 检查/关闭已存在无头会话失败: %s", exc)
+
     try:
         page = await mgr.active_tab_page(auto_key)
     except Exception:
         page = None
 
     if page is None:
-        # 浏览器未打开（待回复面板走缓存、未开浏览器）：自动打开交易页。
-        # 进入上下文即打开并导航；退出不关闭，浏览器保持打开供下方点反应。
+        # 浏览器未打开（待回复面板走缓存 / 上一步已关掉无头会话）：以**有头+最小化**
+        # 方式打开交易页（在任务栏运行，不在桌面弹出）。进入上下文即打开并导航；退出
+        # 不关闭，浏览器保持打开供下方点反应，发送成功后由收尾逻辑立即关闭。
         if not item_id:
             raise RuntimeError("该待办无关联 item_id，无法打开交易页")
         report("open_browser", f"正在打开交易页（{item_id}）…")
         url = f"https://jp.mercari.com/transaction/{item_id}"
         try:
-            async with mitm_automation_browser(aid, start_url=url, browser_key=auto_key):
+            async with mitm_automation_browser(
+                aid,
+                start_url=url,
+                browser_key=auto_key,
+                headless=False,
+                minimized=True,
+            ):
                 pass
             page = await mgr.active_tab_page(auto_key)
         except Exception as exc:

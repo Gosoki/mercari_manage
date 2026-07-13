@@ -10,13 +10,6 @@
         </div>
       </template>
 
-      <el-alert type="info" :closable="false" show-icon class="mb">
-        <div>
-          默认使用 SQLite。切换到 MySQL 后，业务数据存于 MySQL，SQLite 仅保留系统配置（当前选择与连接信息）。
-          <strong>切换会把当前数据库的数据迁移到目标数据库，成功后自动重启后端生效。</strong>
-        </div>
-      </el-alert>
-
       <el-form label-width="110px" class="mt" @submit.prevent>
         <el-form-item label="使用数据库">
           <el-radio-group v-model="form.backend">
@@ -26,16 +19,16 @@
         </el-form-item>
 
         <template v-if="form.backend === 'mysql'">
-          <el-form-item label="主机 Host">
+          <el-form-item label="主机">
             <el-input v-model="form.mysql.host" placeholder="127.0.0.1" style="max-width:360px" />
           </el-form-item>
-          <el-form-item label="端口 Port">
-            <el-input-number v-model="form.mysql.port" :min="1" :max="65535" :controls="false" style="width:160px" />
+          <el-form-item label="端口">
+            <el-input-number v-model="form.mysql.port" :min="1" :max="65535" :controls="false" style="width:160px" class="port-input" />
           </el-form-item>
-          <el-form-item label="用户 User">
+          <el-form-item label="用户">
             <el-input v-model="form.mysql.user" placeholder="root" style="max-width:360px" />
           </el-form-item>
-          <el-form-item label="密码 Password">
+          <el-form-item label="密码">
             <el-input
               v-model="form.mysql.password"
               type="password"
@@ -44,7 +37,7 @@
               style="max-width:360px"
             />
           </el-form-item>
-          <el-form-item label="数据库 Database">
+          <el-form-item label="数据库">
             <el-input v-model="form.mysql.database" placeholder="mercari" style="max-width:360px" />
           </el-form-item>
 
@@ -62,12 +55,19 @@
 
         <el-form-item label=" ">
           <el-button
+            :loading="migrating"
+            :disabled="form.backend === activeBackend || switching"
+            @click="onMigrate"
+          >
+            迁移数据到 {{ form.backend === 'mysql' ? 'MySQL' : 'SQLite' }}
+          </el-button>
+          <el-button
             type="primary"
             :loading="switching"
-            :disabled="form.backend === activeBackend"
+            :disabled="form.backend === activeBackend || migrating"
             @click="onSwitch"
           >
-            {{ form.backend === activeBackend ? '当前已在使用该数据库' : `迁移并切换到 ${form.backend === 'mysql' ? 'MySQL' : 'SQLite'}` }}
+            {{ form.backend === activeBackend ? '当前已在使用该数据库' : `切换到 ${form.backend === 'mysql' ? 'MySQL' : 'SQLite'}` }}
           </el-button>
         </el-form-item>
       </el-form>
@@ -100,6 +100,7 @@ const activeBackend = ref('sqlite')
 const passwordSet = ref(false)
 const testing = ref(false)
 const switching = ref(false)
+const migrating = ref(false)
 const testResult = ref(null)
 const migrateSummary = ref([])
 
@@ -131,24 +132,48 @@ async function onTest() {
   }
 }
 
+async function onMigrate() {
+  const target = form.backend === 'mysql' ? 'MySQL' : 'SQLite'
+  try {
+    await ElMessageBox.confirm(
+      `将把当前数据库的全部数据复制到 ${target}（覆盖目标库同名数据），当前使用的数据库不变。是否继续？`,
+      '确认迁移数据库',
+      { type: 'warning', confirmButtonText: '开始迁移', cancelButtonText: '取消' }
+    )
+  } catch (_) {
+    return
+  }
+  migrating.value = true
+  migrateSummary.value = []
+  try {
+    const payload = { backend: form.backend }
+    if (form.backend === 'mysql') payload.mysql = { ...form.mysql }
+    const res = await databaseApi.migrate(payload)
+    migrateSummary.value = res.tables || []
+    ElMessage.success(res.message)
+  } catch (e) {
+    // 错误消息已由 http 拦截器统一提示
+  } finally {
+    migrating.value = false
+  }
+}
+
 async function onSwitch() {
   const target = form.backend === 'mysql' ? 'MySQL' : 'SQLite'
   try {
     await ElMessageBox.confirm(
-      `将把当前数据库的全部数据迁移到 ${target}，迁移成功后会自动重启后端。是否继续？`,
+      `将把当前使用的数据库切换为 ${target}（仅改变连接，不迁移数据），成功后会自动重启后端。是否继续？`,
       '确认切换数据库',
-      { type: 'warning', confirmButtonText: '迁移并切换', cancelButtonText: '取消' }
+      { type: 'warning', confirmButtonText: '切换', cancelButtonText: '取消' }
     )
   } catch (_) {
     return
   }
   switching.value = true
-  migrateSummary.value = []
   try {
     const payload = { backend: form.backend }
     if (form.backend === 'mysql') payload.mysql = { ...form.mysql }
     const res = await databaseApi.switch(payload)
-    migrateSummary.value = res.tables || []
     ElMessage.success(res.message)
     if (res.restarting) {
       // 后端将重启，稍后自动刷新页面
@@ -173,4 +198,5 @@ onMounted(loadConfig)
 .mt { margin-top: 8px; }
 .test-result { margin-left: 12px; color: #f56c6c; }
 .test-result.ok { color: #67c23a; }
+.port-input :deep(.el-input__inner) { text-align: left; }
 </style>

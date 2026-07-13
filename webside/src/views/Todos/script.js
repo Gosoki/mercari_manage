@@ -203,7 +203,7 @@ export default defineComponent({
       keyword: '',
       kind: '',
       include_deleted: false,
-      include_packed: false,
+      packed_only: false,
     })
 
     const kindOptions = ref([])
@@ -684,7 +684,7 @@ export default defineComponent({
       if (kw) p.keyword = kw
       if (filters.value.kind) p.kind = filters.value.kind
       if (filters.value.include_deleted) p.include_deleted = true
-      if (filters.value.include_packed) p.include_packed = true
+      if (filters.value.packed_only) p.packed_only = true
       return p
     }
 
@@ -909,10 +909,10 @@ export default defineComponent({
     async function runBulkConfirmShip() {
       if (bulkConfirmShipLoading.value || syncLoading.value) return
 
-      // 统计「已打包」候选数量（不按 kind 过滤，逐行按 isPackedRow 判定）
+      // 统计「已打包」候选数量（packed_only 只取已打包行，再逐行按 isPackedRow 判定）
       let candidateCount = 0
       try {
-        const res = await todosApi.list({ page: 1, page_size: 500 })
+        const res = await todosApi.list({ page: 1, page_size: 500, packed_only: true })
         candidateCount = (res?.items || []).filter((r) => isPackedRow(r)).length
       } catch (e) {
         ElMessage.error(e?.message || t('todos.loadFailed'))
@@ -1274,7 +1274,12 @@ export default defineComponent({
           startQrScanMirror(currentRow.value.id)
         } else if (wantGenerateCode) {
           // 发行后已保存发货二维码：直接显示，并刷新本地缓存（不再开浏览器）
-          if (result?.qr_image_url) detail.qr_image_url = result.qr_image_url
+          if (result?.qr_image_url) {
+            detail.qr_image_url = result.qr_image_url
+            // 二维码返回后，实时把列表当前行标记为「已打包」（qr_image_path 即本地二维码路径），
+            // 无需刷新整页即可让类型标签从「待发货」变为「已打包」
+            if (currentRow.value) currentRow.value.qr_image_path = result.qr_image_url
+          }
           loadDetailCache()
         } else {
           loadDetailCache()

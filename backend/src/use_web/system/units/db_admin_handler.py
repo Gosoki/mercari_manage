@@ -121,6 +121,7 @@ def _build_target_dialect(backend: str, params: Optional[MysqlParams]):
 
 
 async def switch_database(body: SwitchIn) -> SwitchOut:
+    """只切换数据库连接（保存后端选择 + 重启生效），不迁移任何数据。"""
     if body.backend not in ("sqlite", "mysql"):
         raise HTTPException(status_code=400, detail=f"未知后端：{body.backend}")
 
@@ -129,6 +130,39 @@ async def switch_database(body: SwitchIn) -> SwitchOut:
         raise HTTPException(status_code=400, detail=f"当前已在使用 {current}，无需切换")
 
     # 切到 MySQL 前先验证连接
+    if body.backend == "mysql":
+        test_mysql_connection(body.mysql or MysqlParams())
+
+    # 持久化后端选择（不迁移数据）
+    mysql_cfg = None
+    if body.backend == "mysql":
+        p = body.mysql
+        mysql_cfg = {"host": p.host, "port": int(p.port), "user": p.user,
+                     "password": _resolve_password(p), "database": p.database}
+    db_settings.save_db_config(body.backend, mysql_cfg)
+
+    # 自动重启后端生效（打包态走 restart.bat；开发态提示手动重启）
+    if resolve_restart_bat() is not None:
+        asyncio.create_task(schedule_restart_via_bat(delay_seconds=1.0))
+        msg = f"已切换到 {body.backend}，正在重启后端，请约 10 秒后刷新页面"
+        restarting = True
+    else:
+        msg = f"已切换到 {body.backend}，请手动重启后端生效"
+        restarting = False
+
+    return SwitchOut(ok=True, message=msg, tables=[], restarting=restarting)
+
+
+async def migrate_database(body: SwitchIn) -> SwitchOut:
+    """只把当前数据库的数据迁移到目标数据库（逐表校验行数），不改变当前生效后端。"""
+    if body.backend not in ("sqlite", "mysql"):
+        raise HTTPException(status_code=400, detail=f"未知后端：{body.backend}")
+
+    current = db_settings.get_active_backend()
+    if body.backend == current:
+        raise HTTPException(status_code=400, detail=f"目标与当前数据库相同（{current}），无需迁移")
+
+    # 迁移到 MySQL 前先验证连接
     if body.backend == "mysql":
         test_mysql_connection(body.mysql or MysqlParams())
 
@@ -145,22 +179,14 @@ async def switch_database(body: SwitchIn) -> SwitchOut:
         bad = ", ".join(s["table"] for s in result["mismatch"])
         raise HTTPException(status_code=500, detail=f"迁移后行数不一致：{bad}")
 
-    # 迁移成功 → 持久化后端选择
-    mysql_cfg = None
+    # 迁移不改变当前后端；但保存 MySQL 连接参数，便于之后一键切换
     if body.backend == "mysql":
         p = body.mysql
-        mysql_cfg = {"host": p.host, "port": int(p.port), "user": p.user,
-                     "password": _resolve_password(p), "database": p.database}
-    db_settings.save_db_config(body.backend, mysql_cfg)
+        db_settings.save_mysql_params({
+            "host": p.host, "port": int(p.port), "user": p.user,
+            "password": _resolve_password(p), "database": p.database,
+        })
 
-    # 自动重启后端生效（打包态走 restart.bat；开发态提示手动重启）
-    if resolve_restart_bat() is not None:
-        asyncio.create_task(schedule_restart_via_bat(delay_seconds=1.0))
-        msg = f"已迁移到 {body.backend} 并保存配置，正在重启后端，请约 10 秒后刷新页面"
-        restarting = True
-    else:
-        msg = f"已迁移到 {body.backend} 并保存配置，请手动重启后端生效"
-        restarting = False
-
-    return SwitchOut(ok=True, message=msg, tables=result["tables"],
-                     restarting=restarting)
+    msg = (f"已将数据迁移到 {body.backend}（共 {len(result['tables'])} 张表），"
+           f"当前仍使用 {current}。如需启用请点击「切换数据库」")
+    return SwitchOut(ok=True, message=msg, tables=result["tables"], restarting=False)

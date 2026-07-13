@@ -93,17 +93,23 @@ def get_mysql_config() -> Dict[str, Any]:
     }
 
 
+def save_mysql_params(mysql: Optional[Dict[str, Any]]) -> None:
+    """只保存 MySQL 连接参数，不改变当前生效后端（迁移数据时调用）。"""
+    if not mysql:
+        return
+    set_setting("mysql_host", str(mysql.get("host", "")).strip())
+    set_setting("mysql_port", str(mysql.get("port", 3306)))
+    set_setting("mysql_user", str(mysql.get("user", "")).strip())
+    if mysql.get("password") is not None:
+        set_setting("mysql_password", str(mysql.get("password")))
+    set_setting("mysql_database", str(mysql.get("database", "")).strip())
+    if mysql.get("pool_size"):
+        set_setting("mysql_pool_size", str(mysql.get("pool_size")))
+
+
 def save_db_config(backend: str, mysql: Optional[Dict[str, Any]] = None) -> None:
     """持久化后端选择与 MySQL 连接参数（切换数据库时调用）。"""
     if backend not in ("sqlite", "mysql"):
         raise ValueError(f"未知数据库后端: {backend}")
     set_setting("db_backend", backend)
-    if mysql:
-        set_setting("mysql_host", str(mysql.get("host", "")).strip())
-        set_setting("mysql_port", str(mysql.get("port", 3306)))
-        set_setting("mysql_user", str(mysql.get("user", "")).strip())
-        if mysql.get("password") is not None:
-            set_setting("mysql_password", str(mysql.get("password")))
-        set_setting("mysql_database", str(mysql.get("database", "")).strip())
-        if mysql.get("pool_size"):
-            set_setting("mysql_pool_size", str(mysql.get("pool_size")))
+    save_mysql_params(mysql)

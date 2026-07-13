@@ -52,7 +52,7 @@ def list_todos(
     kind: Optional[str] = None,
     keyword: Optional[str] = None,
     include_deleted: bool = False,
-    include_packed: bool = False,
+    packed_only: bool = False,
     page: int = 1,
     page_size: int = 20,
 ) -> Dict[str, Any]:
@@ -60,8 +60,8 @@ def list_todos(
     分页列出本地 ``todo_items``，附 ``account_name``。
 
     - ``include_deleted=False``（默认）只显示未完成（``is_delete=0``）
-    - ``include_packed=False``（默认）隐藏「已打包」行（见 ``_PACKED_COND``），
-      勾选后才一并显示
+    - ``packed_only=False``（默认）隐藏「已打包」行（见 ``_PACKED_COND``），
+      只显示待发货/待回复等；``packed_only=True`` 则只显示「已打包」行
     - ``keyword`` 匹配 title / message / item_id / item_name
     """
     db = DatabaseManager()
@@ -72,7 +72,9 @@ def list_todos(
     params: List[Any] = []
     if not include_deleted:
         where.append("COALESCE(t.[is_delete], 0) = 0")
-    if not include_packed:
+    if packed_only:
+        where.append(f"({_PACKED_COND})")
+    else:
         where.append(f"NOT ({_PACKED_COND})")
     if account_id is not None:
         where.append("t.[account_id] = ?")

@@ -32,12 +32,12 @@
           >{{ t('todos.includeDone') }}</div>
           <div
             class="search-filter-chip"
-            :class="{ 'search-filter-chip--active': filters.include_packed }"
+            :class="{ 'search-filter-chip--active': filters.packed_only }"
             role="button"
             tabindex="0"
-            @click="toggleFilterChip('include_packed')"
-            @keyup.enter="toggleFilterChip('include_packed')"
-          >{{ t('todos.includePacked') }}</div>
+            @click="toggleFilterChip('packed_only')"
+            @keyup.enter="toggleFilterChip('packed_only')"
+          >{{ t('todos.packedOnly') }}</div>
         </el-col>
         <el-col :xs="24" :md="8" class="search-actions">
           <el-tooltip :disabled="!syncLockStore.locked" :content="syncLockStore.label" placement="top">

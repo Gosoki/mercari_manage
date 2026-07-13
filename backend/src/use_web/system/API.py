@@ -44,6 +44,7 @@ from .units.db_admin_handler import (
     get_database_config,
     test_mysql_connection,
     switch_database,
+    migrate_database,
 )
 
 # 二级子模块 router
@@ -83,6 +84,7 @@ router.add_api_route("/operation-logs", create_operation_log, methods=["POST"])
 router.add_api_route("/database/config", get_database_config, methods=["GET"], response_model=DbConfigOut)
 router.add_api_route("/database/test-connection", test_mysql_connection, methods=["POST"], response_model=TestResult)
 router.add_api_route("/database/switch", switch_database, methods=["POST"], response_model=SwitchOut)
+router.add_api_route("/database/migrate", migrate_database, methods=["POST"], response_model=SwitchOut)
 
 # SSL MITM 代理控制
 router.add_api_route("/ssl-mitm/status", get_status, methods=["GET"])
