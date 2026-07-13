@@ -23,6 +23,26 @@ def _persist_transaction_detail(todo_id: int, data: Dict[str, Any]) -> None:
     except Exception as exc:
         log.warning("[txdetail] 缓存交易详情失败 todo_id=%s: %s", todo_id, exc)
 
+def _mark_order_packed(db: DatabaseManager, todo_id: int) -> None:
+    """状态变「已打包」（发行发货码）时，首次记录对应订单的打包时间 packed_at（Unix 秒）。
+
+    订单与待办通过 order_no == item_id 关联；写一次不覆盖（历史/重复发行不改动已有值）。
+    """
+    try:
+        rows = db.execute_query(
+            "SELECT [item_id] FROM [todo_items] WHERE [id]=?", (int(todo_id),)
+        )
+        item_id = str((rows[0][0] if rows and rows[0] else "") or "").strip()
+        if not item_id:
+            return
+        db.execute_update(
+            "UPDATE [orders] SET [packed_at]=? "
+            "WHERE [order_no]=? AND ([packed_at] IS NULL OR [packed_at]=0)",
+            (int(time.time()), item_id),
+        )
+    except Exception as exc:
+        log.warning("[shipping] 记录订单打包时间失败 todo_id=%s: %s", todo_id, exc)
+
 def _persist_qr_image_path(todo_id: int, path: str) -> None:
     """保存二维码本地路径到 todo_items.qr_image_path，并同步写入已缓存的 detail_json。"""
     db = DatabaseManager()
@@ -30,6 +50,7 @@ def _persist_qr_image_path(todo_id: int, path: str) -> None:
         db.execute_update(
             "UPDATE [todo_items] SET [qr_image_path]=? WHERE [id]=?", (path, int(todo_id))
         )
+        _mark_order_packed(db, int(todo_id))
         rows = db.execute_query(
             "SELECT [detail_json] FROM [todo_items] WHERE [id]=?", (int(todo_id),)
         )

@@ -133,7 +133,8 @@ class _QueryMixin:
         # 先在派生表里把各告警子句各算一次，外层再用已算出的列派生 order_needs_alert，
         # 避免 no_bound / packaging / wait_review 子查询被重复求值。
         select_sql = f"""
-            SELECT q.id, q.order_no, q.order_date, q.order_updated_at, q.purchase_time, q.customer_name, q.data_user,
+            SELECT q.id, q.order_no, q.order_date, q.order_updated_at, q.purchase_time,
+                   q.packed_at, q.shipped_at, q.completed_at, q.customer_name, q.data_user,
                    q.account_name,
                    q.status, q.amount,
                    q.service_fee, q.net_income, q.carrier_display_name, q.request_class_display_name,
@@ -147,7 +148,8 @@ class _QueryMixin:
                              OR q.wait_review_pending_alert = 1
                         THEN 1 ELSE 0 END AS order_needs_alert
             FROM (
-                SELECT o.id, o.order_no, o.order_date, o.order_updated_at, o.purchase_time, o.customer_name, o.data_user,
+                SELECT o.id, o.order_no, o.order_date, o.order_updated_at, o.purchase_time,
+                       o.packed_at, o.shipped_at, o.completed_at, o.customer_name, o.data_user,
                        (SELECT ma.account_name FROM [mercari_accounts] ma
                         WHERE IFNULL(TRIM(o.data_user), '') != ''
                           AND TRIM(ma.seller_id) = TRIM(o.data_user)
@@ -182,7 +184,8 @@ class _QueryMixin:
         )
         rows = db.execute_query(select_sql, bind)
         keys = [
-            'id', 'order_no', 'order_date', 'order_updated_at', 'purchase_time', 'customer_name', 'data_user',
+            'id', 'order_no', 'order_date', 'order_updated_at', 'purchase_time',
+            'packed_at', 'shipped_at', 'completed_at', 'customer_name', 'data_user',
             'account_name', 'status',
             'amount',
             'service_fee', 'net_income', 'carrier_display_name', 'request_class_display_name',

@@ -15,6 +15,7 @@ from ....sync.sync_progress import make_sync_reporter
 from ....get_order.get_in_progress_order.get_order_info import (
     apply_item_info_to_order,
     apply_post_ship_codes_to_order,
+    mark_order_shipped,
 )
 from .._common import _is_wait_shipping_todo
 from .._cache import get_cached_transaction_detail
@@ -495,6 +496,8 @@ async def finalize_post_shipping(
 
         # 刷新订单信息（回填 transaction_evidences 状态，使 #/orders 同步发货后新状态）
         if item_id:
+            # 「确认发货」成功即记录订单发货时间（本地时刻，写一次）
+            mark_order_shipped(item_id)
             try:
                 order_refresh_error = await apply_item_info_to_order(item_id, account_id=aid)
                 if order_refresh_error:

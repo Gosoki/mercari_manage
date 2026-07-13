@@ -375,6 +375,26 @@ def _mark_order_cancelled(item_id: str, report: Any) -> Optional[str]:
     return None
 
 
+def mark_order_shipped(item_id: str) -> None:
+    """「确认发货」发送通知成功时记录订单发货时间 shipped_at（Unix 秒，本地时刻）。
+
+    订单与待办通过 order_no == item_id 关联；写一次不覆盖。失败仅忽略，不影响发货流程。
+    """
+    iid = str(item_id or "").strip()
+    if not iid:
+        return
+    from ....db_manage.database import DatabaseManager
+
+    try:
+        DatabaseManager().execute_update(
+            "UPDATE [orders] SET [shipped_at]=? "
+            "WHERE [order_no]=? AND ([shipped_at] IS NULL OR [shipped_at]=0)",
+            (int(time.time()), iid),
+        )
+    except Exception:
+        pass
+
+
 async def apply_item_info_to_order(
     item_id: str,
     account_id: Optional[int] = None,
@@ -453,6 +473,10 @@ async def apply_item_info_to_order(
         o.description = fields["description"]
     if fields.get("customer_name"):
         o.customer_name = fields["customer_name"]
+
+    # 状态变为 done → 确认时间取该刻煤炉最后更新时间（order_updated_at）；写一次不覆盖
+    if str(getattr(o, "status", "") or "") == "done" and not getattr(o, "completed_at", None):
+        o.completed_at = int(o.order_updated_at or int(time.time()))
 
     # 接口未提供承运且卖家运费为 0：保留库内快递费，用售价/手续费与已录入运费计算净收益
     if skip_ship:

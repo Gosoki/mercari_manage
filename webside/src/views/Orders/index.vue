@@ -346,9 +346,6 @@
         </el-table-column>
         <el-table-column :label="t('orders.orderNumber')" prop="order_no" width="150" align="center" header-align="center" />
         <el-table-column :label="t('orders.itemNameCol')" prop="remark" min-width="160" show-overflow-tooltip align="left" header-align="center" />
-        <el-table-column :label="t('orders.updateTime')" width="176" show-overflow-tooltip align="center" header-align="center">
-          <template #default="{ row }">{{ displayTsLocal(row.order_updated_at) }}</template>
-        </el-table-column>
         <el-table-column :label="t('orders.purchaseTime')" width="176" show-overflow-tooltip align="center" header-align="center">
           <template #default="{ row }">{{ displayTsLocal(row.purchase_time) }}</template>
         </el-table-column>

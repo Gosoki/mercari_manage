@@ -54,6 +54,25 @@ class OrderModel(_AggregateMixin, _QueryMixin, BaseModel):
                 'not_null': False,
                 'default': None,
             },
+            # ── 本地生命周期时间戳（Unix 秒），随履约动作写入一次，历史订单为空 ──
+            # packed_at: 待办中状态变为「已打包」（发行发货码/二维码 qr_image_path 写入）的本地时刻
+            'packed_at': {
+                'type': 'INTEGER',
+                'not_null': False,
+                'default': None,
+            },
+            # shipped_at: 「已打包」类型点「确认发货」发送通知成功的本地时刻
+            'shipped_at': {
+                'type': 'INTEGER',
+                'not_null': False,
+                'default': None,
+            },
+            # completed_at: 订单状态变为 done 那一刻的煤炉最后更新时间（order_updated_at）
+            'completed_at': {
+                'type': 'INTEGER',
+                'not_null': False,
+                'default': None,
+            },
             # 买家用户 ID（Mercari buyer.id），非昵称
             'customer_name': {
                 'type': 'TEXT',
