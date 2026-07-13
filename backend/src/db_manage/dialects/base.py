@@ -100,3 +100,14 @@ class Dialect(ABC):
     @abstractmethod
     def json_extract_int(self, value_expr: str, key: str) -> str:
         """从 JSON 对象元素中取整数字段的表达式。"""
+
+    @abstractmethod
+    def greatest(self, *exprs: str) -> str:
+        """标量「取最大值」表达式。SQLite: ``MAX(a, b)``；MySQL: ``GREATEST(a, b)``
+        （MySQL 的 ``MAX`` 是聚合函数，不能用于逐行取大）。"""
+
+    @abstractmethod
+    def table_source(self, table_expr: str, alias: str, materialize: bool = False) -> str:
+        """FROM 子句里的表来源。``materialize=True`` 时，MySQL 包成派生表
+        ``(SELECT * FROM t) alias`` 以规避「UPDATE 目标表不能在子查询 FROM 中再引用」
+        （错误 1093）；SQLite 无此限制，恒等返回 ``t alias``。"""

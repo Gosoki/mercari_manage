@@ -73,6 +73,12 @@ class BulkSubmitReviewsRequest(PydanticModel):
     progress_job_id: Optional[str] = None
 
 
+class BulkFinalizePostShippingRequest(PydanticModel):
+    """一键确认发送：对所有「已打包」待办批量执行发货通知（不指定则全部启用账号）。"""
+
+    progress_job_id: Optional[str] = None
+
+
 class TransactionActionRequest(PydanticModel):
     """无 body 的浏览器操作（拉详情/启动尺寸选择/修改发送方式）仍需透传 job_id。"""
 

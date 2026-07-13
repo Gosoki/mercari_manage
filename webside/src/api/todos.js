@@ -36,6 +36,9 @@ export const todosApi = {
   /** 一键好评：后端按账号分组、复用浏览器逐条提交评价（不设超时，进度走 sync-progress 轮询） */
   bulkSubmitReviews: (body = {}, axiosConfig = {}) =>
     http.post('/use_web/todos/bulk-review', body || {}, { timeout: 0, ...axiosConfig }),
+  /** 一键确认发送：后端按账号分组、复用浏览器对「已打包」逐条确认发送（不设超时，进度走 sync-progress 轮询） */
+  bulkFinalizePostShipping: (body = {}, axiosConfig = {}) =>
+    http.post('/use_web/todos/bulk-confirm-ship', body || {}, { timeout: 0, ...axiosConfig }),
   /** 点「商品サイズと発送場所を選択する」→ 抓 shipping_classes → 返回可选项 */
   startShippingClass: (todoId, body = {}, axiosConfig = {}) =>
     http.post(`/use_web/todos/${encodeURIComponent(todoId)}/shipping/start`, body || {}, { timeout: 60000, ...axiosConfig }),

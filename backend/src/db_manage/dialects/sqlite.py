@@ -189,3 +189,9 @@ class SqliteDialect(Dialect):
 
     def json_extract_int(self, value_expr: str, key: str) -> str:
         return f"CAST(json_extract({value_expr}, '$.{key}') AS INTEGER)"
+
+    def greatest(self, *exprs: str) -> str:
+        return f"MAX({', '.join(exprs)})"
+
+    def table_source(self, table_expr: str, alias: str, materialize: bool = False) -> str:
+        return f"{table_expr} {alias}"

@@ -115,6 +115,12 @@
   color: var(--el-color-success);
   font-size: 11px;
 }
+/* 「已打包」类型标签：橙色底色，区别于「待发货」（黄色/warning） */
+.todo-tag-packed {
+  background-color: #fff3e0 !important;
+  border-color: #ffb74d !important;
+  color: #e8590c !important;
+}
 .pagination {
   margin-top: 16px;
   justify-content: flex-end;

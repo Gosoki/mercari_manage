@@ -200,12 +200,7 @@ def _inventory_image_urls(inv) -> List[str]:
     )
 
     return _inventory_paths_from_parsed_row(
-        {
-            "images_json": getattr(inv, "images_json", None),
-            "image_front": getattr(inv, "image_front", None),
-            "image": getattr(inv, "image", None),
-            "image_back": getattr(inv, "image_back", None),
-        }
+        {"images_json": getattr(inv, "images_json", None)}
     )
 
 

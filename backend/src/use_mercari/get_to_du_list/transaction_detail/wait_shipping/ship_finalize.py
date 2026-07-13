@@ -469,6 +469,9 @@ async def finalize_post_shipping(
     if shipped_ok:
         try:
             todo.is_delete = 1
+            # 标记「已确认发送」：跨「从煤炉同步」存活，即使煤炉仍把该 item_id 作为
+            # 待发货返回，同步时也会保持隐藏（不再复活/显示）。
+            todo.shipped_finalized = 1
             todo.synced_at = int(time.time() * 1000)
             todo.save()
             log.info("[postship] 已软删除 todo_id=%s", todo_id)

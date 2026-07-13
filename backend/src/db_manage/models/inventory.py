@@ -29,18 +29,21 @@ class InventoryModel(BaseModel):
                 'type': 'TEXT',
                 'not_null': False,
                 'default': None,
+                'max_length': 255,
             },
             'barcode': {
                 'type': 'TEXT',
                 'not_null': False,
                 'unique': True,
                 'default': None,
+                'max_length': 128,
             },
             'sku': {
                 'type': 'TEXT',
                 'not_null': False,
                 'unique': True,
                 'default': None,
+                'max_length': 128,
             },
             'category_id': {
                 'type': 'INTEGER',
@@ -173,26 +176,13 @@ class InventoryModel(BaseModel):
                 'not_null': False,
                 'default': "'normal'",
             },
-            'image': {
-                'type': 'TEXT',
-                'not_null': False,
-                'default': None,
-            },
-            'image_front': {
-                'type': 'TEXT',
-                'not_null': False,
-                'default': None,
-            },
-            'image_back': {
-                'type': 'TEXT',
-                'not_null': False,
-                'default': None,
-            },
-            # JSON 数组：商品图 /imges/... 路径列表（最多 20 张，由业务层校验）
+            # JSON 数组：商品图 /imges/... 路径列表（最多 20 张，由业务层校验）；图片唯一存储列
+            # （历史 image/image_front/image_back base64/路径列已移除，统一存于此）
             'images_json': {
                 'type': 'TEXT',
                 'not_null': False,
                 'default': None,
+                'mysql_type': 'TEXT',
             },
             # 自动出品（售出即补挂）单品开关：0=关，1=开。需总开关一并开启才生效。
             'auto_listing_enabled': {
@@ -310,40 +300,67 @@ class InventoryModel(BaseModel):
         print(f'[{tn}] price 列已迁移为 INTEGER（日元整数）')
 
     @classmethod
-    def _backfill_images_json_from_legacy(cls) -> None:
-        """将仅有 image_front / image / image_back 的旧数据写入 images_json。"""
+    def _consolidate_legacy_image_columns_into_images_json(cls) -> None:
+        """删列前一次性迁移：把历史 image / image_front / image_back（路径或残留 base64）
+        合并进 images_json（base64 落盘转为 /imges/ 路径）。之后结构同步会删除这三列。
+
+        必须在 super().ensure_table_exists()（会删除多余列）之前调用。
+        """
         db = cls().db
         tn = cls.get_table_name()
         if not db.table_exists(tn):
             return
         cols = {c['name'] for c in db.get_table_columns(tn)}
+        legacy = [c for c in ('image', 'image_front', 'image_back') if c in cols]
+        if not legacy:
+            return  # 已无遗留列，无需处理（含全新库）
         if 'images_json' not in cols:
-            return
-        rows = db.execute_query(
-            f"SELECT id, image, image_front, image_back, images_json FROM [{tn}]"
-        )
-        for rid, image, image_front, image_back, images_json in rows or []:
-            if images_json and str(images_json).strip():
-                continue
-            paths: List[str] = []
-            front = (image_front or image or '').strip() if (image_front or image) else ''
-            back = (image_back or '').strip() if image_back else ''
-            if front:
-                paths.append(front)
-            if back:
-                paths.append(back)
-            if not paths:
-                continue
+            db.add_column(tn, {'name': 'images_json', 'type': 'TEXT'})
+        from ...use_web.image_storage import is_base64_image, save_base64_image
+
+        sel = ['id', 'images_json'] + legacy
+        col_sql = ', '.join(f'[{c}]' for c in sel)
+        rows = db.execute_query(f"SELECT {col_sql} FROM [{tn}]")
+        for row in rows or []:
+            d = dict(zip(sel, row))
+            raw = d.get('images_json')
+            candidates: List[str] = []
+            if raw and str(raw).strip():
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list):
+                        candidates = [str(x).strip() for x in parsed if x and str(x).strip()]
+                except Exception:
+                    candidates = []
+            if not candidates:
+                for v in (d.get('image_front') or d.get('image'), d.get('image_back')):
+                    if v and str(v).strip():
+                        candidates.append(str(v).strip())
+            final: List[str] = []
+            for c in candidates:
+                if is_base64_image(c):
+                    try:
+                        final.append(save_base64_image(c, prefix='inv_legacy'))
+                    except Exception:
+                        pass
+                else:
+                    final.append(c)
+            newjson = (json.dumps(final, ensure_ascii=False, separators=(',', ':'))
+                       if final else None)
             db.execute_update(
-                f"UPDATE [{tn}] SET images_json = ? WHERE id = ?",
-                (json.dumps(paths, ensure_ascii=False, separators=(',', ':')), rid),
+                f"UPDATE [{tn}] SET images_json = ? WHERE id = ?", (newjson, d['id'])
             )
 
     @classmethod
     def ensure_table_exists(cls) -> bool:
         if hasattr(cls, '_cached_table_columns'):
             delattr(cls, '_cached_table_columns')
-        ok = super().ensure_table_exists()
+        try:
+            cls._consolidate_legacy_image_columns_into_images_json()
+        except Exception as exc:
+            print(f'合并 inventory 历史图片列到 images_json 失败: {exc}')
+            return False
+        ok = super().ensure_table_exists()  # 结构同步会删除 image/image_front/image_back
         if not ok:
             return False
         if hasattr(cls, '_cached_table_columns'):
@@ -352,11 +369,6 @@ class InventoryModel(BaseModel):
             cls._migrate_price_to_integer_if_needed()
         except Exception as exc:
             print(f'迁移 inventory.price 为 INTEGER 失败: {exc}')
-            return False
-        try:
-            cls._backfill_images_json_from_legacy()
-        except Exception as exc:
-            print(f'回填 inventory.images_json 失败: {exc}')
             return False
         return True
 

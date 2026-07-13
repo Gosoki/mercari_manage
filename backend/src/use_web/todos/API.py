@@ -17,6 +17,7 @@ from .units.todos_query import list_kinds, list_todos, match_inventory_for_item
 from .units.todos_translate import translate_message_endpoint
 from .units.todos_sync import (
     bulk_submit_reviews_endpoint,
+    bulk_finalize_post_shipping_endpoint,
     camera_frame_endpoint,
     change_shipping_method_endpoint,
     confirm_change_shipping_method_endpoint,
@@ -78,6 +79,7 @@ router.add_api_route("/{todo_id}/send-message", send_transaction_message_endpoin
 router.add_api_route("/{todo_id}/send-reaction", send_message_reaction_endpoint, methods=["POST"])
 router.add_api_route("/{todo_id}/submit-review", submit_transaction_review_endpoint, methods=["POST"])
 router.add_api_route("/bulk-review", bulk_submit_reviews_endpoint, methods=["POST"])
+router.add_api_route("/bulk-confirm-ship", bulk_finalize_post_shipping_endpoint, methods=["POST"])
 router.add_api_route("/{todo_id}/shipping/start", start_shipping_class_endpoint, methods=["POST"])
 router.add_api_route("/{todo_id}/shipping/confirm", confirm_shipping_selection_endpoint, methods=["POST"])
 router.add_api_route("/{todo_id}/shipping/change-method", change_shipping_method_endpoint, methods=["POST"])

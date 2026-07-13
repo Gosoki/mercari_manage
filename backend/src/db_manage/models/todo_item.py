@@ -141,6 +141,14 @@ class TodoItemModel(BaseModel):
                 "not_null": False,
                 "default": 0,
             },
+            # shipped_finalized: 已「确认发送」（点过确认发送/一键确认发送，已在煤炉完成发送通知）。
+            # 1=是 0/NULL=否。用于跨「从煤炉同步」存活：同步时若煤炉仍把同一 item_id 作为
+            # 「待发货」返回，只要本地已 finalized 就保持 is_delete=1（不再复活/显示）。
+            "shipped_finalized": {
+                "type": "INTEGER",
+                "not_null": False,
+                "default": 0,
+            },
             # shipping_duration: 商品页「発送までの日数」(发货期限，如「4~7日で発送」)。
             # 仅在「从煤炉同步」检测到新待发货时，用空白账号浏览器访问公开商品页抓取并写入。
             "shipping_duration": {

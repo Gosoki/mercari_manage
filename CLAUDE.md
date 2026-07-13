@@ -132,7 +132,7 @@ webside/
 Key tables in `backend/src/db_manage/models/`:
 
 - **users**: User accounts with bcrypt passwords
-- **inventory**: Products with barcode, SKU, price, quantity, images (Base64)
+- **inventory**: Products with barcode, SKU, price, quantity, images (filesystem paths in `images_json`; images saved under `backend/imges/`)
 - **warehouses**: Storage locations (shelf names duplicable per warehouse)
 - **mercari_accounts**: Mercari account config (headers in value JSON field)
 - **on_sale_items**: Mercari listing records synced from API
@@ -173,8 +173,10 @@ Key tables in `backend/src/db_manage/models/`:
 ## Environment Variables
 
 **Backend**:
-- `DB_BACKEND`: Database backend — `sqlite` (default) or `mysql`. The database layer is dialect-abstracted (`src/db_manage/dialects/`); all call sites write SQLite-style SQL (`?` placeholders, `[identifier]` brackets) and the MySQL dialect translates at execution time. Switching backends requires no call-site changes.
-- `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` / `MYSQL_POOL_SIZE`: MySQL 8.0+ connection settings (used only when `DB_BACKEND=mysql`; requires `PyMySQL`). The target database is auto-created on startup. Migrate existing SQLite data with `python -m tools.sqlite_to_mysql` (see that script's header).
+- `DB_BACKEND`: Database backend — `sqlite` (default) or `mysql`. The database layer is dialect-abstracted (`src/db_manage/dialects/`); all call sites write SQLite-style SQL (`?` placeholders, `[identifier]` brackets) and the MySQL dialect translates at execution time. Switching backends requires no call-site changes. **Backend selection precedence: the UI/`system.db` setting > this env var > default `sqlite`.** The active backend is normally managed from the UI (see below), which persists it to `backend/system.db`.
+- `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` / `MYSQL_POOL_SIZE`: MySQL 8.0+ connection fallback settings (used when not configured via the UI; requires `PyMySQL`). The target database is auto-created on startup when privileges allow. Migrate existing SQLite data with `python -m tools.sqlite_to_mysql` (see that script's header).
+
+**Database management UI**: System 管理 → 数据库管理 (`/system/database`) lets the user choose SQLite/MySQL, test the MySQL connection, and switch backends. Switching migrates all data from the current backend to the target (`src/db_manage/migrate.py`), persists the choice + connection params to the always-SQLite bootstrap store `backend/system.db` (`src/db_manage/db_settings.py`), then auto-restarts the backend. In MySQL mode, `system.db` (SQLite) retains only this bootstrap config; all business data lives in MySQL.
 - `JWT_SECRET`: Signing key (change in production)
 - `JWT_EXPIRE_HOURS`: Token validity (default: 12)
 - `SSL_MITM_AUTO_START`: Set to `0` to disable mitmproxy (default: 1)

@@ -7,6 +7,7 @@
 
 from .sync import sync_todos
 from .bulk_review import bulk_submit_reviews_endpoint
+from .bulk_ship import bulk_finalize_post_shipping_endpoint
 from .detail import (
     fetch_todo_transaction_detail,
     get_cached_todo_transaction_detail,
@@ -31,6 +32,7 @@ from .actions import (
 __all__ = [
     "sync_todos",
     "bulk_submit_reviews_endpoint",
+    "bulk_finalize_post_shipping_endpoint",
     "todos_sync_progress",
     "fetch_todo_transaction_detail",
     "get_cached_todo_transaction_detail",

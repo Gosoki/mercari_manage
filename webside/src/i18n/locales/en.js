@@ -106,6 +106,7 @@ export default {
       categories: "Game Categories",
       productTypeMappings: "Product Type Mappings",
       systemLogs: "System Logs",
+      database: "Database",
     },
     logout: "Logout",
     logoutConfirm: "Are you sure you want to log out?",

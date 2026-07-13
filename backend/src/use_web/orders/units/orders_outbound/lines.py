@@ -190,7 +190,7 @@ def convert_outbound_line_owner(
         """
         SELECT [name], [barcode], [category_id], [product_type_id], [owner_user_id], [warehouse_id],
                [price], [quantity], [description], [listing_title], [listing_body],
-               [image], [image_front], [image_back], [images_json], [is_combined]
+               [images_json], [is_combined]
         FROM [inventory] WHERE [id] = ? LIMIT 1
         """,
         (src_id,),
@@ -198,7 +198,7 @@ def convert_outbound_line_owner(
     if not src_rows:
         raise HTTPException(status_code=404, detail="原库存不存在")
     src = src_rows[0]
-    if int(src[15] or 0) == 1:
+    if int(src[12] or 0) == 1:
         raise HTTPException(status_code=400, detail="组合商品不能进行归属转化")
     if is_combined_source(src_id):
         raise HTTPException(status_code=400, detail="该商品被组合商品引用，请先解除组合后再进行归属转化")
@@ -236,7 +236,7 @@ def convert_outbound_line_owner(
         return f"/imges/{new_name}"
 
     import json as _json
-    src_images_json = src[14]
+    src_images_json = src[11]
     src_paths: List[str] = []
     try:
         if src_images_json:
@@ -247,15 +247,8 @@ def convert_outbound_line_owner(
                         src_paths.append(str(p).strip())
     except Exception:
         src_paths = []
-    if not src_paths:
-        for p in [src[12], src[11], src[13]]:
-            if p and str(p).strip():
-                src_paths.append(str(p).strip())
 
     new_paths = [_dup(p) for p in src_paths]
-    new_image = new_paths[0] if new_paths else None
-    new_image_front = new_image
-    new_image_back = new_paths[1] if len(new_paths) > 1 else None
     new_images_json = (
         _json.dumps(new_paths, ensure_ascii=False, separators=(",", ":")) if new_paths else None
     )
@@ -287,14 +280,14 @@ def convert_outbound_line_owner(
                 INSERT INTO [inventory] (
                     name, barcode, category_id, product_type_id, owner_user_id, warehouse_id, price, quantity,
                     mercari_item_id, on_sale_quantity, pending_outbound_qty,
-                    description, listing_title, listing_body, image, image_front, image_back, images_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    description, listing_title, listing_body, images_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     src[0], new_barcode, src[2], src[3], target_owner, src[5], src[6], new_qty_value,
                     None, 0, 0,
                     src[8], src[9], src[10],
-                    new_image, new_image_front, new_image_back, new_images_json,
+                    new_images_json,
                 ),
             )
             new_inv_id = cur.lastrowid

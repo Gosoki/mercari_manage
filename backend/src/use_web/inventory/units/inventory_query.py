@@ -131,7 +131,7 @@ def list_inventory_used_in_combos(pid: int):
         f"""
         SELECT cmb.[id], cmb.[name], COALESCE(cmb.[quantity], 0) AS combo_quantity,
                {per_expr} AS per_combo_quantity,
-               cmb.[image], cmb.[image_front], cmb.[image_back], cmb.[images_json]
+               cmb.[images_json]
         FROM [inventory] cmb, {each}
         WHERE COALESCE(cmb.[is_combined], 0) = 1
           AND COALESCE(cmb.[is_delete], 0) = 0
@@ -144,9 +144,7 @@ def list_inventory_used_in_combos(pid: int):
     for r in rows or []:
         per = int(r[3] or 0)
         combo_qty = int(r[2] or 0)
-        images = _inventory_paths_from_parsed_row(
-            {"image_front": r[5], "image": r[4], "image_back": r[6], "images_json": r[7]}
-        )
+        images = _inventory_paths_from_parsed_row({"images_json": r[4]})
         items.append({
             "combined_id": int(r[0]),
             "name": r[1] or "",

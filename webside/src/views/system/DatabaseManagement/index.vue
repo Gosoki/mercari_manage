@@ -1,0 +1,176 @@
+<template>
+  <div class="db-mgmt">
+    <el-card shadow="never" class="mb">
+      <template #header>
+        <div class="card-head">
+          <span>数据库管理</span>
+          <el-tag :type="activeBackend === 'mysql' ? 'success' : 'info'" effect="dark">
+            当前：{{ activeBackend === 'mysql' ? 'MySQL' : 'SQLite' }}
+          </el-tag>
+        </div>
+      </template>
+
+      <el-alert type="info" :closable="false" show-icon class="mb">
+        <div>
+          默认使用 SQLite。切换到 MySQL 后，业务数据存于 MySQL，SQLite 仅保留系统配置（当前选择与连接信息）。
+          <strong>切换会把当前数据库的数据迁移到目标数据库，成功后自动重启后端生效。</strong>
+        </div>
+      </el-alert>
+
+      <el-form label-width="110px" class="mt" @submit.prevent>
+        <el-form-item label="使用数据库">
+          <el-radio-group v-model="form.backend">
+            <el-radio-button label="sqlite">SQLite（默认）</el-radio-button>
+            <el-radio-button label="mysql">MySQL</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
+        <template v-if="form.backend === 'mysql'">
+          <el-form-item label="主机 Host">
+            <el-input v-model="form.mysql.host" placeholder="127.0.0.1" style="max-width:360px" />
+          </el-form-item>
+          <el-form-item label="端口 Port">
+            <el-input-number v-model="form.mysql.port" :min="1" :max="65535" :controls="false" style="width:160px" />
+          </el-form-item>
+          <el-form-item label="用户 User">
+            <el-input v-model="form.mysql.user" placeholder="root" style="max-width:360px" />
+          </el-form-item>
+          <el-form-item label="密码 Password">
+            <el-input
+              v-model="form.mysql.password"
+              type="password"
+              show-password
+              :placeholder="passwordSet ? '留空则沿用已保存的密码' : '请输入密码'"
+              style="max-width:360px"
+            />
+          </el-form-item>
+          <el-form-item label="数据库 Database">
+            <el-input v-model="form.mysql.database" placeholder="mercari" style="max-width:360px" />
+          </el-form-item>
+
+          <el-form-item label=" ">
+            <el-button :loading="testing" @click="onTest">测试连接</el-button>
+            <span v-if="testResult" class="test-result" :class="{ ok: testResult.ok }">
+              {{ testResult.message }}
+              <template v-if="testResult.ok">
+                · 版本 {{ testResult.version }}
+                · 目标库{{ testResult.database_exists ? '已存在' : '不存在（将自动创建）' }}
+              </template>
+            </span>
+          </el-form-item>
+        </template>
+
+        <el-form-item label=" ">
+          <el-button
+            type="primary"
+            :loading="switching"
+            :disabled="form.backend === activeBackend"
+            @click="onSwitch"
+          >
+            {{ form.backend === activeBackend ? '当前已在使用该数据库' : `迁移并切换到 ${form.backend === 'mysql' ? 'MySQL' : 'SQLite'}` }}
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <el-card v-if="migrateSummary.length" shadow="never">
+      <template #header>迁移结果（逐表行数校验）</template>
+      <el-table :data="migrateSummary" stripe size="small" max-height="420">
+        <el-table-column prop="table" label="表" min-width="220" />
+        <el-table-column prop="src" label="源行数" width="100" align="right" />
+        <el-table-column prop="dst" label="目标行数" width="100" align="right" />
+        <el-table-column label="状态" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'OK' ? 'success' : (row.status.includes('不一致') ? 'danger' : 'info')" size="small">
+              {{ row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { databaseApi } from '@/api/database'
+
+const activeBackend = ref('sqlite')
+const passwordSet = ref(false)
+const testing = ref(false)
+const switching = ref(false)
+const testResult = ref(null)
+const migrateSummary = ref([])
+
+const form = reactive({
+  backend: 'sqlite',
+  mysql: { host: '127.0.0.1', port: 3306, user: 'root', password: '', database: 'mercari' }
+})
+
+async function loadConfig() {
+  const cfg = await databaseApi.getConfig()
+  activeBackend.value = cfg.backend
+  form.backend = cfg.backend
+  passwordSet.value = !!cfg.mysql.password_set
+  Object.assign(form.mysql, {
+    host: cfg.mysql.host, port: cfg.mysql.port,
+    user: cfg.mysql.user, database: cfg.mysql.database, password: ''
+  })
+}
+
+async function onTest() {
+  testing.value = true
+  testResult.value = null
+  try {
+    testResult.value = await databaseApi.testConnection({ ...form.mysql })
+  } catch (e) {
+    // 错误消息已由 http 拦截器统一提示
+  } finally {
+    testing.value = false
+  }
+}
+
+async function onSwitch() {
+  const target = form.backend === 'mysql' ? 'MySQL' : 'SQLite'
+  try {
+    await ElMessageBox.confirm(
+      `将把当前数据库的全部数据迁移到 ${target}，迁移成功后会自动重启后端。是否继续？`,
+      '确认切换数据库',
+      { type: 'warning', confirmButtonText: '迁移并切换', cancelButtonText: '取消' }
+    )
+  } catch (_) {
+    return
+  }
+  switching.value = true
+  migrateSummary.value = []
+  try {
+    const payload = { backend: form.backend }
+    if (form.backend === 'mysql') payload.mysql = { ...form.mysql }
+    const res = await databaseApi.switch(payload)
+    migrateSummary.value = res.tables || []
+    ElMessage.success(res.message)
+    if (res.restarting) {
+      // 后端将重启，稍后自动刷新页面
+      setTimeout(() => window.location.reload(), 12000)
+    } else {
+      loadConfig()
+    }
+  } catch (e) {
+    // 错误消息已由 http 拦截器统一提示
+  } finally {
+    switching.value = false
+  }
+}
+
+onMounted(loadConfig)
+</script>
+
+<style scoped>
+.db-mgmt { max-width: 820px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; }
+.mb { margin-bottom: 16px; }
+.mt { margin-top: 8px; }
+.test-result { margin-left: 12px; color: #f56c6c; }
+.test-result.ok { color: #67c23a; }
+</style>

@@ -12,10 +12,10 @@ from .inventory_helpers import (
     _query_inventory_with_joins,
     _warehouse_exists,
     _user_exists,
+    images_json_from_paths,
 )
 from .inventory_images import (
     _resolve_paths_for_combined_create,
-    _sync_image_columns_from_paths,
 )
 from .inventory_models import CombinedInventoryComponent, CombinedInventoryCreate
 
@@ -181,7 +181,7 @@ def create_combined_inventory(data: CombinedInventoryCreate, _claims: dict = Dep
     items = _normalize_combined_components(data.components)
     _validate_combined_sources(items, combo_quantity)
     paths = _resolve_paths_for_combined_create(data)
-    img_cols = _sync_image_columns_from_paths(paths)
+    combined_images_json = images_json_from_paths(paths)
     barcode = f"COMBO-{int(time.time() * 1000)}"
     name = (data.name or "").strip() or "组合商品"
     combined_items_json = json.dumps(items, ensure_ascii=False, separators=(",", ":"))
@@ -195,8 +195,8 @@ def create_combined_inventory(data: CombinedInventoryCreate, _claims: dict = Dep
                 INSERT INTO [inventory] (
                     name, barcode, category_id, product_type_id, owner_user_id, warehouse_id, price, quantity,
                     mercari_item_id, on_sale_quantity, pending_outbound_qty, is_combined, combined_items,
-                    description, listing_title, listing_body, image, image_front, image_back, images_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    description, listing_title, listing_body, images_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     name,
@@ -215,10 +215,7 @@ def create_combined_inventory(data: CombinedInventoryCreate, _claims: dict = Dep
                     data.description,
                     data.listing_title,
                     data.listing_body,
-                    img_cols["image"],
-                    img_cols["image_front"],
-                    img_cols["image_back"],
-                    img_cols["images_json"],
+                    combined_images_json,
                 ),
             )
             new_id = cur.lastrowid

@@ -111,10 +111,21 @@ class BaseModel(ABC):
         except Exception:
             return True
 
+    # DB 侧默认关键字：值未被显式改动时交给数据库 DDL 默认，而不是把关键字当字面量插入
+    _DB_DEFAULT_KEYWORDS = {'CURRENT_TIMESTAMP'}
+
     def _insert(self) -> bool:
         """插入新记录"""
+        field_defs = self.get_fields()
         fields, placeholders, params = [], [], []
         for field_name, value in self._data.items():
+            # created_at 等以 CURRENT_TIMESTAMP 为默认的列：值仍等于该默认时不插入，
+            # 让数据库应用 DDL 默认（SQLite/MySQL 均生成真实时间戳）。
+            default = field_defs.get(field_name, {}).get('default')
+            if (isinstance(default, str)
+                    and default.strip().strip("'\"").upper() in self._DB_DEFAULT_KEYWORDS
+                    and value == default):
+                continue
             if value is not None and not (isinstance(value, str) and value.strip() == ''):
                 fields.append(field_name)
                 placeholders.append('?')
@@ -260,6 +271,8 @@ class BaseModel(ABC):
                 'not_null': fdef.get('not_null', False),
                 'unique': fdef.get('unique', False),
                 'default': fdef.get('default'),
+                'max_length': fdef.get('max_length'),
+                'mysql_type': fdef.get('mysql_type'),
             }
             for fname, fdef in cls.get_fields().items()
         ]
@@ -280,6 +293,8 @@ class BaseModel(ABC):
                     'name': fname, 'type': fdef['type'],
                     'not_null': fdef.get('not_null', False),
                     'default': fdef.get('default'),
+                    'max_length': fdef.get('max_length'),
+                    'mysql_type': fdef.get('mysql_type'),
                 }):
                     return False
 

@@ -85,9 +85,12 @@ def _normalize_todo_row(account_id: int, item: Dict[str, Any], synced_at_ms: int
         "mercari_updated": _parse_rfc3339_to_ms(item.get("updated")),
         "is_delete": 0,
         "synced_at": synced_at_ms,
+        # 默认 0；apply_todolist_sync 中若该 item_id 已 finalized 则改为 1（并置 is_delete=1）
+        "shipped_finalized": 0,
     }
 
 
+# INSERT 用列（含 shipped_finalized：新 uuid 的行也要带上已 finalized 标记）。
 _UPSERT_COLS = (
     "account_id",
     "uuid",
@@ -106,7 +109,14 @@ _UPSERT_COLS = (
     "mercari_updated",
     "is_delete",
     "synced_at",
+    "shipped_finalized",
 )
+
+# UPDATE 时不覆盖的列：
+# - account_id / uuid 为冲突键；
+# - shipped_finalized 一旦为 1 不得被同步（煤炉恒返回 0）降级回 0，
+#   否则已「确认发送」的行会被复活。
+_NO_UPDATE_COLS = frozenset({"account_id", "uuid", "shipped_finalized"})
 
 
 def _upsert_todo_row(db: DatabaseManager, row: Dict[str, Any]) -> str:
@@ -116,7 +126,7 @@ def _upsert_todo_row(db: DatabaseManager, row: Dict[str, Any]) -> str:
     cols_sql = ", ".join(f"[{c}]" for c in _UPSERT_COLS)
     placeholders = ", ".join(["?"] * len(_UPSERT_COLS))
     update_assigns = ", ".join(
-        f"[{c}] = excluded.[{c}]" for c in _UPSERT_COLS if c not in ("account_id", "uuid")
+        f"[{c}] = excluded.[{c}]" for c in _UPSERT_COLS if c not in _NO_UPDATE_COLS
     )
     sql = (
         f"INSERT INTO [todo_items] ({cols_sql}) VALUES ({placeholders}) "
@@ -130,6 +140,24 @@ def _upsert_todo_row(db: DatabaseManager, row: Dict[str, Any]) -> str:
     )
     db.execute_update(sql, params)
     return "updated" if pre else "inserted"
+
+
+def _item_id_finalized(db: DatabaseManager, account_id: int, item_id: Optional[str]) -> bool:
+    """该账号下同一 item_id 是否已被标记「确认发送」（shipped_finalized=1）。
+
+    用于同步去重：煤炉在发货通知后可能仍把这笔交易作为「待发货」返回（同一 item_id，
+    uuid 可能相同或不同）。只要本地已 finalized，就应保持隐藏，不再复活/显示。
+    """
+    iid = (item_id or "").strip()
+    if not iid:
+        return False
+    rows = db.execute_query(
+        "SELECT 1 FROM [todo_items] "
+        "WHERE [account_id] = ? AND [item_id] = ? "
+        "AND COALESCE([shipped_finalized], 0) = 1 LIMIT 1",
+        (int(account_id), iid),
+    )
+    return bool(rows)
 
 
 def _row_is_wait_shipping(row: Dict[str, Any]) -> bool:
@@ -160,12 +188,21 @@ def apply_todolist_sync(account_id: int, items: List[Dict[str, Any]]) -> Dict[st
         if not row["uuid"]:
             skipped += 1
             continue
+        # 去重：煤炉仍把已「确认发送」的同一 item_id 作为「待发货」返回时，保持隐藏。
+        # 仅对「待发货」态压制（不影响这笔交易后续的「待评价」等其它 todo）。
+        suppressed = _row_is_wait_shipping(row) and _item_id_finalized(
+            db, account_id, row.get("item_id")
+        )
+        if suppressed:
+            row["is_delete"] = 1
+            row["shipped_finalized"] = 1
         incoming_uuids.append(row["uuid"])
         action = _upsert_todo_row(db, row)
         if action == "inserted":
             inserted += 1
-            # 新插入(=新出现)的待发货待办视为「新的待发货数据」，用于联动同步在售/订单
-            if _row_is_wait_shipping(row):
+            # 新插入(=新出现)的待发货待办视为「新的待发货数据」，用于联动同步在售/订单。
+            # 已 finalized 的复活行被隐藏，不算新待发货（避免误触发发货期限抓取/联动同步）。
+            if _row_is_wait_shipping(row) and not suppressed:
                 new_wait_shipping += 1
                 iid = (row.get("item_id") or "").strip()
                 if iid:

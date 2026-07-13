@@ -99,9 +99,6 @@ def _attach_inventory_by_item_id(items: list) -> None:
             TRIM(IFNULL(i.[barcode], '')),
             {_wh_w},
             IFNULL(w.[location], ''),
-            i.[image],
-            i.[image_front],
-            i.[image_back],
             i.[images_json],
             COALESCE(u.[display_name], u.[username], '') AS owner_user_name,
             {_combined} AS combined_quantity
@@ -114,12 +111,12 @@ def _attach_inventory_by_item_id(items: list) -> None:
     by_mid: Dict[str, list] = {}
     wanted = set(raw)
     for (mids_raw, iid, iname, qty, osq, pend, barcode, wname, wloc,
-         img, img_front, img_back, images_json, owner_name, combined) in rows:
+         images_json, owner_name, combined) in rows:
         mids = _split_mercari_item_ids(mids_raw)
         if not mids:
             continue
         payload = (iid, iname, qty, osq, pend, barcode, wname, wloc,
-                   img, img_front, img_back, images_json, owner_name, combined)
+                   images_json, owner_name, combined)
         for k in mids:
             if k in wanted:
                 by_mid.setdefault(k, []).append(payload)
@@ -143,7 +140,7 @@ def _attach_inventory_by_item_id(items: list) -> None:
             inventory_name_parts = []
             inventory_lines = []
             for (iid, iname, qty, osq, pend, barcode, wname, wloc,
-                 img, img_front, img_back, images_json, owner_name, combined) in hits:
+                 images_json, owner_name, combined) in hits:
                 loc_name = str(wname or "").strip() or str(wloc or "").strip() or "-"
                 loc_parts.append(
                     f"#{int(iid)} {loc_name} x{int(osq) if osq is not None else 0}"
@@ -156,12 +153,7 @@ def _attach_inventory_by_item_id(items: list) -> None:
                 if n:
                     inventory_name_parts.append(n)
                 line_images = _inventory_paths_from_parsed_row(
-                    {
-                        "image": img,
-                        "image_front": img_front,
-                        "image_back": img_back,
-                        "images_json": images_json,
-                    }
+                    {"images_json": images_json}
                 )
                 q_i = _to_int(qty, 0)
                 os_i = _to_int(osq, 0)

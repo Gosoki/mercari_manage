@@ -12,12 +12,12 @@ from ....use_mercari.inventory_counters import is_combined_source, recompute_lis
 from ...image_storage import get_image_root
 
 from .inventory_helpers import (
+    images_json_from_paths,
     _query_inventory_with_joins,
     _inventory_exists,
     _user_exists,
     _legacy_paths_from_db_columns,
 )
-from .inventory_images import _sync_image_columns_from_paths
 from .inventory_models import InventorySplitRequest
 
 db = DatabaseManager()
@@ -57,7 +57,7 @@ def split_inventory(pid: int, data: InventorySplitRequest, _claims: dict = Depen
         """
         SELECT name, barcode, category_id, product_type_id, owner_user_id, warehouse_id,
                price, quantity, description, listing_title, listing_body,
-               image, image_front, image_back, images_json, is_combined
+               images_json, is_combined
         FROM [inventory] WHERE id = ? LIMIT 1
         """,
         (pid,),
@@ -66,7 +66,7 @@ def split_inventory(pid: int, data: InventorySplitRequest, _claims: dict = Depen
         raise HTTPException(status_code=404, detail="商品不存在")
     src = rows[0]
     src_quantity = int(src[7] or 0)
-    is_combined = int(src[15] or 0)
+    is_combined = int(src[12] or 0)
 
     if is_combined:
         raise HTTPException(status_code=400, detail="组合商品不能拆分")
@@ -81,9 +81,9 @@ def split_inventory(pid: int, data: InventorySplitRequest, _claims: dict = Depen
     new_owner = data.owner_user_id if data.owner_user_id is not None else src[4]
     new_barcode = f"SPLIT-{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}"
 
-    src_paths = _legacy_paths_from_db_columns(src[12], src[11], src[13], src[14])
+    src_paths = _legacy_paths_from_db_columns(src[11])
     new_paths = [_duplicate_image_file(p) for p in src_paths]
-    img_cols = _sync_image_columns_from_paths(new_paths)
+    new_images_json = images_json_from_paths(new_paths)
 
     try:
         with db.get_connection() as conn:
@@ -99,14 +99,14 @@ def split_inventory(pid: int, data: InventorySplitRequest, _claims: dict = Depen
                 INSERT INTO [inventory] (
                     name, barcode, category_id, product_type_id, owner_user_id, warehouse_id, price, quantity,
                     mercari_item_id, on_sale_quantity, pending_outbound_qty, split_parent_id,
-                    description, listing_title, listing_body, image, image_front, image_back, images_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    description, listing_title, listing_body, images_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     src[0], new_barcode, src[2], src[3], new_owner, src[5], src[6], split_qty,
                     None, 0, 0, pid,
                     src[8], src[9], src[10],
-                    img_cols["image"], img_cols["image_front"], img_cols["image_back"], img_cols["images_json"],
+                    new_images_json,
                 ),
             )
             new_id = cur.lastrowid

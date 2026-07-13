@@ -61,7 +61,7 @@ def enqueue_full_reconcile() -> None:
     _queue.put_nowait(_FULL_RECONCILE)
 
 
-def _paths_from_images_json(images_json, front, legacy, back) -> list:
+def _paths_from_images_json(images_json) -> list:
     """与 inventory_helpers._inventory_paths_from_parsed_row 同口径，避免循环导入做了精简拷贝。"""
     if images_json and str(images_json).strip():
         try:
@@ -72,26 +72,19 @@ def _paths_from_images_json(images_json, front, legacy, back) -> list:
                     return out
         except Exception:
             pass
-    out = []
-    f = (front or legacy or "").strip()
-    if f:
-        out.append(f)
-    b = (back or "").strip()
-    if b:
-        out.append(b)
-    return out
+    return []
 
 
 def _desired_paths(where_sql: str = "", params: tuple = ()) -> Dict[str, int]:
     """现存库存（未删除）应被索引的 {image_path: inventory_id}。"""
     rows = db.execute_query(
-        "SELECT id, image_front, image, image_back, images_json FROM [inventory] "
+        "SELECT id, images_json FROM [inventory] "
         f"WHERE COALESCE(is_delete, 0) = 0 {where_sql}",
         params,
     )
     desired: Dict[str, int] = {}
-    for pid, front, legacy, back, images_json in rows or []:
-        for p in _paths_from_images_json(images_json, front, legacy, back):
+    for pid, images_json in rows or []:
+        for p in _paths_from_images_json(images_json):
             if p.startswith("/imges/"):
                 desired[p] = int(pid)
     return desired

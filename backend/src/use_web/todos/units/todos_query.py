@@ -182,7 +182,7 @@ def match_inventory_for_item(item_id: str) -> Dict[str, Any]:
     # item_id 即订单号：取该订单出库明细关联的库存（去重，按明细排序）
     inv_rows = db.execute_query(
         """
-        SELECT p.id, p.name, p.image, p.image_front, p.image_back, p.images_json,
+        SELECT p.id, p.name, p.images_json,
                NULLIF(TRIM(w.warehouse), '') AS warehouse_name,
                NULLIF(TRIM(w.shelf_name), '') AS shelf_name,
                NULLIF(TRIM(w.name), '') AS shelf_code,
@@ -204,7 +204,7 @@ def match_inventory_for_item(item_id: str) -> Dict[str, Any]:
         (iid,),
     )
     keys = [
-        "id", "name", "image", "image_front", "image_back", "images_json",
+        "id", "name", "images_json",
         "warehouse_name", "shelf_name", "shelf_code", "product_type_name",
         "is_combined", "combined_items",
         "sort_index", "line_id",

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """库存管理共享辅助函数（被多个端点文件复用）。"""
 import json
-from typing import List
+from typing import List, Optional
 from ....db_manage.database import DatabaseManager
 
 db = DatabaseManager()
@@ -40,9 +40,6 @@ INVENTORY_COLUMNS = [
     "shipping_days",
     "sale_type",
     "auction_duration",
-    "image",
-    "image_front",
-    "image_back",
     "images_json",
     "created_at",
     "warehouse_id",
@@ -63,49 +60,54 @@ def _row_to_inventory_detail(row: tuple) -> dict:
     return dict(zip(keys, row))
 
 
-def _inventory_paths_from_parsed_row(row_dict: dict) -> List[str]:
-    """从行字典解析图片路径列表（优先 images_json，否则 image_front / image / image_back）。"""
-    raw = row_dict.get("images_json")
-    if raw and str(raw).strip():
-        try:
-            data = json.loads(raw)
-            if isinstance(data, list):
-                out: List[str] = []
-                for x in data:
-                    if x is None:
-                        continue
-                    s = str(x).strip()
-                    if s:
-                        out.append(s)
-                if out:
-                    return out[:MAX_INVENTORY_IMAGES]
-        except Exception:
-            pass
+def _paths_from_images_json(raw) -> List[str]:
+    """把 images_json（JSON 路径数组）解析为路径列表；图片唯一存储来源。"""
+    if not raw or not str(raw).strip():
+        return []
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
     out: List[str] = []
-    front = (row_dict.get("image_front") or row_dict.get("image") or "").strip()
-    if front:
-        out.append(front)
-    back = (row_dict.get("image_back") or "").strip()
-    if back:
-        out.append(back)
-    return out
+    for x in data:
+        if x is None:
+            continue
+        s = str(x).strip()
+        if s:
+            out.append(s)
+    return out[:MAX_INVENTORY_IMAGES]
+
+
+def images_json_from_paths(paths: List[str]) -> Optional[str]:
+    """把路径列表编码为 images_json（空列表→None）。图片唯一存储列。"""
+    clean = [str(p).strip() for p in (paths or []) if p and str(p).strip()]
+    if not clean:
+        return None
+    return json.dumps(clean[:MAX_INVENTORY_IMAGES], ensure_ascii=False, separators=(",", ":"))
+
+
+def _inventory_paths_from_parsed_row(row_dict: dict) -> List[str]:
+    """从行字典解析图片路径列表（仅 images_json，唯一图片来源）。"""
+    return _paths_from_images_json(row_dict.get("images_json"))
 
 
 def _enrich_inventory_api_dict(d: dict) -> dict:
-    d["images"] = _inventory_paths_from_parsed_row(d)
+    """响应重建：由 images_json 派生 images 列表及兼容字段 image_front/image_back/image
+    （前后端传输格式不变，读取侧仍可用这些字段）。"""
+    paths = _paths_from_images_json(d.get("images_json"))
+    d["images"] = paths
+    d["image_front"] = paths[0] if paths else None
+    d["image_back"] = paths[1] if len(paths) > 1 else None
+    d["image"] = paths[0] if paths else None
     d.pop("images_json", None)
     return d
 
 
-def _legacy_paths_from_db_columns(front, legacy_image, back, images_json_raw) -> List[str]:
-    return _inventory_paths_from_parsed_row(
-        {
-            "image_front": front,
-            "image": legacy_image,
-            "image_back": back,
-            "images_json": images_json_raw,
-        }
-    )
+def _legacy_paths_from_db_columns(images_json_raw) -> List[str]:
+    """由 images_json 解析路径列表（历史三列 image/image_front/image_back 已删除）。"""
+    return _paths_from_images_json(images_json_raw)
 
 
 def _query_inventory_with_joins(where_sql: str = "", params: tuple = ()) -> list[dict]:
@@ -165,21 +167,17 @@ def _user_exists(uid: int) -> bool:
 
 
 def _sql_inventory_has_image_condition() -> str:
-    """与 _inventory_paths_from_parsed_row 一致：任一有效图片路径即视为有图。"""
+    """与 _inventory_paths_from_parsed_row 一致：images_json 含任一有效路径即视为有图。"""
     each = db.dialect.json_array_each_text("p.images_json", "je")
     return f"""
         (
-            COALESCE(TRIM(p.image_front), TRIM(p.image), '') != ''
-            OR COALESCE(TRIM(p.image_back), '') != ''
-            OR (
-                p.images_json IS NOT NULL
-                AND TRIM(p.images_json) != ''
-                AND TRIM(p.images_json) != '[]'
-                AND json_valid(p.images_json) = 1
-                AND EXISTS (
-                    SELECT 1 FROM {each}
-                    WHERE TRIM(COALESCE(je.value, '')) != ''
-                )
+            p.images_json IS NOT NULL
+            AND TRIM(p.images_json) != ''
+            AND TRIM(p.images_json) != '[]'
+            AND json_valid(p.images_json) = 1
+            AND EXISTS (
+                SELECT 1 FROM {each}
+                WHERE TRIM(COALESCE(je.value, '')) != ''
             )
         )
     """

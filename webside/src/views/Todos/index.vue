@@ -34,12 +34,15 @@
         <el-col :xs="24" :md="8" class="search-actions">
           <el-tooltip :disabled="!syncLockStore.locked" :content="syncLockStore.label" placement="top">
             <span>
-              <el-button type="primary" :icon="Download" :loading="syncLoading || syncLockStore.locked" :disabled="bulkReviewLoading || syncLockStore.locked" @click="runSync">
+              <el-button type="primary" :icon="Download" :loading="syncLoading || syncLockStore.locked" :disabled="bulkReviewLoading || bulkConfirmShipLoading || syncLockStore.locked" @click="runSync">
                 {{ t('todos.syncFromMercari') }}
               </el-button>
             </span>
           </el-tooltip>
-          <el-button type="success" :loading="bulkReviewLoading" :disabled="syncLoading" @click="runBulkReview">
+          <el-button type="warning" :loading="bulkConfirmShipLoading" :disabled="syncLoading || bulkReviewLoading" @click="runBulkConfirmShip">
+            {{ t('todos.bulkConfirmShip') }}
+          </el-button>
+          <el-button type="success" :loading="bulkReviewLoading" :disabled="syncLoading || bulkConfirmShipLoading" @click="runBulkReview">
             {{ t('todos.bulkReview') }}
           </el-button>
         </el-col>
@@ -70,7 +73,12 @@
 
         <el-table-column :label="t('todos.todoType')" width="140" align="center" header-align="center">
           <template #default="{ row }">
-            <el-tag :type="kindTagType(row)" size="small" effect="light">
+            <el-tag
+              :type="kindTagType(row)"
+              size="small"
+              effect="light"
+              :class="{ 'todo-tag-packed': isPackedRow(row) }"
+            >
               {{ kindLabel(row) }}
             </el-tag>
             <div v-if="row.is_delete" class="row-tag-done">{{ t('todos.done') }}</div>
@@ -662,7 +670,7 @@
           :loading="shippingConfirmLoading"
           @click="onConfirmShippingSelection"
         >
-          {{ t('todos.confirmAndSend') }}
+          {{ shippingNeedsFacility ? t('todos.generateShipCode') : t('todos.confirmAndSend') }}
         </el-button>
       </template>
     </el-dialog>

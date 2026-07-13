@@ -2,7 +2,6 @@
 """库存图片相关辅助函数与图片相关端点。"""
 import io
 import os
-import json
 import base64
 from typing import Optional, List
 from fastapi import HTTPException, UploadFile, File
@@ -21,6 +20,7 @@ from .inventory_helpers import (
     MAX_INVENTORY_IMAGES,
     _legacy_paths_from_db_columns,
     _query_inventory_with_joins,
+    images_json_from_paths,
 )
 from .inventory_models import InventoryCreate, CombinedInventoryCreate
 
@@ -82,16 +82,9 @@ def _convert_image_list_to_paths(raw_items: List[str]) -> List[str]:
     return paths
 
 
-def _sync_image_columns_from_paths(paths: List[str]) -> dict:
-    j = json.dumps(paths, ensure_ascii=False, separators=(",", ":")) if paths else None
-    front = paths[0] if paths else None
-    back = paths[1] if len(paths) > 1 else None
-    return {
-        "image": front,
-        "image_front": front,
-        "image_back": back,
-        "images_json": j,
-    }
+def _images_json_dict_from_paths(paths: List[str]) -> dict:
+    """图片唯一存储列 images_json（历史 image/image_front/image_back 已删除）。"""
+    return {"images_json": images_json_from_paths(paths)}
 
 
 def _delete_paths_removed(old_paths: List[str], new_paths: List[str]) -> None:
@@ -185,14 +178,14 @@ async def find_by_image(file: UploadFile = File(...)):
 
     query_hash = _to_dhash(query_img)
     rows = db.execute_query(
-        "SELECT id, image_front, image, image_back, images_json FROM [inventory] "
+        "SELECT id, images_json FROM [inventory] "
         "WHERE COALESCE(is_delete, 0) = 0"
     )
     best_id = None
     best_distance = 999
 
-    for pid, image_front, image, image_back, images_json in rows:
-        candidates = _legacy_paths_from_db_columns(image_front, image, image_back, images_json)
+    for pid, images_json in rows:
+        candidates = _legacy_paths_from_db_columns(images_json)
         row_best = 999
         for path in candidates:
             candidate_img = _load_image_for_match(path)

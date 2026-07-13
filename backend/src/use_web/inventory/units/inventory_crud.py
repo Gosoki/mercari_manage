@@ -4,7 +4,6 @@ from fastapi import HTTPException, Depends
 
 from ....auth import require_auth
 from ....db_manage.database import DatabaseManager
-from ...image_storage import delete_image_file
 
 from .inventory_helpers import (
     _query_inventory_with_joins,
@@ -12,11 +11,11 @@ from .inventory_helpers import (
     _warehouse_exists,
     _user_exists,
     _legacy_paths_from_db_columns,
+    images_json_from_paths,
 )
 from .inventory_images import (
     _normalize_images_input_list,
     _convert_image_list_to_paths,
-    _sync_image_columns_from_paths,
     _delete_paths_removed,
     _convert_image_payload,
     _resolve_paths_for_create,
@@ -36,7 +35,7 @@ def create_inventory(data: InventoryCreate, _claims: dict = Depends(require_auth
     if data.owner_user_id is not None and not _user_exists(data.owner_user_id):
         raise HTTPException(status_code=400, detail="商品归属用户不存在")
     paths = _resolve_paths_for_create(data)
-    img_cols = _sync_image_columns_from_paths(paths)
+    images_json_val = images_json_from_paths(paths)
     try:
         new_id = db.execute_insert(
             """
@@ -46,8 +45,8 @@ def create_inventory(data: InventoryCreate, _claims: dict = Depends(require_auth
                 description, listing_title, listing_body,
                 listing_status, listing_account_id, shipping_payer, shipping_method,
                 shipping_from_area_id, shipping_days, sale_type, auction_duration,
-                image, image_front, image_back, images_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                images_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data.name,
@@ -74,10 +73,7 @@ def create_inventory(data: InventoryCreate, _claims: dict = Depends(require_auth
                 data.shipping_days,
                 data.sale_type,
                 data.auction_duration,
-                img_cols["image"],
-                img_cols["image_front"],
-                img_cols["image_back"],
-                img_cols["images_json"],
+                images_json_val,
             ),
         )
     except Exception as exc:
@@ -100,22 +96,19 @@ def update_inventory(pid: int, data: InventoryUpdate, _claims: dict = Depends(re
         update_data['barcode'] = update_data['barcode'].strip()
     existing = db.execute_query(
         """
-        SELECT image, image_front, image_back, images_json, warehouse_id, owner_user_id,
+        SELECT images_json, warehouse_id, owner_user_id,
                is_combined, combined_items
         FROM [inventory] WHERE id = ? LIMIT 1
         """,
         (pid,),
     )
-    old_image = existing[0][0] if existing else None
-    old_front = existing[0][1] if existing else None
-    old_back = existing[0][2] if existing else None
-    old_images_json = existing[0][3] if existing else None
-    old_warehouse_id = existing[0][4] if existing else None
-    old_owner_user_id = existing[0][5] if existing else None
-    old_is_combined = int(existing[0][6] or 0) if existing else 0
-    old_combined_items = existing[0][7] if existing else None
+    old_images_json = existing[0][0] if existing else None
+    old_warehouse_id = existing[0][1] if existing else None
+    old_owner_user_id = existing[0][2] if existing else None
+    old_is_combined = int(existing[0][3] or 0) if existing else 0
+    old_combined_items = existing[0][4] if existing else None
 
-    old_paths = _legacy_paths_from_db_columns(old_front, old_image, old_back, old_images_json)
+    old_paths = _legacy_paths_from_db_columns(old_images_json)
 
     if 'images' in update_data:
         update_data.pop('image_front', None)
@@ -127,19 +120,19 @@ def update_inventory(pid: int, data: InventoryUpdate, _claims: dict = Depends(re
             normalized = []
         new_paths = _convert_image_list_to_paths(normalized)
         _delete_paths_removed(old_paths, new_paths)
-        update_data.update(_sync_image_columns_from_paths(new_paths))
-    else:
+        update_data['images_json'] = images_json_from_paths(new_paths)
+    elif 'image_front' in update_data or 'image_back' in update_data:
+        # 兼容旧传输：单独传 image_front / image_back（保留未指定的一侧）
+        cur_front = old_paths[0] if len(old_paths) > 0 else None
+        cur_back = old_paths[1] if len(old_paths) > 1 else None
         if 'image_front' in update_data:
-            new_front = _convert_image_payload(update_data.get('image_front'), "inventory_front")
-            update_data['image_front'] = new_front
-            update_data['image'] = new_front
-            if old_front and old_front != new_front:
-                delete_image_file(old_front)
+            cur_front = _convert_image_payload(update_data.pop('image_front'), "inventory_front")
         if 'image_back' in update_data:
-            new_back = _convert_image_payload(update_data.get('image_back'), "inventory_back")
-            update_data['image_back'] = new_back
-            if old_back and old_back != new_back:
-                delete_image_file(old_back)
+            cur_back = _convert_image_payload(update_data.pop('image_back'), "inventory_back")
+        update_data.pop('image', None)
+        new_paths = [p for p in [cur_front, cur_back] if p]
+        _delete_paths_removed(old_paths, new_paths)
+        update_data['images_json'] = images_json_from_paths(new_paths)
     final_warehouse_id = update_data['warehouse_id'] if 'warehouse_id' in update_data else old_warehouse_id
     if 'warehouse_id' in update_data:
         if final_warehouse_id is not None and not _warehouse_exists(final_warehouse_id):
@@ -159,7 +152,7 @@ def update_inventory(pid: int, data: InventoryUpdate, _claims: dict = Depends(re
         "description", "listing_title", "listing_body",
         "listing_status", "listing_account_id", "shipping_payer", "shipping_method",
         "shipping_from_area_id", "shipping_days", "sale_type", "auction_duration",
-        "image", "image_front", "image_back", "images_json",
+        "images_json",
     }
     update_data = {k: v for k, v in update_data.items() if k in allowed_fields}
     # 组合商品上调套数前校验来源子商品是否够预留（排除本组合自身既有预留），避免幽灵预留
@@ -181,7 +174,7 @@ def update_inventory(pid: int, data: InventoryUpdate, _claims: dict = Depends(re
             if source_ids:
                 from ....use_mercari.inventory_counters import recompute_listable_quantity
                 recompute_listable_quantity(source_ids)
-    if any(k in update_data for k in ("image", "image_front", "image_back", "images_json")):
+    if "images_json" in update_data:
         _enqueue_image_index(pid)
     inventory_items = _query_inventory_with_joins(" AND p.id = ? LIMIT 1", (pid,))
     if not inventory_items:

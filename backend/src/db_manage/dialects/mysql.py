@@ -128,23 +128,39 @@ class _Pool:
 class MysqlDialect(Dialect):
     name = "mysql"
 
-    def __init__(self):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         if pymysql is None:
             raise RuntimeError(
-                "选用 DB_BACKEND=mysql 但未安装 PyMySQL，请先 pip install PyMySQL")
-        self.host = os.environ.get("MYSQL_HOST", "127.0.0.1")
-        self.port = int(os.environ.get("MYSQL_PORT", "3306"))
-        self.user = os.environ.get("MYSQL_USER", "root")
-        self.password = os.environ.get("MYSQL_PASSWORD", "")
-        self.database = os.environ.get("MYSQL_DATABASE", "mercari")
-        self._pool_size = int(os.environ.get("MYSQL_POOL_SIZE", "10"))
+                "选用 mysql 后端但未安装 PyMySQL，请先 pip install PyMySQL")
+        cfg = config or {}
+        self.host = cfg.get("host") or os.environ.get("MYSQL_HOST", "127.0.0.1")
+        self.port = int(cfg.get("port") or os.environ.get("MYSQL_PORT", "3306"))
+        self.user = cfg.get("user") or os.environ.get("MYSQL_USER", "root")
+        self.password = (cfg.get("password") if cfg.get("password") is not None
+                         else os.environ.get("MYSQL_PASSWORD", ""))
+        self.database = cfg.get("database") or os.environ.get("MYSQL_DATABASE", "mercari")
+        self._pool_size = int(cfg.get("pool_size") or os.environ.get("MYSQL_POOL_SIZE", "10"))
         self._pool = _Pool(self._raw_connect, self._pool_size)
 
+    def _build_conv(self):
+        # 让 DATETIME/DATE/TIMESTAMP 以字符串返回，与 SQLite 行为一致，
+        # 避免下游按字符串处理时间戳的代码在 MySQL 下拿到 datetime 对象。
+        from pymysql.constants import FIELD_TYPE
+        conv = pymysql.converters.conversions.copy()
+        conv[FIELD_TYPE.DATETIME] = str
+        conv[FIELD_TYPE.TIMESTAMP] = str
+        conv[FIELD_TYPE.DATE] = str
+        return conv
+
     def _raw_connect(self):
+        # autocommit=True：匹配 SQLite 逐语句提交语义，避免池化连接残留未提交读事务
+        # （否则复用会拿到过期快照并阻塞 DDL）。transaction() 内以显式 BEGIN 开启事务，
+        # 期间覆盖 autocommit，直至 COMMIT/ROLLBACK。
         return pymysql.connect(
             host=self.host, port=self.port, user=self.user,
             password=self.password, database=self.database,
-            charset="utf8mb4", autocommit=False,
+            charset="utf8mb4", collation="utf8mb4_unicode_ci",
+            autocommit=True, conv=self._build_conv(),
         )
 
     # ---- 连接与事务 -------------------------------------------------
@@ -153,17 +169,34 @@ class MysqlDialect(Dialect):
         return _TranslatingConnection(self._pool.acquire(), self._pool)
 
     def setup(self) -> None:
-        # 确保目标库存在（用不带 database 的连接创建），随后建立连接池
+        # 确保目标库存在。优先尝试创建；若账号无建库权限（受限权限 + DBA 预建库的
+        # 常见生产模式），只要库已存在即继续使用，否则给出清晰的错误指引。
         conn = pymysql.connect(
             host=self.host, port=self.port, user=self.user,
             password=self.password, charset="utf8mb4", autocommit=True,
         )
         try:
             with conn.cursor() as cur:
-                cur.execute(
-                    f"CREATE DATABASE IF NOT EXISTS `{self.database}` "
-                    "DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-                )
+                try:
+                    cur.execute(
+                        f"CREATE DATABASE IF NOT EXISTS `{self.database}` "
+                        "DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+                    )
+                except Exception as create_err:  # noqa: BLE001
+                    cur.execute(
+                        "SELECT 1 FROM information_schema.schemata "
+                        "WHERE schema_name = %s",
+                        (self.database,),
+                    )
+                    if not cur.fetchone():
+                        raise RuntimeError(
+                            f"数据库 `{self.database}` 不存在，且账号 `{self.user}` 无建库权限："
+                            f"{create_err}。请让管理员执行：\n"
+                            f"  CREATE DATABASE `{self.database}` "
+                            f"DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\n"
+                            f"  GRANT ALL PRIVILEGES ON `{self.database}`.* "
+                            f"TO '{self.user}'@'%';"
+                        ) from create_err
         finally:
             conn.close()
 
@@ -243,6 +276,11 @@ class MysqlDialect(Dialect):
 
     @staticmethod
     def _map_type(col: Dict[str, Any], indexed_names: set) -> str:
+        # 显式 MySQL 类型优先（模型可用 'mysql_type' 精确指定，如 TEXT/MEDIUMTEXT/TINYINT）
+        explicit = col.get('mysql_type')
+        if explicit:
+            return str(explicit)
+
         t = str(col.get('type', 'TEXT')).upper()
         if 'INT' in t:
             if col.get('primary_key') and col.get('autoincrement'):
@@ -254,8 +292,16 @@ class MysqlDialect(Dialect):
             return 'DATETIME'
         if 'DATE' in t:
             return 'DATE'
-        # TEXT / CHAR 等文本
-        short = (col.get('unique') or col.get('name') in indexed_names
+
+        # 文本：模型标注 max_length 的用 VARCHAR(n)（推荐，精确存储、可索引）
+        ml = col.get('max_length')
+        if ml:
+            return f'VARCHAR({int(ml)})'
+        # 未标注长度：主键/唯一/被索引/带默认值的短字符串回落 VARCHAR(255)
+        # （MySQL 不允许对 TEXT 直接建键，也不允许其带字面默认值），
+        # 其余未知长度文本保守用 LONGTEXT（避免截断；如需更省请在模型标注 max_length/mysql_type）
+        short = (col.get('primary_key') or col.get('unique')
+                 or col.get('name') in indexed_names
                  or col.get('default') is not None)
         return 'VARCHAR(255)' if short else 'LONGTEXT'
 
@@ -359,3 +405,11 @@ class MysqlDialect(Dialect):
 
     def json_extract_int(self, value_expr: str, key: str) -> str:
         return f"CAST(JSON_EXTRACT({value_expr}, '$.{key}') AS SIGNED)"
+
+    def greatest(self, *exprs: str) -> str:
+        return f"GREATEST({', '.join(exprs)})"
+
+    def table_source(self, table_expr: str, alias: str, materialize: bool = False) -> str:
+        if materialize:
+            return f"(SELECT * FROM {table_expr}) {alias}"
+        return f"{table_expr} {alias}"

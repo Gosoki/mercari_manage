@@ -209,6 +209,7 @@ export default defineComponent({
 
     const syncLoading = ref(false)
     const bulkReviewLoading = ref(false)
+    const bulkConfirmShipLoading = ref(false)
 
     /** 「从煤炉同步」全屏等待与步骤文案（与后端 progress_job_id 轮询同步） */
     const syncOverlayVisible = ref(false)
@@ -901,6 +902,87 @@ export default defineComponent({
       await load()
     }
 
+    // 一键确认发送：对所有「已打包」待办批量执行发货通知（勾选→発送通知→発送しました）。
+    // 与一键好评同范式：前端统计候选 → 二次确认 → 全屏进度轮询 → 汇总结果。
+    async function runBulkConfirmShip() {
+      if (bulkConfirmShipLoading.value || syncLoading.value) return
+
+      // 统计「已打包」候选数量（不按 kind 过滤，逐行按 isPackedRow 判定）
+      let candidateCount = 0
+      try {
+        const res = await todosApi.list({ page: 1, page_size: 500 })
+        candidateCount = (res?.items || []).filter((r) => isPackedRow(r)).length
+      } catch (e) {
+        ElMessage.error(e?.message || t('todos.loadFailed'))
+        return
+      }
+
+      if (!candidateCount) {
+        ElMessage.info(t('todos.bulkConfirmShipNoCandidates'))
+        return
+      }
+
+      try {
+        await ElMessageBox.confirm(
+          t('todos.bulkConfirmShipConfirmMessage', { count: candidateCount }),
+          t('todos.bulkConfirmShipConfirmTitle'),
+          { type: 'warning', confirmButtonText: t('todos.start'), cancelButtonText: t('common.cancel') },
+        )
+      } catch {
+        return
+      }
+
+      const progressJobId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `job_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+      let progressTimer = null
+      async function pollProgress() {
+        try {
+          const pr = await todosApi.getSyncProgress(progressJobId)
+          const zh = pr?.data?.label_zh
+          if (zh) syncProgressLabel.value = zh
+        } catch { /* 轮询失败忽略 */ }
+      }
+
+      bulkConfirmShipLoading.value = true
+      syncOverlayTitle.value = t('todos.bulkConfirmShipRunning')
+      syncOverlayFailed.value = false
+      syncProgressLabel.value = t('todos.connectingServer')
+      syncOverlayVisible.value = true
+      progressTimer = setInterval(pollProgress, 400)
+
+      try {
+        const d = (await todosApi.bulkFinalizePostShipping({
+          progress_job_id: progressJobId,
+        })) || {}
+        const okCount = Number(d.ok || 0)
+        const failCount = Number(d.fail || 0)
+        const total = Number(d.total || 0)
+        const failures = Array.isArray(d.failures) ? d.failures : []
+        const summary = t('todos.bulkConfirmShipResult', { ok: okCount, fail: failCount, total })
+        ElMessageBox.alert(
+          failures.length ? `${summary}\n${failures.slice(0, 10).join('\n')}` : summary,
+          t('todos.bulkConfirmShipConfirmTitle'),
+          { type: failCount ? 'warning' : 'success', confirmButtonText: t('dialog.confirmBtn') },
+        )
+      } catch (e) {
+        const msg = e?.response?.data?.detail || e?.message || t('todos.bulkConfirmShipRunning')
+        ElMessage.error(msg)
+      } finally {
+        if (progressTimer != null) {
+          clearInterval(progressTimer)
+          progressTimer = null
+        }
+        syncOverlayVisible.value = false
+        syncOverlayTitle.value = t('todos.syncingFromMercari')
+        syncProgressLabel.value = ''
+        bulkConfirmShipLoading.value = false
+      }
+
+      await load()
+    }
+
     // 入参可为 kind 字符串（下拉筛选）或整行（表格）；标题为「発送をしてください」时一律按待发货
     function kindLabel(kindOrRow) {
       const isRow = kindOrRow && typeof kindOrRow === 'object'
@@ -932,6 +1014,19 @@ export default defineComponent({
       if (kind === 'Shipped') return KIND_TAG_TYPES.Shipped
       if (title === WAIT_SHIPPING_TITLE) return 'warning'
       return KIND_TAG_TYPES[kind] || 'info'
+    }
+
+    // 是否「已打包」行（待发货 + 已发行发货二维码/条形码）。与 kindLabel 的「已打包」判定一致：
+    // 「待反馈」/ 待收货(Shipped) 优先，不算已打包。已打包在列表里显示橙色底色（见 style.css）。
+    function isPackedRow(row) {
+      if (!row || typeof row !== 'object') return false
+      if (row.awaiting_feedback) return false
+      const kind = String(row.kind || '').trim()
+      if (kind === 'Shipped') return false
+      const title = String(row.title || '').trim()
+      const isWaitShippingKind =
+        title === WAIT_SHIPPING_TITLE || KIND_LABEL_KEYS[kind] === 'todos.kind.waitShipping'
+      return isWaitShippingKind && !!row.qr_image_path
     }
 
     function displayTs(ms) {
@@ -1164,6 +1259,9 @@ export default defineComponent({
         })
         ElMessage.success(t('todos.shippingDone', { classText }))
         shippingDialogVisible.value = false
+        // 「确认并发送」成功（返回二维码/条形码/发送确认等，各分支均视为已发货）→
+        // 立即把所选包材同步到关联订单，并把关联物品自动出库到 /#/orders
+        await commitShipPackagingAndOutbound()
         if (wantScanQr && result?.qr_scanner_open) {
           // 后端已自动打开 /qr_code_scanner → 开镜像弹窗轮询视频帧
           startQrScanMirror(currentRow.value.id)
@@ -1384,10 +1482,10 @@ export default defineComponent({
         }
 
         // 仅当后端检测到「購入者の受取をお待ちください」才算发送成功
+        // 注：包材同步与自动出库已提前到「确认并发送」(onConfirmShippingSelection) 时执行，
+        // 此处不再重复，避免包材费用记录重复插入。
         if (result?.shipped_ok) {
           ElMessage.success(t('todos.shipNotified'))
-          // 发货成功 → 把所选包材同步到关联订单，并把关联物品出库
-          await commitShipPackagingAndOutbound()
         } else {
           ElMessage.warning(t('todos.shipNotifyUnconfirmed'))
         }
@@ -1716,6 +1814,7 @@ export default defineComponent({
       kindOptions,
       syncLoading,
       bulkReviewLoading,
+      bulkConfirmShipLoading,
       syncOverlayVisible,
       syncOverlayTitle,
       syncOverlayFailed,
@@ -1787,8 +1886,10 @@ export default defineComponent({
       onPageSizeChange,
       runSync,
       runBulkReview,
+      runBulkConfirmShip,
       kindLabel,
       kindTagType,
+      isPackedRow,
       shipRemainingText,
       shipRemainingTagType,
       displayTs,

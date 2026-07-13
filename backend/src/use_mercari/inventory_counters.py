@@ -44,22 +44,27 @@ def _norm_keys(item_id: str) -> List[str]:
     return _mercari_id_lookup_keys(item_id)
 
 
-def _combined_reserved_sql_expr(inv_alias: str = "[inventory]") -> str:
+def _combined_reserved_sql_expr(inv_alias: str = "[inventory]",
+                                materialize_source: bool = False) -> str:
     """该商品被「组合商品」拉走（预留）的件数：Σ(组合商品库存 × 每套该商品数量)。
 
     仅统计未软删的组合商品。组合商品不再扣减来源库存，改由本预留量在「可上架」中扣减、
     并在库存页「组合」列展示。``inv_alias`` 为外层 inventory 行的引用（UPDATE 时为
     ``[inventory]``，库存列表查询里别名为 ``p``）。
+
+    ``materialize_source`` 用于本表达式作为 ``UPDATE [inventory]`` 子查询时：MySQL 不允许
+    在 UPDATE 目标表的子查询 FROM 中再引用该表（错误 1093），需把内层 inventory 包成派生表。
     """
     d = DatabaseManager().dialect
     each = d.json_array_each("cmb.[combined_items]", "je")
     qty_expr = d.json_extract_int("je.value", "quantity")
     inv_id_expr = d.json_extract_int("je.value", "inventory_id")
+    src = d.table_source("[inventory]", "cmb", materialize_source)
     return (
         "(SELECT COALESCE(SUM("
         "COALESCE(cmb.[quantity], 0) * "
         f"{qty_expr}), 0) "
-        f"FROM [inventory] cmb, {each} "
+        f"FROM {src}, {each} "
         "WHERE COALESCE(cmb.[is_combined], 0) = 1 "
         "AND COALESCE(cmb.[is_delete], 0) = 0 "
         f"AND {inv_id_expr} = {inv_alias}.[id])"
@@ -68,12 +73,13 @@ def _combined_reserved_sql_expr(inv_alias: str = "[inventory]") -> str:
 
 def _listable_sql_expr() -> str:
     """可上架 = max(0, 库存 - 在售 - 待出 - 组合预留) 的 SQL 表达式（基于同表列）。"""
-    return (
-        "MAX(0, COALESCE([quantity], 0) "
+    inner = (
+        "COALESCE([quantity], 0) "
         "- COALESCE([on_sale_quantity], 0) "
         "- COALESCE([pending_outbound_qty], 0) "
-        f"- {_combined_reserved_sql_expr()})"
+        f"- {_combined_reserved_sql_expr(materialize_source=True)}"
     )
+    return DatabaseManager().dialect.greatest("0", inner)
 
 
 def recompute_listable_quantity(inv_ids: Optional[Iterable[int]] = None) -> int:
@@ -276,10 +282,11 @@ def _adjust_on_sale(db: DatabaseManager, inv_id: int, on_sale_delta: int) -> boo
     """对单个库存行的在售数量应用增量（clamp >= 0），并同步重算可上架。返回是否实际更新。"""
     if on_sale_delta == 0:
         return False
+    on_sale_expr = db.dialect.greatest("0", "COALESCE([on_sale_quantity], 0) + ?")
     changed = db.execute_update(
-        """
+        f"""
         UPDATE [inventory]
-        SET [on_sale_quantity] = MAX(0, COALESCE([on_sale_quantity], 0) + ?)
+        SET [on_sale_quantity] = {on_sale_expr}
         WHERE [id] = ?
         """,
         (int(on_sale_delta), int(inv_id)),

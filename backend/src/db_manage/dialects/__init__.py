@@ -11,16 +11,15 @@
 
 from __future__ import annotations
 
-import os
-
 from .base import Dialect
 
 
 def get_dialect(sqlite_db_path: str) -> Dialect:
-    backend = (os.environ.get("DB_BACKEND") or "sqlite").strip().lower()
-    if backend == "mysql":
+    # 后端选择来自 bootstrap 配置存储（system.db），其次环境变量，最后默认 sqlite。
+    from ..db_settings import get_active_backend, get_mysql_config
+    if get_active_backend() == "mysql":
         from .mysql import MysqlDialect
-        return MysqlDialect()
+        return MysqlDialect(get_mysql_config())
     from .sqlite import SqliteDialect
     return SqliteDialect(sqlite_db_path)
 
