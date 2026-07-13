@@ -46,6 +46,7 @@ def _list_todos_endpoint(
     keyword: Optional[str] = None,
     include_deleted: bool = False,
     packed_only: bool = False,
+    categories: Optional[str] = None,
     page: int = 1,
     page_size: int = 20,
 ):
@@ -55,6 +56,7 @@ def _list_todos_endpoint(
         keyword=keyword,
         include_deleted=include_deleted,
         packed_only=packed_only,
+        categories=categories,
         page=page,
         page_size=page_size,
     )

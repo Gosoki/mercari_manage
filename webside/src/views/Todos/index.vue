@@ -24,20 +24,36 @@
           </el-select>
           <div
             class="search-filter-chip"
-            :class="{ 'search-filter-chip--active': filters.include_deleted }"
+            :class="{ 'search-filter-chip--active': filters.categories.includes('wait_shipping') }"
             role="button"
             tabindex="0"
-            @click="toggleFilterChip('include_deleted')"
-            @keyup.enter="toggleFilterChip('include_deleted')"
-          >{{ t('todos.includeDone') }}</div>
+            @click="selectFilterChip('wait_shipping')"
+            @keyup.enter="selectFilterChip('wait_shipping')"
+          >{{ t('todos.kind.waitShipping') }}</div>
+          <div
+            class="search-filter-chip"
+            :class="{ 'search-filter-chip--active': filters.categories.includes('wait_reply') }"
+            role="button"
+            tabindex="0"
+            @click="selectFilterChip('wait_reply')"
+            @keyup.enter="selectFilterChip('wait_reply')"
+          >{{ t('todos.kind.waitReply') }}</div>
           <div
             class="search-filter-chip"
             :class="{ 'search-filter-chip--active': filters.packed_only }"
             role="button"
             tabindex="0"
-            @click="toggleFilterChip('packed_only')"
-            @keyup.enter="toggleFilterChip('packed_only')"
+            @click="selectFilterChip('packed')"
+            @keyup.enter="selectFilterChip('packed')"
           >{{ t('todos.packedOnly') }}</div>
+          <div
+            class="search-filter-chip"
+            :class="{ 'search-filter-chip--active': filters.categories.includes('other') }"
+            role="button"
+            tabindex="0"
+            @click="selectFilterChip('other')"
+            @keyup.enter="selectFilterChip('other')"
+          >{{ t('todos.categoryOther') }}</div>
         </el-col>
         <el-col :xs="24" :md="8" class="search-actions">
           <el-tooltip :disabled="!syncLockStore.locked" :content="syncLockStore.label" placement="top">
@@ -252,8 +268,8 @@
             </div>
           </section>
 
-          <!-- 包材（待发货时，放在发货之前） -->
-          <section v-if="!isReviewedSeller && isWaitShipping" class="detail-section">
+          <!-- 包材（待发货时，放在发货之前；已打包后不再展示） -->
+          <section v-if="!isReviewedSeller && isWaitShipping && !isPackedDetail" class="detail-section">
             <div class="detail-section-title">{{ t('todos.packaging') }}</div>
             <div v-if="invMatch.loading" class="detail-empty">{{ t('todos.matching') }}</div>
             <div v-else-if="!hasInventoryMatch" class="detail-empty-hint">{{ t('todos.updateOrderFirst') }}</div>

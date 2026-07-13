@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Mercari is a **full-stack inventory and order management system** with deep integration to the Japanese Mercari marketplace. It's built as a Vue 3 frontend (Vite) with a Python FastAPI backend, featuring order synchronization, product listing automation, and local inventory management with support for barcode scanning and OCR.
 
+## Production Database Safety
+
+- **MySQL mode = production. NEVER perform any data-modifying operations.** When the database backend is MySQL (`DB_BACKEND=mysql`, or MySQL selected in the UI / persisted in `backend/system.db`), the database is the **production environment**. Do NOT run, generate, or execute any statement that changes data or schema — no `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `TRUNCATE`, no migrations, no seed/test data, no manual writes through the ORM or a client. Read-only inspection (`SELECT`, `SHOW`, `DESCRIBE`) is fine. If a task appears to require a data or schema change in MySQL mode, **stop and ask the user first** — never modify production data on your own initiative.
+
 ## Code Organization Rules
 
 - **Max file length: 500 lines.** No `.py` file under `backend/` may exceed **500 lines**. When a module grows past this, split it by feature into smaller modules — convert it into a package (a folder named after the module with an `__init__.py` that re-exports the public API so existing imports keep working) and group related functions into separate files. Keep shared helpers in a `_common`/`_helpers` module and group cohesive features into their own files (and subfolders when a feature spans several files). This rule also applies to new files: never write a `.py` over 500 lines.

@@ -202,8 +202,9 @@ export default defineComponent({
     const filters = ref({
       keyword: '',
       kind: '',
-      include_deleted: false,
       packed_only: false,
+      // 分类筛选 chip（单选，互斥）；默认选中「待发货」
+      categories: ['wait_shipping'],
     })
 
     const kindOptions = ref([])
@@ -446,6 +447,10 @@ export default defineComponent({
     const isWaitShipping = computed(
       () => String(currentRow.value?.title || '').trim() === WAIT_SHIPPING_TITLE,
     )
+    // 是否「已打包」详情（待发货 + 已发行发货二维码/条形码）。已打包时不再展示包材表单。
+    const isPackedDetail = computed(
+      () => isPackedRow(currentRow.value) || !!detail.qr_image_url,
+    )
     // 是否反查到关联本地库存（待发货时未关联则不允许选包材 / 发货，须先更新订单管理）
     const hasInventoryMatch = computed(() => (invMatch.inventory || []).length > 0)
     // 反查到的库存里是否有至少一张本地图片
@@ -683,8 +688,8 @@ export default defineComponent({
       const kw = filters.value.keyword?.trim()
       if (kw) p.keyword = kw
       if (filters.value.kind) p.kind = filters.value.kind
-      if (filters.value.include_deleted) p.include_deleted = true
       if (filters.value.packed_only) p.packed_only = true
+      if (filters.value.categories.length) p.categories = filters.value.categories.join(',')
       return p
     }
 
@@ -716,8 +721,19 @@ export default defineComponent({
       load()
     }
 
-    function toggleFilterChip(key) {
-      filters.value[key] = !filters.value[key]
+    // 筛选 chip 单选（待发货 / 待回复 / 已打包 / 其他，互斥）：点某项只显示该项；
+    // 再次点当前项则取消，回到默认全部显示。已打包用 packed_only，其余用 categories。
+    function selectFilterChip(chip) {
+      const active =
+        chip === 'packed'
+          ? filters.value.packed_only
+          : filters.value.categories.includes(chip)
+      filters.value.packed_only = false
+      filters.value.categories = []
+      if (!active) {
+        if (chip === 'packed') filters.value.packed_only = true
+        else filters.value.categories = [chip]
+      }
       onFilterChange()
     }
 
@@ -1036,6 +1052,16 @@ export default defineComponent({
       return isWaitShippingKind && !!row.qr_image_path
     }
 
+    // 某行变成「已打包」后：默认列表（未勾选「已打包」筛选）不展示已打包数据，
+    // 将其从当前列表移除并同步递减总数；勾选「已打包」筛选时保留（该视图本就只看已打包）。
+    function dropPackedRowFromList(id) {
+      if (filters.value.packed_only) return
+      const idx = list.value.findIndex((r) => r && r.id === id)
+      if (idx === -1) return
+      list.value.splice(idx, 1)
+      total.value = Math.max(0, total.value - 1)
+    }
+
     function displayTs(ms) {
       const n = Number(ms || 0)
       if (!n) return '-'
@@ -1276,9 +1302,12 @@ export default defineComponent({
           // 发行后已保存发货二维码：直接显示，并刷新本地缓存（不再开浏览器）
           if (result?.qr_image_url) {
             detail.qr_image_url = result.qr_image_url
-            // 二维码返回后，实时把列表当前行标记为「已打包」（qr_image_path 即本地二维码路径），
-            // 无需刷新整页即可让类型标签从「待发货」变为「已打包」
-            if (currentRow.value) currentRow.value.qr_image_path = result.qr_image_url
+            // 二维码返回后该行即「已打包」（qr_image_path 即本地二维码路径）。默认列表不展示
+            // 已打包数据，故实时把当前行从列表移除（勾选「已打包」筛选时保留并标记）。
+            if (currentRow.value) {
+              currentRow.value.qr_image_path = result.qr_image_url
+              dropPackedRowFromList(currentRow.value.id)
+            }
           }
           loadDetailCache()
         } else {
@@ -1843,6 +1872,7 @@ export default defineComponent({
       inventoryThumbUrl,
       loadInventoryMatch,
       isWaitShipping,
+      isPackedDetail,
       showInventoryMatch,
       hasInventoryMatch,
       hasLocalInventoryImages,
@@ -1893,7 +1923,7 @@ export default defineComponent({
       load,
       loadKindOptions,
       onFilterChange,
-      toggleFilterChip,
+      selectFilterChip,
       onPageChange,
       onPageSizeChange,
       runSync,

@@ -84,10 +84,12 @@ def _attach_inventory_by_item_id(items: list) -> None:
     if not raw:
         return
     db = DatabaseManager()
-    from ....use_mercari.inventory_counters import _combined_reserved_sql_expr
+    from ....use_mercari.inventory_counters import _combined_reserved_agg_subquery
 
     _wh_w = WarehouseModel.sql_display_label("w")
-    _combined = _combined_reserved_sql_expr("i")
+    # 组合预留量：预聚合为派生表并一次性 LEFT JOIN，替代逐行相关子查询
+    # （原做法对每行都全表展开组合商品 JSON，O(N) 次；此处只展开分组一次）。
+    _combined_agg = _combined_reserved_agg_subquery()
     sql = f"""
         SELECT
             i.[mercari_item_id],
@@ -101,10 +103,11 @@ def _attach_inventory_by_item_id(items: list) -> None:
             IFNULL(w.[location], ''),
             i.[images_json],
             COALESCE(u.[display_name], u.[username], '') AS owner_user_name,
-            {_combined} AS combined_quantity
+            COALESCE(cr.[reserved], 0) AS combined_quantity
         FROM [inventory] i
         LEFT JOIN [warehouses] w ON w.[id] = i.[warehouse_id]
         LEFT JOIN [users] u ON u.[id] = i.[owner_user_id]
+        LEFT JOIN {_combined_agg} cr ON cr.src_id = i.[id]
         WHERE TRIM(IFNULL(i.[mercari_item_id], '')) != ''
     """
     rows = db.execute_query(sql)
@@ -278,23 +281,12 @@ def list_on_sale_items(
     page_size = max(1, min(int(page_size or 20), 200))
 
     # 后端全表排序：先取全部匹配项，补齐库存字段后按“标红优先”排序，再做分页切片。
-    all_items = []
-    fetch_page = 1
-    fetch_size = 500
-    while True:
-        chunk = OnSaleItemModel.find_list(
-            keyword=keyword,
-            seller_id=seller_id,
-            status=status,
-            page=fetch_page,
-            page_size=fetch_size,
-        )
-        rows = chunk.get("items") or []
-        all_items.extend(rows)
-        total = int(chunk.get("total") or 0)
-        if not rows or len(all_items) >= total:
-            break
-        fetch_page += 1
+    # 单次查询取回全量（免去按页循环的重复 COUNT(*) 与随 OFFSET 增长的扫描）。
+    all_items = OnSaleItemModel.find_all_matching(
+        keyword=keyword,
+        seller_id=seller_id,
+        status=status,
+    )
 
     # 出品方式筛选：auction='1' 仅拍卖（存在 auction_info_json），'0' 仅一口价（无）。
     aval = str(auction or "").strip()

@@ -345,6 +345,32 @@ class OnSaleItemModel(BaseModel):
         return [dict(zip(keys, row)) for row in rows]
 
     @classmethod
+    def find_all_matching(
+        cls,
+        keyword: Optional[str] = None,
+        seller_id: Optional[str] = None,
+        status: Optional[str] = None,
+        include_deleted: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """按筛选条件一次性取回全部匹配行（无分页），供需全表排序的在售列表使用。
+
+        替代「按 500 行分页循环取全量」：单次 SELECT，免去每页重复 COUNT(*) 与
+        随 OFFSET 增长的扫描成本。
+        """
+        db = cls().db
+        base_sql, params = cls._build_filter(
+            keyword=keyword, seller_id=seller_id, status=status, include_deleted=include_deleted
+        )
+        keys = list(_ON_SALE_ITEM_LIST_KEYS)
+        sel = f"""
+            SELECT {', '.join('t.' + k for k in keys)}
+            {base_sql}
+            ORDER BY COALESCE(t.updated, t.created, 0) DESC, t.id DESC
+        """
+        rows = db.execute_query(sel, tuple(params))
+        return [dict(zip(keys, row)) for row in rows]
+
+    @classmethod
     def find_list(
         cls,
         keyword: Optional[str] = None,

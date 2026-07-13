@@ -112,12 +112,14 @@ def _legacy_paths_from_db_columns(images_json_raw) -> List[str]:
 
 def _query_inventory_with_joins(where_sql: str = "", params: tuple = ()) -> list[dict]:
     from ....db_manage.models.warehouse import WarehouseModel
-    from ....use_mercari.inventory_counters import _combined_reserved_sql_expr
+    from ....use_mercari.inventory_counters import _combined_reserved_agg_subquery
 
     select_cols = ", ".join([f"p.[{c}]" for c in INVENTORY_COLUMNS])
     wh_l = WarehouseModel.sql_display_label("w")
     wh_store = "COALESCE(NULLIF(TRIM(w.warehouse), ''), '默认仓库')"
-    combined_reserved = _combined_reserved_sql_expr("p")
+    # 组合预留量：预聚合为派生表并一次性 LEFT JOIN，替代逐行相关子查询
+    # （原做法对每行都全表展开组合商品 JSON，O(N) 次；此处只展开分组一次）。
+    combined_reserved_agg = _combined_reserved_agg_subquery()
     sql = f"""
         SELECT {select_cols}, c.name AS category_name, {wh_l} AS warehouse_name,
                {wh_store} AS inv_wh_name,
@@ -125,13 +127,14 @@ def _query_inventory_with_joins(where_sql: str = "", params: tuple = ()) -> list
                w.name AS inv_shelf_code,
                ptcm.product_type AS product_type_name,
                COALESCE(u.display_name, u.username) AS owner_user_name,
-               {combined_reserved} AS combined_quantity
+               COALESCE(cr.reserved, 0) AS combined_quantity
         FROM [inventory] p
         LEFT JOIN [categories] c ON c.id = p.category_id
         LEFT JOIN [warehouses] w ON w.id = p.warehouse_id
         LEFT JOIN [product_type_category_mappings] ptcm
                ON ptcm.mapping_id = CAST(p.product_type_id AS TEXT)
         LEFT JOIN [users] u ON u.id = p.owner_user_id
+        LEFT JOIN {combined_reserved_agg} cr ON cr.src_id = p.id
         WHERE COALESCE(p.is_delete, 0) = 0 {where_sql}
     """
     rows = db.execute_query(sql, tuple(params))

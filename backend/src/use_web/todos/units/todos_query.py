@@ -9,6 +9,22 @@ from typing import Any, Dict, List, Optional
 from ....db_manage.database import DatabaseManager
 
 
+# 「待发货」类判定：标题「発送をしてください」或 kind 属于待发货系列。
+_WAIT_SHIPPING_COND = (
+    "(IFNULL(t.[title], '') = '発送をしてください'"
+    " OR IFNULL(t.[kind], '') IN ('WaitShippingCard', 'WaitShippingPoint', 'WaitShippingCarrier', 'TransactionWaitShippingFunds'))"
+)
+# 「待回复」类判定：买家来信（IncomingMessage）。
+_WAIT_REPLY_COND = "IFNULL(t.[kind], '') = 'IncomingMessage'"
+
+# 前端「待发货 / 待回复 / 其他」分类筛选（chip）。「其他」= 既非待发货也非待回复。
+# 传入多个分类时取并集；未传（默认）不做分类过滤，全部显示。
+_CATEGORY_CONDS = {
+    "wait_shipping": _WAIT_SHIPPING_COND,
+    "wait_reply": _WAIT_REPLY_COND,
+    "other": f"NOT {_WAIT_SHIPPING_COND} AND NOT ({_WAIT_REPLY_COND})",
+}
+
 # 「已打包」判定（与前端 isPackedRow 一致）：已发行发货二维码/条形码、非待反馈、
 # 非待收货(Shipped)，且属于待发货类（标题「発送をしてください」或 kind 为待发货类）。
 # 默认列表隐藏这些行，勾选「已打包」筛选后才一并显示。全部字段用 IFNULL/COALESCE 包裹，
@@ -17,8 +33,7 @@ _PACKED_COND = (
     "IFNULL(t.[qr_image_path], '') != ''"
     " AND COALESCE(t.[awaiting_feedback], 0) = 0"
     " AND IFNULL(t.[kind], '') != 'Shipped'"
-    " AND (IFNULL(t.[title], '') = '発送をしてください'"
-    " OR IFNULL(t.[kind], '') IN ('WaitShippingCard', 'WaitShippingPoint', 'WaitShippingCarrier', 'TransactionWaitShippingFunds'))"
+    f" AND {_WAIT_SHIPPING_COND}"
 )
 
 
@@ -53,6 +68,7 @@ def list_todos(
     keyword: Optional[str] = None,
     include_deleted: bool = False,
     packed_only: bool = False,
+    categories: Optional[str] = None,
     page: int = 1,
     page_size: int = 20,
 ) -> Dict[str, Any]:
@@ -62,6 +78,8 @@ def list_todos(
     - ``include_deleted=False``（默认）只显示未完成（``is_delete=0``）
     - ``packed_only=False``（默认）隐藏「已打包」行（见 ``_PACKED_COND``），
       只显示待发货/待回复等；``packed_only=True`` 则只显示「已打包」行
+    - ``categories`` 逗号分隔的分类筛选（``wait_shipping`` / ``wait_reply`` / ``other``），
+      多个取并集；为空（默认）不做分类过滤，全部显示
     - ``keyword`` 匹配 title / message / item_id / item_name
     """
     db = DatabaseManager()
@@ -76,6 +94,10 @@ def list_todos(
         where.append(f"({_PACKED_COND})")
     else:
         where.append(f"NOT ({_PACKED_COND})")
+    if categories:
+        cats = [c.strip() for c in str(categories).split(",") if c.strip() in _CATEGORY_CONDS]
+        if cats:
+            where.append("(" + " OR ".join(f"({_CATEGORY_CONDS[c]})" for c in cats) + ")")
     if account_id is not None:
         where.append("t.[account_id] = ?")
         params.append(int(account_id))

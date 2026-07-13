@@ -28,6 +28,16 @@ _CAST_TYPE_RE = re.compile(r"\bAS\s+INTEGER\b|\bAS\s+TEXT\b|\bAS\s+REAL\b",
                            re.IGNORECASE)
 _CAST_MAP = {"INTEGER": "SIGNED", "TEXT": "CHAR", "REAL": "DECIMAL"}
 
+# SQLite UPSERT → MySQL：
+#   ``ON CONFLICT(冲突列) DO UPDATE SET 赋值`` → ``ON DUPLICATE KEY UPDATE 赋值``
+#     （MySQL 依已有唯一键/主键判定冲突，不显式列出冲突列，故整段目标丢弃）
+#   ``excluded.列`` → ``VALUES(列)``（引用「本应插入的新值」；MySQL 8.0 仍支持，
+#     虽在 8.0.20+ 标记弃用但仍可用）。DO UPDATE 中对本表列的引用（如
+#     ``table.col``）在 MySQL 里天然指向「已存在的旧值」，与 SQLite 语义一致，无需改写。
+_ON_CONFLICT_RE = re.compile(
+    r"ON\s+CONFLICT\s*\([^)]*\)\s*DO\s+UPDATE\s+SET", re.IGNORECASE)
+_EXCLUDED_RE = re.compile(r"\bexcluded\.(`[^`]+`|\w+)", re.IGNORECASE)
+
 
 def _split_string_literals(sql: str):
     """把 SQL 切成交替的 (语法段, 字符串段, 语法段, ...)。字符串段含首尾单引号。"""
@@ -65,6 +75,8 @@ def _rewrite_code(seg: str, has_params: bool) -> str:
     seg = _BRACKET_RE.sub(lambda m: "`" + m.group(1) + "`", seg)
     seg = _CAST_TYPE_RE.sub(
         lambda m: "AS " + _CAST_MAP[m.group(0).split()[-1].upper()], seg)
+    seg = _ON_CONFLICT_RE.sub("ON DUPLICATE KEY UPDATE", seg)
+    seg = _EXCLUDED_RE.sub(lambda m: "VALUES(" + m.group(1) + ")", seg)
     seg = seg.replace("?", "%s")
     return seg
 

@@ -71,6 +71,28 @@ def _combined_reserved_sql_expr(inv_alias: str = "[inventory]",
     )
 
 
+def _combined_reserved_agg_subquery() -> str:
+    """把「每个来源子商品被组合预留的件数」预聚合为派生表，供库存列表一次性 LEFT JOIN。
+
+    等价于对每行都跑一遍 ``_combined_reserved_sql_expr`` 的相关子查询，但只对组合商品做
+    「一次」JSON 展开 + 分组，避免库存列表 O(N) 次全表 JSON 展开。输出列：
+    ``src_id``（来源子商品 inventory.id）、``reserved``（Σ 组合库存 × 每套用量）。
+    连接方式：``LEFT JOIN <本子查询> cr ON cr.src_id = p.id``，取 ``COALESCE(cr.reserved, 0)``。
+    """
+    d = DatabaseManager().dialect
+    each = d.json_array_each("cmb.[combined_items]", "je")
+    qty_expr = d.json_extract_int("je.value", "quantity")
+    inv_id_expr = d.json_extract_int("je.value", "inventory_id")
+    return (
+        f"(SELECT {inv_id_expr} AS src_id, "
+        f"COALESCE(SUM(COALESCE(cmb.[quantity], 0) * {qty_expr}), 0) AS reserved "
+        f"FROM [inventory] cmb, {each} "
+        "WHERE COALESCE(cmb.[is_combined], 0) = 1 "
+        "AND COALESCE(cmb.[is_delete], 0) = 0 "
+        f"GROUP BY {inv_id_expr})"
+    )
+
+
 def _listable_sql_expr() -> str:
     """可上架 = max(0, 库存 - 在售 - 待出 - 组合预留) 的 SQL 表达式（基于同表列）。"""
     inner = (
