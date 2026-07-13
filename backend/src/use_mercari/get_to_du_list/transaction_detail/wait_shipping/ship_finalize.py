@@ -18,7 +18,7 @@ from ....get_order.get_in_progress_order.get_order_info import (
 )
 from .._common import _is_wait_shipping_todo
 from .._cache import get_cached_transaction_detail
-from .._qr_facility import _extract_post_ship_ready, _persist_post_ship_ready
+from .._qr_facility import _detect_already_shipped, _extract_post_ship_ready, _persist_post_ship_ready
 from .._ui import _click_visible_button_by_text
 from .qr_scan import _SCAN_OK_TEXT
 
@@ -431,15 +431,23 @@ async def finalize_post_shipping(
 
     if page is not None:
         log.info("[postship] 复用已打开页面直接操作（不刷新）account_id=%s", aid)
-        if not force:
-            report("verify", "正在核验发送确认符号 / 追跡番号…")
-            mismatch = await _detect_ship_code_mismatch(page, int(todo_id))
-            if mismatch:
-                return _mismatch_result(mismatch)
-        steps = await _run_post_ship_steps(page, report, int(todo_id))
-        ticked = int(steps.get("ticked", 0) or 0)
-        confirmed = bool(steps.get("confirmed"))
-        shipped_ok = bool(steps.get("shipped_ok"))
+        already = await _detect_already_shipped(page)
+        if already:
+            # 已在别处发送（外部扫码发送 / 已发送通知、数据连携确认中）：无「发送通知」入口，
+            # 无需再确认发送，直接视为发送成功走 Step 5（软删 todo + 回填订单状态）。
+            report("already_shipped", "该交易已发送，无需再次确认发送，仅更新订单")
+            log.info("[postship] 已发送跳过确认发送 todo_id=%s marker=%s", todo_id, already)
+            shipped_ok = True
+        else:
+            if not force:
+                report("verify", "正在核验发送确认符号 / 追跡番号…")
+                mismatch = await _detect_ship_code_mismatch(page, int(todo_id))
+                if mismatch:
+                    return _mismatch_result(mismatch)
+            steps = await _run_post_ship_steps(page, report, int(todo_id))
+            ticked = int(steps.get("ticked", 0) or 0)
+            confirmed = bool(steps.get("confirmed"))
+            shipped_ok = bool(steps.get("shipped_ok"))
     else:
         # ── 兜底：浏览器未打开 → 打开并导航到交易页，再操作。──
         # /todos 浏览器操作统一无头静默：headless=None 走环境默认（默认无头）。
@@ -454,15 +462,22 @@ async def finalize_post_shipping(
             browser_key=mercari_todo_key(aid),
         ) as (mgr2, key):
             page = await mgr2.active_tab_page(key)
-            if not force:
-                report("verify", "正在核验发送确认符号 / 追跡番号…")
-                mismatch = await _detect_ship_code_mismatch(page, int(todo_id))
-                if mismatch:
-                    return _mismatch_result(mismatch)
-            steps = await _run_post_ship_steps(page, report, int(todo_id))
-            ticked = int(steps.get("ticked", 0) or 0)
-            confirmed = bool(steps.get("confirmed"))
-            shipped_ok = bool(steps.get("shipped_ok"))
+            already = await _detect_already_shipped(page)
+            if already:
+                # 已在别处发送：无「发送通知」入口，无需再确认发送，直接走 Step 5 回填订单状态。
+                report("already_shipped", "该交易已发送，无需再次确认发送，仅更新订单")
+                log.info("[postship] 已发送跳过确认发送 todo_id=%s marker=%s", todo_id, already)
+                shipped_ok = True
+            else:
+                if not force:
+                    report("verify", "正在核验发送确认符号 / 追跡番号…")
+                    mismatch = await _detect_ship_code_mismatch(page, int(todo_id))
+                    if mismatch:
+                        return _mismatch_result(mismatch)
+                steps = await _run_post_ship_steps(page, report, int(todo_id))
+                ticked = int(steps.get("ticked", 0) or 0)
+                confirmed = bool(steps.get("confirmed"))
+                shipped_ok = bool(steps.get("shipped_ok"))
 
     # ── Step 5: 成功确认后才软删除本地 todo（列表から消す） ──
     order_refresh_error: Optional[str] = None

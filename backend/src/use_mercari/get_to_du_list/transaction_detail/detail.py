@@ -18,7 +18,7 @@ from ._common import _WAIT_REPLY_KINDS, _is_wait_shipping_todo, _parse_messages,
 from ._messages_media import cache_message_images
 from ._messages_store import load_order_messages, replace_order_messages
 from ._translate import translate_buyer_messages
-from ._qr_facility import _extract_awaiting_feedback, _extract_delivery_address, _extract_post_ship_ready, _extract_shipping_facility, _qr_code_exists, _save_qr_code_image
+from ._qr_facility import _extract_awaiting_feedback, _extract_delivery_address, _extract_okihasso_shipping_info, _extract_post_ship_ready, _extract_shipping_facility, _qr_code_exists, _save_qr_code_image
 
 log = logging.getLogger(__name__)
 
@@ -102,6 +102,7 @@ async def fetch_transaction_detail(
         synced_recipient: Optional[str] = None
         post_ship: Dict[str, Any] = {"ready": False, "confirm_code": None, "tracking_no": None}
         awaiting_feedback = False
+        okihasso_rows: Optional[list] = None
         qr_checked = False
         qr_present = False
         try:
@@ -121,6 +122,9 @@ async def fetch_transaction_detail(
                 post_ship = await _extract_post_ship_ready(qr_page)
             # 「待反馈」状态：发送通知已完成，煤炉确认数据中（确认后自动通知买家）
             awaiting_feedback = await _extract_awaiting_feedback(qr_page)
+            # エコメルカリ便/置き発送の配送情报（サイズ/出荷番号/出荷予定日時/配送料/発送元/集荷場所）：
+            # 集荷待ちの交易页にのみ在る「ééæå±」区块。抓到即随详情返回并缓存，供前端展示。
+            okihasso_rows = await _extract_okihasso_shipping_info(qr_page)
         except Exception as exc:
             log.debug("[txdetail] 同步发货二维码/お届け先/发送通知状态失败 todo_id=%s: %s", todo_id, exc)
 
@@ -222,6 +226,8 @@ async def fetch_transaction_detail(
     # 「待反馈」状态（前端 /#/todos 列表据此显示绿色「待反馈」标签）：发送通知已完成、
     # 煤炉确认数据中，确认后会自动通知买家——卖家无需操作，仅等待煤炉反馈。
     result["awaiting_feedback"] = bool(awaiting_feedback)
+    # エコメルカリ便/置き発送の配送情报行（集荷待ち时才有；メルカリ表记原样的 {label,value} 列表）。
+    result["okihasso_shipping_rows"] = okihasso_rows or None
     # 单独写入 awaiting_feedback 列（列表查询读列、不解析 detail_json）。该状态直接读自
     # 渲染后的 DOM（qr_checked=已成功访问页面 DOM），即便此场景未截获 shipping/messages
     # 接口（page_loaded=False）也能写入；按当前实际状态置 1/0，随状态变化自动纠正。
@@ -251,6 +257,7 @@ async def fetch_transaction_detail(
             or bool(result.get("qr_image_url"))
             or bool(result.get("post_ship_ready"))
             or bool(result.get("awaiting_feedback"))
+            or bool(result.get("okihasso_shipping_rows"))
         )
     else:
         capture_ok = page_loaded

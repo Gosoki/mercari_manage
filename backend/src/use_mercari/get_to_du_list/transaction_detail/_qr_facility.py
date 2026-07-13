@@ -235,6 +235,83 @@ async def _extract_awaiting_feedback(page: Any) -> bool:
         log.debug("[shipping] 提取待反馈状态失败: %s", exc)
         return False
 
+# エコメルカリ便/置き発送（okihasso）で出荷番号発行・荷物設置済み（集荷待ち）の交易ページには
+# 「ééæå±（配送情報）」セクション data-testid="transaction:shipping_info" が表示され、
+# サイズ / 出荷番号 / 出荷予定日時 / 配送料 / 発送元 / 集荷場所 等が merDisplayRow で並ぶ。
+# ここを見出し(title)→値(body)のペアとしてそのまま抜き出す（メルカリ表記のまま＝表示に忠実、
+# 文言変更に強い）。写真行は画像のみなので除外。他方式（メルカリ便匿名の QR 等）にはこの
+# セクションが無いので、存在した時だけ結果に載る（＝okihasso 集荷待ち専用に自然にゲートされる）。
+_OKIHASSO_SHIPPING_JS = """
+() => {
+  const sec = document.querySelector('[data-testid="transaction:shipping_info"]');
+  if (!sec) return null;
+  const rows = [];
+  sec.querySelectorAll('.merDisplayRow').forEach((row) => {
+    const titleEl = row.querySelector('[class*="title__"]');
+    const bodyEl = row.querySelector(':scope > [class*="body__"]');
+    const label = titleEl ? (titleEl.innerText || '').trim() : '';
+    if (!label || label === '写真') return;
+    const value = bodyEl ? (bodyEl.innerText || '').trim() : '';
+    if (!value) return;
+    rows.push({ label, value });
+  });
+  return rows.length ? rows : null;
+}
+"""
+
+
+async def _extract_okihasso_shipping_info(page: Any):
+    """从交易页提取「エコメルカリ便/置き発送」的配送信息行（集荷待ち时才有）。
+
+    返回 ``[{label, value}, ...]``（メルカリ表记原样）；无该区块或抓取失败时返回 None。
+    """
+    try:
+        rows = await page.evaluate(_OKIHASSO_SHIPPING_JS)
+    except Exception as exc:
+        log.debug("[shipping] 提取エコメルカリ便配送信息失败: %s", exc)
+        return None
+    if not isinstance(rows, list) or not rows:
+        return None
+    out = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        label = (r.get("label") or "").strip()
+        value = (r.get("value") or "").strip()
+        if label and value:
+            out.append({"label": label, "value": value})
+    return out or None
+
+# 「発送手順完了」判定用文言：交易页がこれ以上の発送操作を要さない状態（既に発送済み or
+# 集荷待ち＝出荷番号発行・荷物設置済みで集荷を待つのみ）の場合に表示される。已打包の一键确认发送で、
+# 手動「発送通知」入口が無い（or 別の場所で発送済みの）取引に対し再度発送通知を試みるのを防ぐため、
+# 開いた時点でこれらが在れば発送手順をスキップし、订单表の状態のみ更新する。
+#
+# 注意：エコメルカリ便/置き発送の「エコメルカリ便で発送する」等の {方法}で発送する は
+# 出荷番号発行前（＝まだ発送操作が必要）にも出るため判定に使えない。集荷設置済みを一意に示す
+# 「荷物の集荷をお待ちください」を用いる。
+_ALREADY_SHIPPED_MARKERS = (
+    "購入者の受取をお待ちください",       # 発送完了・購入者の受取待ち（評価待ち）
+    "データの連携を確認中",               # 外部スキャン発送済み・メルカリ側でデータ連携確認中（最大24時間）
+    "発送通知は自動で購入者へ送信されます",  # 発送通知済み・待反馈（確認後に自動で購入者へ送信）
+    "荷物の集荷をお待ちください",          # エコメルカリ便/置き発送：出荷番号発行・荷物設置済み、集荷待ち（集荷で自動発送通知）
+)
+
+
+async def _detect_already_shipped(page: Any) -> Optional[str]:
+    """交易页が既に発送済み（外部発送 or 発送通知済み）かを可視テキストから判定する。
+
+    戻り値: 命中した文言（＝発送済み、発送手順不要）／``None``（未発送 or 判定不可）。
+    """
+    try:
+        text = await page.inner_text("body")
+    except Exception:
+        return None
+    for marker in _ALREADY_SHIPPED_MARKERS:
+        if marker in (text or ""):
+            return marker
+    return None
+
 def _persist_post_ship_ready(
     todo_id: int,
     *,

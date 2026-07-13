@@ -34,6 +34,7 @@ from ...get_order.get_in_progress_order.get_order_info import (
 from ...sync.sync_progress import make_sync_reporter
 from ._cache import get_cached_transaction_detail
 from ._common import _WAIT_SHIPPING_KINDS, _WAIT_SHIPPING_TITLE
+from ._qr_facility import _detect_already_shipped
 from .wait_shipping.ship_finalize import _detect_ship_code_mismatch, _run_post_ship_steps
 
 log = logging.getLogger(__name__)
@@ -153,6 +154,7 @@ async def bulk_finalize_post_shipping_for_account(
     auto_key = mercari_todo_key(int(account_id))
     ok = 0
     fail = 0
+    already_shipped = 0  # 打开时已在别处发送、跳过确认发送仅回填订单的条数（计入 ok）
     failures: List[str] = []
     completed: List[Dict[str, Any]] = []
 
@@ -184,6 +186,17 @@ async def bulk_finalize_post_shipping_for_account(
                 try:
                     await mgr.reload_active_tab(key, url)
                     page = await mgr.active_tab_page(key)
+                    # 校验：该交易若已在别处发送（外部扫码发送 / 已发送通知、煤炉数据连携确认中），
+                    # 页面已无「发送通知」入口，无需再确认发送——直接软删 todo + 回填订单状态即可。
+                    already = await _detect_already_shipped(page)
+                    if already:
+                        ok += 1
+                        already_shipped += 1
+                        _finalize_todo(todo)
+                        completed.append({"todo_id": int(todo.id), "item_id": item_id})
+                        report("bulk_ship_item", f"{label}：已在别处发送，跳过确认发送，仅更新订单")
+                        log.info("[bulk_ship] 已发送跳过 todo_id=%s marker=%s", todo.id, already)
+                        continue
                     # 发送前核验：不一致则跳过（不无人值守强发），留给用户手动确认发送
                     mismatch = await _detect_ship_code_mismatch(page, int(todo.id))
                     if mismatch:
@@ -227,6 +240,7 @@ async def bulk_finalize_post_shipping_for_account(
         "account_id": int(account_id),
         "ok": ok,
         "fail": fail,
+        "already_shipped": already_shipped,
         "total": total,
         "failures": failures,
     }

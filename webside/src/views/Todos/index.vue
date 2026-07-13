@@ -30,6 +30,14 @@
             @click="toggleFilterChip('include_deleted')"
             @keyup.enter="toggleFilterChip('include_deleted')"
           >{{ t('todos.includeDone') }}</div>
+          <div
+            class="search-filter-chip"
+            :class="{ 'search-filter-chip--active': filters.include_packed }"
+            role="button"
+            tabindex="0"
+            @click="toggleFilterChip('include_packed')"
+            @keyup.enter="toggleFilterChip('include_packed')"
+          >{{ t('todos.includePacked') }}</div>
         </el-col>
         <el-col :xs="24" :md="8" class="search-actions">
           <el-tooltip :disabled="!syncLockStore.locked" :content="syncLockStore.label" placement="top">
@@ -382,6 +390,20 @@
                   >
                     {{ t('todos.confirmShip') }}
                   </el-button>
+                </div>
+              </div>
+            </template>
+            <!-- エコメルカリ便/置き発送：出荷番号発行・荷物設置済み（集荷待ち）。
+                 配送情报（サイズ/出荷番号/出荷予定日時/配送料/発送元/集荷場所）をそのまま表示。 -->
+            <template v-else-if="detail.okihasso_shipping_rows && detail.okihasso_shipping_rows.length">
+              <div class="detail-okihasso">
+                <div
+                  v-for="(row, i) in detail.okihasso_shipping_rows"
+                  :key="i"
+                  class="detail-recipient"
+                >
+                  <span class="detail-label">{{ row.label }}</span>
+                  <pre class="detail-recipient-text">{{ row.value }}</pre>
                 </div>
               </div>
             </template>

@@ -203,6 +203,7 @@ export default defineComponent({
       keyword: '',
       kind: '',
       include_deleted: false,
+      include_packed: false,
     })
 
     const kindOptions = ref([])
@@ -683,6 +684,7 @@ export default defineComponent({
       if (kw) p.keyword = kw
       if (filters.value.kind) p.kind = filters.value.kind
       if (filters.value.include_deleted) p.include_deleted = true
+      if (filters.value.include_packed) p.include_packed = true
       return p
     }
 
@@ -959,8 +961,13 @@ export default defineComponent({
         const okCount = Number(d.ok || 0)
         const failCount = Number(d.fail || 0)
         const total = Number(d.total || 0)
+        const alreadyShipped = Number(d.already_shipped || 0)
         const failures = Array.isArray(d.failures) ? d.failures : []
-        const summary = t('todos.bulkConfirmShipResult', { ok: okCount, fail: failCount, total })
+        let summary = t('todos.bulkConfirmShipResult', { ok: okCount, fail: failCount, total })
+        // 已在别处发送、跳过确认发送仅回填订单的条数（计入成功）追加一行说明
+        if (alreadyShipped) {
+          summary += `\n${t('todos.bulkConfirmShipAlreadyShipped', { count: alreadyShipped })}`
+        }
         ElMessageBox.alert(
           failures.length ? `${summary}\n${failures.slice(0, 10).join('\n')}` : summary,
           t('todos.bulkConfirmShipConfirmTitle'),

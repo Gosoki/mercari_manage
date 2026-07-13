@@ -30,10 +30,10 @@ async def bulk_finalize_post_shipping_endpoint(req: BulkFinalizePostShippingRequ
     if not account_ids:
         if jid:
             clear_sync_progress(jid)
-        return {"account_count": 0, "ok": 0, "fail": 0, "total": 0, "accounts": [], "failures": []}
+        return {"account_count": 0, "ok": 0, "fail": 0, "already_shipped": 0, "total": 0, "accounts": [], "failures": []}
 
     accounts: List[Dict[str, Any]] = []
-    ok = fail = total = 0
+    ok = fail = total = already_shipped = 0
     failures: List[str] = []
     try:
         for i, aid in enumerate(account_ids, start=1):
@@ -56,6 +56,7 @@ async def bulk_finalize_post_shipping_endpoint(req: BulkFinalizePostShippingRequ
                 continue
             ok += int(stats.get("ok", 0) or 0)
             fail += int(stats.get("fail", 0) or 0)
+            already_shipped += int(stats.get("already_shipped", 0) or 0)
             total += int(stats.get("total", 0) or 0)
             failures.extend(stats.get("failures") or [])
             accounts.append(stats)
@@ -67,6 +68,7 @@ async def bulk_finalize_post_shipping_endpoint(req: BulkFinalizePostShippingRequ
         "account_count": len(account_ids),
         "ok": ok,
         "fail": fail,
+        "already_shipped": already_shipped,
         "total": total,
         "accounts": accounts,
         "failures": failures,

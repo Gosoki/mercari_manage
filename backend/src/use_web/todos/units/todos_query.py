@@ -9,6 +9,19 @@ from typing import Any, Dict, List, Optional
 from ....db_manage.database import DatabaseManager
 
 
+# 「已打包」判定（与前端 isPackedRow 一致）：已发行发货二维码/条形码、非待反馈、
+# 非待收货(Shipped)，且属于待发货类（标题「発送をしてください」或 kind 为待发货类）。
+# 默认列表隐藏这些行，勾选「已打包」筛选后才一并显示。全部字段用 IFNULL/COALESCE 包裹，
+# 保证该条件恒为 0/1（不会因 NULL 让外层 NOT(...) 误排除正常行）。
+_PACKED_COND = (
+    "IFNULL(t.[qr_image_path], '') != ''"
+    " AND COALESCE(t.[awaiting_feedback], 0) = 0"
+    " AND IFNULL(t.[kind], '') != 'Shipped'"
+    " AND (IFNULL(t.[title], '') = '発送をしてください'"
+    " OR IFNULL(t.[kind], '') IN ('WaitShippingCard', 'WaitShippingPoint', 'WaitShippingCarrier', 'TransactionWaitShippingFunds'))"
+)
+
+
 _LIST_COLS = (
     "id",
     "account_id",
@@ -39,6 +52,7 @@ def list_todos(
     kind: Optional[str] = None,
     keyword: Optional[str] = None,
     include_deleted: bool = False,
+    include_packed: bool = False,
     page: int = 1,
     page_size: int = 20,
 ) -> Dict[str, Any]:
@@ -46,6 +60,8 @@ def list_todos(
     分页列出本地 ``todo_items``，附 ``account_name``。
 
     - ``include_deleted=False``（默认）只显示未完成（``is_delete=0``）
+    - ``include_packed=False``（默认）隐藏「已打包」行（见 ``_PACKED_COND``），
+      勾选后才一并显示
     - ``keyword`` 匹配 title / message / item_id / item_name
     """
     db = DatabaseManager()
@@ -56,6 +72,8 @@ def list_todos(
     params: List[Any] = []
     if not include_deleted:
         where.append("COALESCE(t.[is_delete], 0) = 0")
+    if not include_packed:
+        where.append(f"NOT ({_PACKED_COND})")
     if account_id is not None:
         where.append("t.[account_id] = ?")
         params.append(int(account_id))
