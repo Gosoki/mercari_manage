@@ -40,6 +40,14 @@
           >{{ t('todos.kind.waitReply') }}</div>
           <div
             class="search-filter-chip"
+            :class="{ 'search-filter-chip--active': filters.categories.includes('wait_review') }"
+            role="button"
+            tabindex="0"
+            @click="selectFilterChip('wait_review')"
+            @keyup.enter="selectFilterChip('wait_review')"
+          >{{ t('todos.kind.waitReview') }}</div>
+          <div
+            class="search-filter-chip"
             :class="{ 'search-filter-chip--active': filters.packed_only }"
             role="button"
             tabindex="0"
@@ -58,15 +66,15 @@
         <el-col :xs="24" :md="8" class="search-actions">
           <el-tooltip :disabled="!syncLockStore.locked" :content="syncLockStore.label" placement="top">
             <span>
-              <el-button type="primary" :icon="Download" :loading="syncLoading || syncLockStore.locked" :disabled="bulkReviewLoading || bulkConfirmShipLoading || syncLockStore.locked" @click="runSync">
+              <el-button type="primary" :loading="syncLoading || syncLockStore.locked" :disabled="bulkReviewLoading || bulkConfirmShipLoading || syncLockStore.locked" @click="runSync">
                 {{ t('todos.syncFromMercari') }}
               </el-button>
             </span>
           </el-tooltip>
-          <el-button type="warning" :loading="bulkConfirmShipLoading" :disabled="syncLoading || bulkReviewLoading" @click="runBulkConfirmShip">
+          <el-button v-if="filters.packed_only" type="warning" :loading="bulkConfirmShipLoading" :disabled="syncLoading || bulkReviewLoading" @click="runBulkConfirmShip">
             {{ t('todos.bulkConfirmShip') }}
           </el-button>
-          <el-button type="success" :loading="bulkReviewLoading" :disabled="syncLoading || bulkConfirmShipLoading" @click="runBulkReview">
+          <el-button v-if="filters.categories.includes('wait_review')" type="success" :loading="bulkReviewLoading" :disabled="syncLoading || bulkConfirmShipLoading" @click="runBulkReview">
             {{ t('todos.bulkReview') }}
           </el-button>
         </el-col>
@@ -90,6 +98,23 @@
               <template #error>
                 <span class="thumb-fallback">-</span>
               </template>
+            </el-image>
+            <span v-else class="thumb-fallback">-</span>
+          </template>
+        </el-table-column>
+
+        <!-- 发货码（仅「已打包」筛选时显示）：点击缩略图弹出大图，大图上方显示订单号 -->
+        <el-table-column v-if="filters.packed_only" :label="t('todos.colShipCode')" width="150" align="center" header-align="center">
+          <template #default="{ row }">
+            <el-image
+              v-if="row.qr_image_path"
+              class="todo-qr-thumb"
+              :src="mercariImageUrl(row.qr_image_path)"
+              fit="contain"
+              lazy
+              @click="openQrViewer(row)"
+            >
+              <template #error><span class="thumb-fallback">-</span></template>
             </el-image>
             <span v-else class="thumb-fallback">-</span>
           </template>
@@ -826,6 +851,23 @@
           <div class="todos-sync-overlay__title">{{ syncOverlayTitle }}</div>
           <div class="todos-sync-overlay__step">{{ syncProgressLabel || t('todos.pleaseWait') }}</div>
         </div>
+      </div>
+    </teleport>
+
+    <!-- 发货码大图：点击列表缩略图后弹出，二维码上方显示订单号（末 4 位高亮） -->
+    <teleport to="body">
+      <div
+        v-if="qrViewer.visible"
+        class="qr-viewer-mask"
+        @click="qrViewer.visible = false"
+      >
+        <div class="qr-viewer-body" @click.stop>
+          <div v-if="qrViewer.orderNo" class="qr-viewer-orderno">
+            <span class="cell-order-no-head">{{ orderNoHead(qrViewer.orderNo) }}</span><span class="cell-order-no-tail">{{ orderNoTail(qrViewer.orderNo) }}</span>
+          </div>
+          <img :src="qrViewer.src" class="qr-viewer-img" alt="" />
+        </div>
+        <div class="qr-viewer-close" @click="qrViewer.visible = false">×</div>
       </div>
     </teleport>
 

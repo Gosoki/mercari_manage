@@ -65,6 +65,16 @@
   color: var(--el-text-color-placeholder);
   font-size: 12px;
 }
+/* 发货码列缩略图：列表内高斯模糊（防误扫），点击弹出大图才清晰。样式见 style.global.css .qr-viewer-* */
+.todo-qr-thumb {
+  width: 120px;
+  height: 60px;
+  border-radius: 4px;
+  display: block;
+  margin: 0 auto;
+  cursor: pointer;
+  filter: blur(4px);
+}
 .cell-title {
   font-weight: 600;
   margin-bottom: 4px;

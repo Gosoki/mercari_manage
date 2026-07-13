@@ -44,3 +44,58 @@
   line-height: 1.55;
   word-break: break-word;
 }
+
+/* ─── 发货码大图查看（teleport 到 body；二维码上方显示订单号，末 4 位高亮） ─── */
+.qr-viewer-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+}
+.qr-viewer-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.qr-viewer-orderno {
+  font-family: var(--el-font-family-monospace, monospace);
+  font-size: 24px;
+  letter-spacing: 1px;
+  word-break: break-all;
+  text-align: center;
+}
+.qr-viewer-orderno .cell-order-no-head {
+  color: #d0d3d9;
+}
+/* 订单号末 4 位高亮，便于扫码/核对 */
+.qr-viewer-orderno .cell-order-no-tail {
+  color: #f87171;
+  font-weight: 700;
+}
+.qr-viewer-img {
+  max-width: 80vw;
+  max-height: 70vh;
+  background: #fff;
+  border-radius: 6px;
+}
+.qr-viewer-close {
+  position: absolute;
+  top: 24px;
+  right: 32px;
+  width: 44px;
+  height: 44px;
+  line-height: 40px;
+  text-align: center;
+  font-size: 30px;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+}
+.qr-viewer-close:hover {
+  background: rgba(255, 255, 255, 0.28);
+}

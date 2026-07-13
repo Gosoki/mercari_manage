@@ -111,3 +111,4 @@ backend/mercariDB*
 skills-lock.json
 mercariDB.db
 backend/system.db
+backend/sync.ffs_db

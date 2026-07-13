@@ -2,7 +2,7 @@ import { defineComponent, computed, nextTick, onBeforeUnmount, onMounted, reacti
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import { ElMessage } from '@/utils/notify'
-import { Download, Loading, Plus, Minus } from '@element-plus/icons-vue'
+import { Loading, Plus, Minus } from '@element-plus/icons-vue'
 import { todosApi, costRecordApi, costExpenseApi, orderApi } from '@/api'
 import { useMercariAccountStore } from '@/stores/mercariAccount.js'
 import { useSyncLockStore } from '@/stores/syncLock.js'
@@ -1039,6 +1039,26 @@ export default defineComponent({
       return KIND_TAG_TYPES[kind] || 'info'
     }
 
+    // 订单号（= item_id）拆分：末 4 位单独高亮显示，前缀正常色。见 style.css .cell-order-no-tail
+    function orderNoHead(id) {
+      const s = String(id || '')
+      return s.length > 4 ? s.slice(0, -4) : ''
+    }
+    function orderNoTail(id) {
+      const s = String(id || '')
+      return s.length > 4 ? s.slice(-4) : s
+    }
+
+    // 发货码大图查看：点击列表缩略图弹出全屏遮罩，二维码上方显示订单号（末 4 位高亮）
+    const qrViewer = reactive({ visible: false, src: '', orderNo: '' })
+    function openQrViewer(row) {
+      const src = mercariImageUrl(row?.qr_image_path)
+      if (!src) return
+      qrViewer.src = src
+      qrViewer.orderNo = String(row?.item_id || '')
+      qrViewer.visible = true
+    }
+
     // 是否「已打包」行（待发货 + 已发行发货二维码/条形码）。与 kindLabel 的「已打包」判定一致：
     // 「待反馈」/ 待收货(Shipped) 优先，不算已打包。已打包在列表里显示橙色底色（见 style.css）。
     function isPackedRow(row) {
@@ -1829,7 +1849,6 @@ export default defineComponent({
       useI18n,
       ElMessage,
       ElMessageBox,
-      Download,
       Loading,
       todosApi,
       useMercariAccountStore,
@@ -1932,6 +1951,10 @@ export default defineComponent({
       kindLabel,
       kindTagType,
       isPackedRow,
+      orderNoHead,
+      orderNoTail,
+      qrViewer,
+      openQrViewer,
       shipRemainingText,
       shipRemainingTagType,
       displayTs,

@@ -16,13 +16,21 @@ _WAIT_SHIPPING_COND = (
 )
 # 「待回复」类判定：买家来信（IncomingMessage）。
 _WAIT_REPLY_COND = "IFNULL(t.[kind], '') = 'IncomingMessage'"
+# 「待评价」类判定：卖家待评价（ReviewedSeller）。
+_WAIT_REVIEW_COND = "IFNULL(t.[kind], '') = 'ReviewedSeller'"
 
-# 前端「待发货 / 待回复 / 其他」分类筛选（chip）。「其他」= 既非待发货也非待回复。
+# 前端「待发货 / 待回复 / 待评价 / 其他」分类筛选（chip）。
+# 「其他」= 既非待发货、也非待回复、也非待评价。
 # 传入多个分类时取并集；未传（默认）不做分类过滤，全部显示。
 _CATEGORY_CONDS = {
     "wait_shipping": _WAIT_SHIPPING_COND,
     "wait_reply": _WAIT_REPLY_COND,
-    "other": f"NOT {_WAIT_SHIPPING_COND} AND NOT ({_WAIT_REPLY_COND})",
+    "wait_review": _WAIT_REVIEW_COND,
+    "other": (
+        f"NOT {_WAIT_SHIPPING_COND}"
+        f" AND NOT ({_WAIT_REPLY_COND})"
+        f" AND NOT ({_WAIT_REVIEW_COND})"
+    ),
 }
 
 # 「已打包」判定（与前端 isPackedRow 一致）：已发行发货二维码/条形码、非待反馈、
