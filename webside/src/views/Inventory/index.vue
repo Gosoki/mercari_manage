@@ -28,7 +28,7 @@
             </el-select>
             <el-cascader
               v-model="filterWarehousePath"
-              :options="warehouseCascaderOptions"
+              :options="warehouseFilterCascaderOptions"
               :props="warehouseCascaderProps"
               :show-all-levels="false"
               class="search-select-control"
@@ -439,6 +439,7 @@
       :width="productEditDialogWidth"
       class="product-dialog"
       destroy-on-close
+      :before-close="handleProductDialogClose"
     >
       <el-form
         :model="form"
@@ -1084,22 +1085,9 @@
                 plain
                 @click="openSplitDialog(form)"
               >{{ t('inventory.split') }}</el-button>
-              <el-popconfirm
-                title=""
-                hide-icon
-                popper-class="listing-confirm-popper"
-                :confirm-button-text="t('common.confirm')"
-                :cancel-button-text="t('common.cancel')"
-                @confirm="remove(form.id); dialogVisible = false"
-              >
-                <template #reference>
-                  <el-button type="danger">{{ t('common.delete') }}</el-button>
-                </template>
-              </el-popconfirm>
             </template>
           </div>
           <div class="product-dialog-footer__right">
-            <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
             <el-button
               type="primary"
               @click="submit"

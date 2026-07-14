@@ -23,6 +23,7 @@ def list_inventory(
     product_type_id: Optional[int] = None,
     owner_user_id: Optional[int] = None,
     warehouse_id: Optional[int] = None,
+    warehouse_unassigned: bool = False,
     in_stock_only: bool = False,
     warehouse_assigned_only: bool = False,
     no_image_only: bool = False,
@@ -64,6 +65,8 @@ def list_inventory(
     if warehouse_id:
         where_parts.append("AND p.warehouse_id = ?")
         params.append(warehouse_id)
+    if warehouse_unassigned:
+        where_parts.append("AND p.warehouse_id IS NULL")
     if in_stock_only:
         where_parts.append("AND COALESCE(p.quantity, 0) > 0")
     if warehouse_assigned_only:

@@ -85,6 +85,7 @@ export default defineComponent({
     const keyword = ref('')
     const filterCat = ref(null)
     const filterWarehouse = ref(null)
+    const filterWarehouseUnassigned = ref(false)
     const filterWarehousePath = ref([])
     const filterProductType = ref(null)
     const filterProductTypePath = ref([])
@@ -1502,6 +1503,13 @@ export default defineComponent({
 
     const warehouseCascaderOptions = computed(() => warehouseTreeMeta.value.roots)
 
+    // 顶部筛选专用：在真实仓库分组之上追加「默认仓库」合成节点，用于筛选未分配货位的商品
+    const WAREHOUSE_UNASSIGNED_VALUE = 'WH_UNASSIGNED'
+    const warehouseFilterCascaderOptions = computed(() => [
+      { value: WAREHOUSE_UNASSIGNED_VALUE, label: t('inventory.defaultWarehouse'), children: [] },
+      ...warehouseTreeMeta.value.roots,
+    ])
+
     function syncWarehouseCascaderPathByWarehouseId(wid) {
       const id = wid == null || wid === '' ? null : Number(wid)
       if (!Number.isFinite(id)) {
@@ -1513,6 +1521,10 @@ export default defineComponent({
     }
 
     function syncFilterWarehousePathByWarehouseId(wid) {
+      if (filterWarehouseUnassigned.value) {
+        filterWarehousePath.value = [WAREHOUSE_UNASSIGNED_VALUE]
+        return
+      }
       const id = wid == null || wid === '' ? null : Number(wid)
       if (!Number.isFinite(id)) {
         filterWarehousePath.value = []
@@ -1536,6 +1548,13 @@ export default defineComponent({
 
     function handleFilterWarehouseChange(path) {
       const picked = Array.isArray(path) ? path[path.length - 1] : null
+      if (picked === WAREHOUSE_UNASSIGNED_VALUE) {
+        filterWarehouse.value = null
+        filterWarehouseUnassigned.value = true
+        load()
+        return
+      }
+      filterWarehouseUnassigned.value = false
       if (!picked || !String(picked).startsWith('WHS:')) {
         filterWarehouse.value = null
         load()
@@ -1611,6 +1630,7 @@ export default defineComponent({
       if (keyword.value) params.keyword = keyword.value
       if (filterCat.value) params.category_id = filterCat.value
       if (filterWarehouse.value) params.warehouse_id = filterWarehouse.value
+      if (filterWarehouseUnassigned.value) params.warehouse_unassigned = true
       if (filterProductType.value) params.product_type_id = filterProductType.value
       if (filterOwnerUserId.value) params.owner_user_id = filterOwnerUserId.value
       if (viewAutoListingOnly.value) params.auto_listing_only = true
@@ -3751,11 +3771,18 @@ export default defineComponent({
       }
     }
 
-    async function remove(id) {
-      await inventoryApi.remove(id)
-      ElMessage.success(t('inventory.deleteSuccess'))
-      await load({ resetPage: false })
-      loadInventoryStats()
+    /** 关闭编辑弹窗前：冲刷尚未落库的防抖实时保存，确保最后一次编辑即时生效 */
+    async function handleProductDialogClose(done) {
+      const hadPending = !!autosaveTimer
+      cancelFormAutosave()
+      try {
+        if (autosaveInFlight) await autosaveInFlight
+        if (hadPending) await runFormAutosave()
+      } catch (e) {
+        // 静默：实时保存失败不阻塞关闭
+      } finally {
+        done()
+      }
     }
 
     async function openScanDialog() {
@@ -4431,6 +4458,7 @@ export default defineComponent({
       shelfNamePartitionLabelFromKey,
       warehouseTreeMeta,
       warehouseCascaderOptions,
+      warehouseFilterCascaderOptions,
       syncWarehouseCascaderPathByWarehouseId,
       syncFilterWarehousePathByWarehouseId,
       handleWarehouseCascaderChange,
@@ -4539,7 +4567,7 @@ export default defineComponent({
       applyProductImgConfirm,
       handleInventoryImageFileChange,
       submit,
-      remove,
+      handleProductDialogClose,
       openScanDialog,
       stopScan,
       handleCameraCapture,
