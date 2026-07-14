@@ -200,14 +200,10 @@ export default defineComponent({
     const pageSize = ref(20)
 
     const filters = ref({
-      keyword: '',
-      kind: '',
       packed_only: false,
       // 分类筛选 chip（单选，互斥）；默认选中「待发货」
       categories: ['wait_shipping'],
     })
-
-    const kindOptions = ref([])
 
     const syncLoading = ref(false)
     const bulkReviewLoading = ref(false)
@@ -701,9 +697,6 @@ export default defineComponent({
 
     function listParams() {
       const p = { page: page.value, page_size: pageSize.value }
-      const kw = filters.value.keyword?.trim()
-      if (kw) p.keyword = kw
-      if (filters.value.kind) p.kind = filters.value.kind
       if (filters.value.packed_only) p.packed_only = true
       if (filters.value.categories.length) p.categories = filters.value.categories.join(',')
       return p
@@ -719,16 +712,6 @@ export default defineComponent({
         ElMessage.error(e?.message || t('todos.loadFailed'))
       } finally {
         loading.value = false
-      }
-    }
-
-    async function loadKindOptions() {
-      try {
-        const res = await todosApi.kinds()
-        const arr = res?.kinds
-        kindOptions.value = Array.isArray(arr) ? arr : []
-      } catch {
-        kindOptions.value = []
       }
     }
 
@@ -829,7 +812,7 @@ export default defineComponent({
           t('todos.syncResultTitle'),
           { type: 'success', confirmButtonText: t('dialog.confirmBtn') },
         )
-        await Promise.all([load(), loadKindOptions()])
+        await load()
       } catch (e) {
         syncHadError = true
         syncOverlayTitle.value = t('todos.syncFailed')
@@ -1831,7 +1814,6 @@ export default defineComponent({
     onMounted(() => {
       mercariAccountStore.ensureLoaded()
       syncLockStore.subscribe()
-      loadKindOptions()
       load()
       // 每分钟推进 nowTs，让列表里的「剩余发货时间」倒计时与颜色随时间刷新
       shipCountdownTimer = setInterval(() => { nowTs.value = Date.now() }, 60000)
@@ -1882,7 +1864,6 @@ export default defineComponent({
       page,
       pageSize,
       filters,
-      kindOptions,
       syncLoading,
       bulkReviewLoading,
       bulkConfirmShipLoading,
@@ -1953,7 +1934,6 @@ export default defineComponent({
       onShippingImgError,
       listParams,
       load,
-      loadKindOptions,
       onFilterChange,
       selectFilterChip,
       onPageChange,

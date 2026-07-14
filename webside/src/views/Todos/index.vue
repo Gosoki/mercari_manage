@@ -1,27 +1,8 @@
 <template>
   <div>
     <el-card shadow="never" class="search-card">
-      <el-row :gutter="0" align="middle" class="search-row">
-        <el-col :xs="24" :md="16" class="search-left-group">
-          <el-input
-            v-model="filters.keyword"
-            clearable
-            @change="onFilterChange"
-          />
-          <el-select
-            v-model="filters.kind"
-            :placeholder="t('todos.todoType')"
-            clearable
-            style="min-width: 200px"
-            @change="onFilterChange"
-          >
-            <el-option
-              v-for="k in kindOptions"
-              :key="k"
-              :label="kindLabel(k)"
-              :value="k"
-            />
-          </el-select>
+      <div class="search-row">
+        <div class="search-left-group">
           <div
             class="search-filter-chip"
             :class="{ 'search-filter-chip--active': filters.categories.includes('wait_shipping') }"
@@ -62,8 +43,8 @@
             @click="selectFilterChip('other')"
             @keyup.enter="selectFilterChip('other')"
           >{{ t('todos.categoryOther') }}</div>
-        </el-col>
-        <el-col :xs="24" :md="8" class="search-actions">
+        </div>
+        <div class="search-actions">
           <el-tooltip :disabled="!syncLockStore.locked" :content="syncLockStore.label" placement="top">
             <span>
               <el-button type="primary" :loading="syncLoading || syncLockStore.locked" :disabled="bulkReviewLoading || bulkConfirmShipLoading || syncLockStore.locked" @click="runSync">
@@ -71,14 +52,14 @@
               </el-button>
             </span>
           </el-tooltip>
-          <el-button v-if="filters.packed_only" type="warning" :loading="bulkConfirmShipLoading" :disabled="syncLoading || bulkReviewLoading" @click="runBulkConfirmShip">
+          <el-button v-if="filters.packed_only" type="success" :loading="bulkConfirmShipLoading" :disabled="syncLoading || bulkReviewLoading" @click="runBulkConfirmShip">
             {{ t('todos.bulkConfirmShip') }}
           </el-button>
           <el-button v-if="filters.categories.includes('wait_review')" type="success" :loading="bulkReviewLoading" :disabled="syncLoading || bulkConfirmShipLoading" @click="runBulkReview">
             {{ t('todos.bulkReview') }}
           </el-button>
-        </el-col>
-      </el-row>
+        </div>
+      </div>
     </el-card>
 
     <el-card shadow="never" class="table-card">
