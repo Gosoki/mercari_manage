@@ -20,8 +20,8 @@ def stock_in_inventory(pid: int, data: StockInRequest):
         raise HTTPException(status_code=400, detail="入库数量必须大于0")
     try:
         with db.get_connection() as conn:
+            db.dialect.begin(conn)
             cur = conn.cursor()
-            cur.execute("BEGIN IMMEDIATE")
             cur.execute(
                 "UPDATE [inventory] SET quantity = COALESCE(quantity, 0) + ? WHERE id = ?",
                 (data.quantity, pid),
@@ -48,7 +48,7 @@ def stock_in_inventory(pid: int, data: StockInRequest):
                         int(time.time()),
                     ),
                 )
-            conn.commit()
+            db.dialect.commit(conn)
     except HTTPException:
         raise
     new_qty = db.execute_query("SELECT quantity FROM [inventory] WHERE id = ?", (pid,))
@@ -67,8 +67,8 @@ def stock_out_inventory(pid: int, data: StockInRequest):
         raise HTTPException(status_code=400, detail=f"库存不足，当前库存：{current_qty}")
     try:
         with db.get_connection() as conn:
+            db.dialect.begin(conn)
             cur = conn.cursor()
-            cur.execute("BEGIN IMMEDIATE")
             cur.execute("SELECT quantity FROM [inventory] WHERE id = ? LIMIT 1", (pid,))
             meta = cur.fetchone()
             if not meta:
@@ -101,7 +101,7 @@ def stock_out_inventory(pid: int, data: StockInRequest):
                         int(time.time()),
                     ),
                 )
-            conn.commit()
+            db.dialect.commit(conn)
     except HTTPException:
         raise
     # 组合商品：套数已扣减并提交，级联扣减来源子商品物理库存（普通商品为空操作）。

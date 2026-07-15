@@ -8,7 +8,11 @@ from fastapi import HTTPException, Depends
 
 from ....auth import require_auth
 from ....db_manage.database import DatabaseManager
-from ....use_mercari.inventory_counters import is_combined_source, recompute_listable_quantity
+from ....use_mercari.inventory_counters import (
+    is_combined_source,
+    recompute_listable_quantity,
+    _listable_sql_expr,
+)
 from ...image_storage import get_image_root
 
 from .inventory_helpers import (
@@ -71,8 +75,19 @@ def split_inventory(pid: int, data: InventorySplitRequest, _claims: dict = Depen
     if is_combined:
         raise HTTPException(status_code=400, detail="组合商品不能拆分")
     if is_combined_source(pid):
-        raise HTTPException(status_code=400, detail="该商品被组合商品引用，请先解除组合后再拆分")
-    if split_qty > src_quantity:
+        # 被组合商品引用：允许拆分，但只能拆「可上数量」（库存 - 在售 - 待出 - 组合预留）内的部分，
+        # 否则来源物理库存会低于组合预留，产生超过实物的「幽灵预留」。
+        lst_rows = db.execute_query(
+            f"SELECT {_listable_sql_expr()} FROM [inventory] WHERE id = ? LIMIT 1",
+            (pid,),
+        )
+        listable = int(lst_rows[0][0] or 0) if lst_rows else 0
+        if split_qty > listable:
+            raise HTTPException(
+                status_code=400,
+                detail=f"该商品被组合商品引用，拆分数量不能超过可上数量（{listable}）",
+            )
+    elif split_qty > src_quantity:
         raise HTTPException(
             status_code=400,
             detail=f"拆分数量不能超过当前库存（{src_quantity}）",
@@ -87,8 +102,8 @@ def split_inventory(pid: int, data: InventorySplitRequest, _claims: dict = Depen
 
     try:
         with db.get_connection() as conn:
+            db.dialect.begin(conn)
             cur = conn.cursor()
-            cur.execute("BEGIN IMMEDIATE")
             if split_qty > 0:
                 cur.execute(
                     "UPDATE [inventory] SET quantity = COALESCE(quantity, 0) - ? WHERE id = ?",
@@ -110,7 +125,7 @@ def split_inventory(pid: int, data: InventorySplitRequest, _claims: dict = Depen
                 ),
             )
             new_id = cur.lastrowid
-            conn.commit()
+            db.dialect.commit(conn)
     except HTTPException:
         raise
     except Exception:

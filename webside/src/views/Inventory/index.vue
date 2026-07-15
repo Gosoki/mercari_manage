@@ -348,7 +348,9 @@
         </el-table-column>
         <el-table-column :label="t('inventory.warehouseLocation')" min-width="160" align="left" header-align="left">
           <template #default="{ row }">
+            <span v-if="Number(row.is_combined || 0) === 1" class="cell-muted">-</span>
             <el-popover
+              v-else
               :visible="editingWarehouseRowId === row.id"
               trigger="click"
               :disabled="listingPickMode"
@@ -555,7 +557,7 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="12">
+          <el-col v-if="!showCombinedEditDetail" :xs="24" :sm="12">
             <el-form-item :label="t('inventory.belongingShelf')" prop="warehouse_id">
               <el-cascader
                 v-model="warehouseCascaderPath"
@@ -1411,13 +1413,13 @@
           <el-input-number
             v-model="splitForm.split_quantity"
             :min="0"
-            :max="splitSourceQuantity"
+            :max="splitMaxQuantity"
             :step="1"
             controls-position="right"
             style="width: 160px"
           />
           <span class="split-quantity-hint">
-            {{ t('inventory.splitQuantityHint', { max: splitSourceQuantity }) }}
+            {{ t('inventory.splitQuantityHint', { max: splitMaxQuantity }) }}
           </span>
         </el-form-item>
       </el-form>

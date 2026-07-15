@@ -192,8 +192,8 @@ def migrate_inventory_to_shelf(wid: int, data: MigrateInventoryBody):
         raise HTTPException(status_code=404, detail="货架不存在")
     try:
         with db.get_connection() as conn:
+            db.dialect.begin(conn)
             cur = conn.cursor()
-            cur.execute("BEGIN IMMEDIATE")
             # 库存归属迁移（库存管理主数据）
             cur.execute(
                 "UPDATE [inventory] SET warehouse_id = ? WHERE warehouse_id = ?",
@@ -218,7 +218,7 @@ def migrate_inventory_to_shelf(wid: int, data: MigrateInventoryBody):
                 (tid, wid),
             )
             moved_cost = cur.rowcount
-            conn.commit()
+            db.dialect.commit(conn)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"迁移失败: {e}")
     return {

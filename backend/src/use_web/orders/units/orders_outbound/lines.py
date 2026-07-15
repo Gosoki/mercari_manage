@@ -104,8 +104,8 @@ def bind_outbound_line_inventory(line_id: int, data: OutboundLineBindInventoryBo
             raise HTTPException(status_code=400, detail=f"目标库存不足，当前库存：{new_inv_qty}")
 
         with db.get_connection() as conn:
+            db.dialect.begin(conn)
             cur = conn.cursor()
-            cur.execute("BEGIN IMMEDIATE")
             if old_inv_id is not None and old_inv_id != inv_id:
                 cur.execute(
                     "UPDATE [inventory] SET [quantity] = COALESCE([quantity], 0) + ? WHERE [id] = ?",
@@ -144,7 +144,7 @@ def bind_outbound_line_inventory(line_id: int, data: OutboundLineBindInventoryBo
                 "UPDATE [order_outbound_lines] SET [inventory_id] = ?, [quantity] = ? WHERE [id] = ?",
                 (inv_id, new_qty, int(line.id)),
             )
-            conn.commit()
+            db.dialect.commit(conn)
     else:
         line.inventory_id = inv_id
         line.quantity = new_qty
@@ -257,8 +257,8 @@ def convert_outbound_line_owner(
 
     try:
         with db.get_connection() as conn:
+            db.dialect.begin(conn)
             cur = conn.cursor()
-            cur.execute("BEGIN IMMEDIATE")
             if not holds_stock:
                 # 未出库：把 qty 从原库存搬到新库存，新库存 quantity = qty
                 cur.execute(
@@ -315,7 +315,7 @@ def convert_outbound_line_owner(
                 "UPDATE [order_outbound_lines] SET [inventory_id] = ? WHERE [id] = ?",
                 (new_inv_id, int(line.id)),
             )
-            conn.commit()
+            db.dialect.commit(conn)
     except HTTPException:
         raise
     except Exception:

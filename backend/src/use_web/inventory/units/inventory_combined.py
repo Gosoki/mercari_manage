@@ -188,8 +188,8 @@ def create_combined_inventory(data: CombinedInventoryCreate, _claims: dict = Dep
 
     try:
         with db.get_connection() as conn:
+            db.dialect.begin(conn)
             cur = conn.cursor()
-            cur.execute("BEGIN IMMEDIATE")
             cur.execute(
                 """
                 INSERT INTO [inventory] (
@@ -219,7 +219,7 @@ def create_combined_inventory(data: CombinedInventoryCreate, _claims: dict = Dep
                 ),
             )
             new_id = cur.lastrowid
-            conn.commit()
+            db.dialect.commit(conn)
     except HTTPException:
         raise
     except Exception:

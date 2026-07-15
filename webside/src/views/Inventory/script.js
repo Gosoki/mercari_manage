@@ -404,6 +404,8 @@ export default defineComponent({
     const splitSourceId = ref(null)
     const splitSourceName = ref('')
     const splitSourceQuantity = ref(0)
+    /** 拆分数量上限：被组合引用时为「可上数量」，否则为全部库存 */
+    const splitMaxQuantity = ref(0)
     const splitForm = ref({
       owner_user_id: null,
       split_quantity: 0
@@ -411,7 +413,7 @@ export default defineComponent({
     const splitCanSubmit = computed(() => {
       const qty = Number(splitForm.value.split_quantity ?? 0)
       if (!Number.isFinite(qty) || qty < 0) return false
-      if (qty > Number(splitSourceQuantity.value || 0)) return false
+      if (qty > Number(splitMaxQuantity.value || 0)) return false
       return splitForm.value.owner_user_id != null
     })
 
@@ -424,6 +426,10 @@ export default defineComponent({
       splitSourceId.value = row.id
       splitSourceName.value = row.name || ''
       splitSourceQuantity.value = Number(row.quantity ?? 0)
+      // 被组合商品引用时仅可拆「可上数量」（库存 - 在售 - 待出 - 组合预留），否则可拆至全部库存
+      splitMaxQuantity.value = Number(row.combined_quantity ?? 0) > 0
+        ? listableQuantity(row)
+        : Number(row.quantity ?? 0)
       splitForm.value = {
         owner_user_id: null,
         split_quantity: 0
@@ -434,8 +440,8 @@ export default defineComponent({
     async function submitSplit() {
       if (!splitSourceId.value) return
       const qty = Math.max(0, Math.round(Number(splitForm.value.split_quantity ?? 0)))
-      if (qty > Number(splitSourceQuantity.value || 0)) {
-        ElMessage.warning(t('inventory.splitQuantityExceeds', { max: splitSourceQuantity.value }))
+      if (qty > Number(splitMaxQuantity.value || 0)) {
+        ElMessage.warning(t('inventory.splitQuantityExceeds', { max: splitMaxQuantity.value }))
         return
       }
       if (splitForm.value.owner_user_id == null) {
@@ -4299,6 +4305,7 @@ export default defineComponent({
       splitSourceId,
       splitSourceName,
       splitSourceQuantity,
+      splitMaxQuantity,
       splitForm,
       splitCanSubmit,
       openSplitDialog,
