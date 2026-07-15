@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel as PydanticModel
 
 from .....db_manage.database import DatabaseManager
-from .....db_manage.models.warehouse import WarehouseModel
+from .....db_manage.models.system.warehouse import WarehouseModel
 
 
 db = DatabaseManager()

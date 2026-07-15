@@ -17,7 +17,7 @@ import time
 from typing import Any, Dict, Optional
 
 from ....db_manage.database import DatabaseManager
-from ....db_manage.models.mercari_account import MercariAccountModel
+from ....db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
 from ....ssl_mitm_proxy.capture_config import (
     clear_aggregated_desired_prices_response_file,
     clear_item_get_response_file,

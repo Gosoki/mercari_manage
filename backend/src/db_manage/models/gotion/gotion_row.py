@@ -4,7 +4,7 @@
 import json
 from datetime import datetime, timezone
 from typing import Dict, Any, List
-from ..base_model import BaseModel
+from ...base_model import BaseModel
 
 
 class GotionRowModel(BaseModel):

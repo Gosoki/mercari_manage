@@ -6,7 +6,7 @@ HTTP 请求头以 JSON 形式存放在 value 列。
 
 import json
 from typing import Dict, Any, List, Optional
-from ..base_model import BaseModel
+from ...base_model import BaseModel
 
 
 class MercariAccountModel(BaseModel):

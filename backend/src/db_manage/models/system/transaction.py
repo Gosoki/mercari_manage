@@ -8,7 +8,7 @@ created_at：INTEGER，Unix 秒；存量库由 scripts/migrate_transactions_crea
 import time
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
-from ..base_model import BaseModel
+from ...base_model import BaseModel
 from .warehouse import WarehouseModel
 
 

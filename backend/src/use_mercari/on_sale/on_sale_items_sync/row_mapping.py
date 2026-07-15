@@ -5,7 +5,7 @@ import json
 import math
 import time
 from typing import Any, Dict, Optional
-from ....db_manage.models.on_sale_item import OnSaleItemModel
+from ....db_manage.models.on_sale_items.on_sale_item import OnSaleItemModel
 
 
 def _opt_int(v: Any) -> Optional[int]:

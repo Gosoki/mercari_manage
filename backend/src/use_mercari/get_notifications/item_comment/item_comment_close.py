@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from ....db_manage.models.mercari_account import MercariAccountModel
+from ....db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
 from ....web_drive.core.manager import get_web_drive_manager
 from ....web_drive.core.paths import mercari_automation_key
 

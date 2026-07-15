@@ -23,7 +23,7 @@ except Exception:
     pass
 
 from src.db_manage.database import DatabaseManager
-from src.db_manage.models.order_outbound_line import OrderOutboundLineModel
+from src.db_manage.models.orders.order_outbound_line import OrderOutboundLineModel
 from src.use_web.orders.units.order_goods_ratio import split_order_money_for_owner_user
 
 db = DatabaseManager()

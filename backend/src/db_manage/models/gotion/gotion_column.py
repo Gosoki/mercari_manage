@@ -3,7 +3,7 @@
 
 from datetime import datetime, timezone
 from typing import Dict, Any, List
-from ..base_model import BaseModel
+from ...base_model import BaseModel
 
 VALID_COLUMN_TYPES = {'text', 'number', 'select', 'tags', 'url', 'table_ref'}
 

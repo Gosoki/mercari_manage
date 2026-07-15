@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Any, Dict, Optional
 from ....db_manage.database import DatabaseManager
-from ....db_manage.models.todo_item import TodoItemModel
+from ....db_manage.models.todos.todo_item import TodoItemModel
 from ....ssl_mitm_proxy.capture_config import clear_shipping_info_response_file, clear_transaction_messages_response_file
 from ....web_drive.core.mitm_session import mitm_automation_browser
 from ....web_drive.core.paths import mercari_todo_key

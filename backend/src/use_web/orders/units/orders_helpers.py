@@ -6,7 +6,7 @@ from typing import List, Optional
 from fastapi import HTTPException
 
 from ....db_manage.database import DatabaseManager
-from ....db_manage.models.order_outbound_line import OrderOutboundLineModel
+from ....db_manage.models.orders.order_outbound_line import OrderOutboundLineModel
 
 db = DatabaseManager()
 

@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from ....auth import require_auth
 from ....db_manage.database import DatabaseManager
-from ....db_manage.models.system_log import SystemLogModel
+from ....db_manage.models.system.system_log import SystemLogModel
 
 db = DatabaseManager()
 
@@ -38,7 +38,7 @@ def _account_name_for_log(account_id: Optional[int]) -> Optional[str]:
     if account_id is None:
         return None
     try:
-        from ....db_manage.models.mercari_account import MercariAccountModel
+        from ....db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
         acc = MercariAccountModel.find_by_id(id=int(account_id))
         if acc is None:
             return None

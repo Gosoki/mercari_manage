@@ -111,7 +111,7 @@ def _legacy_paths_from_db_columns(images_json_raw) -> List[str]:
 
 
 def _query_inventory_with_joins(where_sql: str = "", params: tuple = ()) -> list[dict]:
-    from ....db_manage.models.warehouse import WarehouseModel
+    from ....db_manage.models.system.warehouse import WarehouseModel
     from ....use_mercari.inventory_counters import _combined_reserved_agg_subquery
 
     select_cols = ", ".join([f"p.[{c}]" for c in INVENTORY_COLUMNS])

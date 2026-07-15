@@ -19,8 +19,8 @@ from ..get_order.get_in_progress_order.get_order_list import (
 )
 from ..get_order.get_in_progress_order.get_order_info import apply_item_info_to_order
 from .sync_progress import make_sync_reporter
-from ...db_manage.models.mercari_account import MercariAccountModel
-from ...db_manage.models.order import OrderModel
+from ...db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
+from ...db_manage.models.orders.order import OrderModel
 
 
 def resolve_account_id_by_seller_id(seller_id_str: Optional[str]) -> Optional[int]:

@@ -196,7 +196,7 @@ class _QueryMixin:
         ]
         items = [dict(zip(keys, row)) for row in rows]
         if owner_user_id is not None and int(owner_user_id) > 0:
-            from ....use_web.orders.units.order_goods_ratio import (
+            from .....use_web.orders.units.order_goods_ratio import (
                 ensure_orders_ratio_stored,
                 owner_amt_by_order,
             )

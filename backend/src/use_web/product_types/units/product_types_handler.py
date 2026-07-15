@@ -3,7 +3,7 @@
 from fastapi import HTTPException
 from pydantic import BaseModel as PydanticModel
 from typing import Optional
-from ....db_manage.models.product_type import ProductTypeModel
+from ....db_manage.models.system.product_type import ProductTypeModel
 
 
 class ProductTypeCreate(PydanticModel):

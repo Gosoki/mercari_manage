@@ -5,7 +5,7 @@
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..base_model import BaseModel
+from ...base_model import BaseModel
 
 
 # 以下状态的订单不再占用待出库数量（与业务终态一致）

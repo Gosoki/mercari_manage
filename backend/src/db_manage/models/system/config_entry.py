@@ -5,7 +5,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from ..base_model import BaseModel
+from ...base_model import BaseModel
 
 
 class ConfigEntryModel(BaseModel):

@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 from fastapi import HTTPException
 
-from ....db_manage.models.mercari_account import MercariAccountModel
+from ....db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
 from .mercari_accounts_models import (
     ALLOWED_STATUS,
     _HEADER_FIELD_LABELS,

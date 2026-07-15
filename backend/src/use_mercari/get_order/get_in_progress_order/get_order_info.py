@@ -22,7 +22,7 @@ import time
 from typing import Any, Dict, Optional
 from urllib.parse import quote
 
-from ....db_manage.models.order import OrderModel
+from ....db_manage.models.orders.order import OrderModel
 from ....ssl_mitm_proxy.capture_config import (
     canonical_mercari_item_id,
     clear_transaction_evidence_response_file,

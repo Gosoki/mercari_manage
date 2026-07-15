@@ -18,7 +18,7 @@ import time
 from typing import Any, Dict, List, Optional, Sequence
 
 from ....db_manage.database import DatabaseManager
-from ....db_manage.models.mercari_account import MercariAccountModel
+from ....db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
 from ....web_drive.core.manager import EdgeWebDriveManager
 from ....web_drive.core.mitm_session import mitm_automation_browser
 from ....web_drive.core.paths import mercari_automation_key

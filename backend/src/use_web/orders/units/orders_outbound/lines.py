@@ -5,7 +5,7 @@ import time
 from typing import List
 from fastapi import Depends, HTTPException
 from .....auth import require_auth
-from .....db_manage.models.order_outbound_line import OrderOutboundLineModel
+from .....db_manage.models.orders.order_outbound_line import OrderOutboundLineModel
 from .....use_mercari.get_order.description_mgmt_ids import refresh_inventory_pending_outbound_qty
 from .....use_mercari.inventory_counters import (
     cascade_combined_child_deduction,

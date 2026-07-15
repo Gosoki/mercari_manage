@@ -23,8 +23,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from .db_manage.models.mercari_account import MercariAccountModel
-from .db_manage.models.system_log import SystemLogModel
+from .db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
+from .db_manage.models.system.system_log import SystemLogModel
 from .use_web.mercari_accounts.units.mercari_accounts_models import (
     AUTO_FETCH_TASK_KEYS,
     interval_to_seconds,

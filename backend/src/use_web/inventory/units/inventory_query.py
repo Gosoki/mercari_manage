@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import HTTPException
 
 from ....db_manage.database import DatabaseManager
-from ....db_manage.models.order_outbound_line import OrderOutboundLineModel
+from ....db_manage.models.orders.order_outbound_line import OrderOutboundLineModel
 from ....use_mercari.mgmt_id_cipher import decode_mgmt_id_cipher
 
 from .inventory_helpers import (

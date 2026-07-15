@@ -13,7 +13,7 @@ from ...get_order.mercari_item_get import fetch_mercari_item_get_in_browser_sess
 from ..on_sale_item_detail_sync import detail_sync_inventory_from_item_get_response
 from ..on_sale_sync_progress import make_on_sale_sync_reporter
 from ...sync.sync_data import _resolve_account_and_seller
-from ....db_manage.models.on_sale_item import OnSaleItemModel
+from ....db_manage.models.on_sale_items.on_sale_item import OnSaleItemModel
 from ....web_drive.core.mitm_session import mitm_automation_browser
 
 

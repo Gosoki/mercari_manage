@@ -8,7 +8,7 @@ from fastapi import Depends, HTTPException
 
 from ....auth import require_auth
 
-from ....db_manage.models.mercari_account import MercariAccountModel
+from ....db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
 from ...image_storage import delete_image_file
 from .mercari_accounts_helpers import (
     _ensure_seller_id_unique,

@@ -9,7 +9,7 @@ from pydantic import BaseModel as PydanticModel
 
 from ....auth import require_auth
 from ....db_manage.database import DatabaseManager
-from ....db_manage.models.talk_script import TalkScriptModel
+from ....db_manage.models.system.talk_script import TalkScriptModel
 
 db = DatabaseManager()
 

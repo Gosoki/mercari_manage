@@ -15,7 +15,7 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-from ....db_manage.models.mercari_account import MercariAccountModel
+from ....db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
 from ....ssl_mitm_proxy.capture_config import clear_item_get_response_file
 from ....web_drive.core.mitm_session import mitm_automation_browser
 from .item_comment_capture import (

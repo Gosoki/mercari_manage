@@ -51,7 +51,7 @@ def _get_category_positions(mapping_id: Optional[str]) -> dict:
     if not mapping_id:
         return {}
     try:
-        from .....db_manage.models.product_type_category_mapping import (
+        from .....db_manage.models.system.product_type_category_mapping import (
             ProductTypeCategoryMappingModel,
         )
         rows = ProductTypeCategoryMappingModel.find_all(

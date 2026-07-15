@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any, Dict
-from .....db_manage.models.todo_item import TodoItemModel
+from .....db_manage.models.todos.todo_item import TodoItemModel
 from .....web_drive.core.manager import get_web_drive_manager
 from .....web_drive.core.paths import mercari_todo_key
 

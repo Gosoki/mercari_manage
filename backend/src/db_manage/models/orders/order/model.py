@@ -2,7 +2,7 @@
 """订单表模型主类：模式定义（字段/索引）+ 组合聚合/查询 Mixin。"""
 
 from typing import Any, Dict, List
-from ...base_model import BaseModel
+from ....base_model import BaseModel
 from ._aggregate import _AggregateMixin
 from ._query import _QueryMixin
 

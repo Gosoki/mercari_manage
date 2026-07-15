@@ -10,7 +10,7 @@ from pydantic import BaseModel as PydanticModel
 
 from ....auth import require_auth
 from ....db_manage.database import DatabaseManager
-from ....db_manage.models.memo import MemoModel
+from ....db_manage.models.memos.memo import MemoModel
 from ...image_storage import (
     delete_image_file,
     is_base64_image,

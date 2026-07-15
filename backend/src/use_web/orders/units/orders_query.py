@@ -4,8 +4,8 @@ from typing import Optional
 
 from fastapi import HTTPException
 
-from ....db_manage.models.order import OrderModel
-from ....db_manage.models.order_outbound_line import OrderOutboundLineModel
+from ....db_manage.models.orders.order import OrderModel
+from ....db_manage.models.orders.order_outbound_line import OrderOutboundLineModel
 from ....use_mercari.get_to_du_list.transaction_detail._messages_store import (
     load_order_messages,
 )

@@ -7,7 +7,7 @@ model_name 记录生成向量的模型标识，换模型后旧向量自动视为
 """
 
 from typing import Dict, Any, List
-from ..base_model import BaseModel
+from ...base_model import BaseModel
 
 
 class ImageEmbeddingModel(BaseModel):

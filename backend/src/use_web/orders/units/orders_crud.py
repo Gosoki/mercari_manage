@@ -2,8 +2,8 @@
 """订单 CRUD 端点：创建 / 更新 / 删除。"""
 from fastapi import HTTPException
 
-from ....db_manage.models.order import OrderModel
-from ....db_manage.models.order_outbound_line import OrderOutboundLineModel
+from ....db_manage.models.orders.order import OrderModel
+from ....db_manage.models.orders.order_outbound_line import OrderOutboundLineModel
 from ....use_mercari.get_order.description_mgmt_ids import (
     refresh_inventory_pending_outbound_qty,
     sync_outbound_lines_for_order,

@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Set
 
 from fastapi import HTTPException
 
-from ....db_manage.models.on_sale_item import OnSaleItemModel
+from ....db_manage.models.on_sale_items.on_sale_item import OnSaleItemModel
 from ....web_drive.core.account_serial_queue import (
     queue_key_for_mercari_account,
     resolve_mercari_account_id,

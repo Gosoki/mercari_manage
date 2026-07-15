@@ -7,7 +7,7 @@
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..base_model import BaseModel
+from ...base_model import BaseModel
 
 
 # SELECT 列顺序（find_list / find_all_by_item_id 共用）

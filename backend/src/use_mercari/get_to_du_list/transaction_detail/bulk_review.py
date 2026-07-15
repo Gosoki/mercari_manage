@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from ....db_manage.models.todo_item import TodoItemModel
+from ....db_manage.models.todos.todo_item import TodoItemModel
 from ....web_drive.core.manager import get_web_drive_manager
 from ....web_drive.core.mitm_session import MercariLoginRequiredError, mitm_automation_browser
 from ....web_drive.core.paths import mercari_automation_key, mercari_todo_key

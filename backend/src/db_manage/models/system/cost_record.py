@@ -5,7 +5,7 @@
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
-from ..base_model import BaseModel
+from ...base_model import BaseModel
 from .warehouse import WarehouseModel
 
 

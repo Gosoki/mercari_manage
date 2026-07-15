@@ -28,7 +28,7 @@ _BINARY_TOKEN_RE = re.compile(r"^([◇◆]+)(?:\s*[*xX×]\s*(\d+))?$", re.UNICOD
 def get_cipher_mode() -> str:
     """读取当前编码模式：'binary' 或 'base5'（默认 base5）。"""
     try:
-        from ..db_manage.models.config_entry import ConfigEntryModel
+        from ..db_manage.models.system.config_entry import ConfigEntryModel
 
         v = (ConfigEntryModel.get_value(MGMT_CIPHER_MODE_KEY) or "").strip().lower()
     except Exception:  # noqa: BLE001

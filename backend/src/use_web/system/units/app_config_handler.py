@@ -6,8 +6,8 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from ....db_manage.models.config_entry import ConfigEntryModel
-from ....db_manage.models.mercari_account import MercariAccountModel
+from ....db_manage.models.system.config_entry import ConfigEntryModel
+from ....db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
 
 _K_SHIP_FROM = "listing_defaults_shipping_from_area_id"
 _K_SHIP_METHOD = "listing_defaults_shipping_method"

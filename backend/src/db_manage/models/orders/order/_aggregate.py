@@ -182,7 +182,7 @@ class _AggregateMixin:
         owner_user_id: int = 0,
         by_purchase_time: bool = False,
     ) -> Dict[str, Any]:
-        from ....use_web.orders.units.order_goods_ratio import (
+        from .....use_web.orders.units.order_goods_ratio import (
             ensure_orders_ratio_stored,
             owner_amt_by_order,
         )

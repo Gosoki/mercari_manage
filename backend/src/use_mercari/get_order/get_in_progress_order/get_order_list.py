@@ -25,7 +25,7 @@ import json
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from ....db_manage.models.order import OrderModel
+from ....db_manage.models.orders.order import OrderModel
 from ....ssl_mitm_proxy.capture_config import (
     clear_trading_list_response_file,
     read_trading_list_response,

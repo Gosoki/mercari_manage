@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from ...db_manage.database import DatabaseManager
-from ...db_manage.models.mercari_account import MercariAccountModel
+from ...db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
 from ...ssl_mitm_proxy.capture_config import clear_todolist_response_file
 from ...web_drive.core.mitm_session import mitm_automation_browser
 from ..sync.sync_progress import make_sync_reporter

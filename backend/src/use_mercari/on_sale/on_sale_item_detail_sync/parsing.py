@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from typing import Any, Dict, List, Optional, Tuple
-from ....db_manage.models.on_sale_item import OnSaleItemModel
+from ....db_manage.models.on_sale_items.on_sale_item import OnSaleItemModel
 from ...get_order.description_mgmt_ids import _extract_bundle_product_titles, _inventory_id_by_barcode, _inventory_id_exists, _is_bundle_order_description, parse_order_description_outbound_tokens, parse_order_description_outbound_tokens_with_quantity
 
 

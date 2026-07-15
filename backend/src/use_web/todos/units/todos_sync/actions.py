@@ -3,7 +3,7 @@
 
 from typing import Any, Dict, Optional
 from fastapi import HTTPException
-from .....db_manage.models.todo_item import TodoItemModel
+from .....db_manage.models.todos.todo_item import TodoItemModel
 from .....use_mercari.get_to_du_list.transaction_detail import SUPPORTED_REACTIONS, capture_qr_scanner_frame, click_change_shipping_method, confirm_change_shipping_method, confirm_shipping_selection, finalize_post_shipping, revise_shipping_after_qr, push_remote_camera_frame, read_post_shipping_confirm_info, send_message_reaction_by_index, send_transaction_message, start_select_shipping_class, submit_transaction_review
 from .....use_mercari.sync.sync_progress import clear_sync_progress
 from .....web_drive.core.account_serial_queue import queue_key_for_mercari_account, run_mercari_serial_async

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any, Dict, Optional
-from .....db_manage.models.todo_item import TodoItemModel
+from .....db_manage.models.todos.todo_item import TodoItemModel
 from .....web_drive.core.mitm_session import mitm_automation_browser
 from .....web_drive.core.paths import mercari_todo_key
 from ....sync.sync_progress import make_sync_reporter

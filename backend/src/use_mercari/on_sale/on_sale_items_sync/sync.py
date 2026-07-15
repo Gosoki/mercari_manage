@@ -7,7 +7,7 @@ from ...get_order.get_on_sale.on_sale_list import LISTINGS_PAGE_URL, capture_on_
 from ..on_sale_item_detail_sync import auto_fetch_details_for_inserted_items, relink_inventory_from_persisted_listing
 from ..on_sale_sync_progress import make_on_sale_sync_reporter
 from ...sync.sync_data import _resolve_account_and_seller
-from ....db_manage.models.on_sale_item import OnSaleItemModel
+from ....db_manage.models.on_sale_items.on_sale_item import OnSaleItemModel
 from ....ssl_mitm_proxy.capture_config import clear_on_sale_list_response_file
 from ....web_drive.core.mitm_session import mitm_automation_browser
 from .row_mapping import mercari_list_item_to_row, upsert_on_sale_item_row

@@ -3,7 +3,7 @@
 
 import re
 from typing import Any, Dict, List, Optional
-from ....db_manage.models.on_sale_item import OnSaleItemModel
+from ....db_manage.models.on_sale_items.on_sale_item import OnSaleItemModel
 from ....db_manage.database import DatabaseManager
 from ....ssl_mitm_proxy.capture_config import canonical_mercari_item_id
 

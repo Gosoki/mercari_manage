@@ -4,8 +4,8 @@
 import time
 from typing import List
 from fastapi import HTTPException
-from .....db_manage.models.order import OrderModel
-from .....db_manage.models.order_outbound_line import OrderOutboundLineModel
+from .....db_manage.models.orders.order import OrderModel
+from .....db_manage.models.orders.order_outbound_line import OrderOutboundLineModel
 from .....use_mercari.get_order.description_mgmt_ids import refresh_inventory_pending_outbound_qty
 from .....use_mercari.inventory_counters import cascade_combined_child_deduction
 from ..orders_helpers import db

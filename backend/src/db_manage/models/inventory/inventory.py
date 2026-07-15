@@ -5,8 +5,8 @@
 
 import json
 from typing import Dict, Any, List, Optional
-from ..base_model import BaseModel
-from .warehouse import WarehouseModel
+from ...base_model import BaseModel
+from ..system.warehouse import WarehouseModel
 
 
 class InventoryModel(BaseModel):
@@ -316,7 +316,7 @@ class InventoryModel(BaseModel):
             return  # 已无遗留列，无需处理（含全新库）
         if 'images_json' not in cols:
             db.add_column(tn, {'name': 'images_json', 'type': 'TEXT'})
-        from ...use_web.image_storage import is_base64_image, save_base64_image
+        from ....use_web.image_storage import is_base64_image, save_base64_image
 
         sel = ['id', 'images_json'] + legacy
         col_sql = ', '.join(f'[{c}]' for c in sel)

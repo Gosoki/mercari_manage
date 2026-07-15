@@ -15,7 +15,7 @@ import time
 from typing import Any, Dict, Optional
 
 from ..db_manage.database import DatabaseManager
-from ..db_manage.models.on_sale_item import OnSaleItemModel
+from ..db_manage.models.on_sale_items.on_sale_item import OnSaleItemModel
 from .get_order.description_mgmt_ids import (
     _extract_bundle_product_titles,
     _inventory_id_by_barcode,

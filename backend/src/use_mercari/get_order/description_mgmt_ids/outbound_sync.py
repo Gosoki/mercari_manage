@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 from ....db_manage.database import DatabaseManager
-from ....db_manage.models.order_outbound_line import TERMINAL_ORDER_STATUSES, OrderOutboundLineModel
+from ....db_manage.models.orders.order_outbound_line import TERMINAL_ORDER_STATUSES, OrderOutboundLineModel
 from ._common import _normalize_int_id, _normalize_match_text
 from .inventory_resolve import _extract_bundle_product_titles, _inventory_id_by_barcode, _inventory_id_exists, _is_bundle_order_description, _resolve_inventory_ids_by_bundle_title
 from .parsing import parse_order_description_outbound_tokens_with_quantity

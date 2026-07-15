@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-from ....db_manage.models.mercari_account import MercariAccountModel
+from ....db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
 from ....web_drive.core.account_serial_queue import (
     queue_key_for_mercari_account,
     run_mercari_serial_async,

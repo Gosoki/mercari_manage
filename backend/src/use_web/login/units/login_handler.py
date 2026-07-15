@@ -10,7 +10,7 @@ from pydantic import BaseModel as PydanticModel
 
 from ....auth import create_access_token
 from ....db_manage.database import DatabaseManager
-from ....db_manage.models.user import UserModel
+from ....db_manage.models.system.user import UserModel
 
 db = DatabaseManager()
 

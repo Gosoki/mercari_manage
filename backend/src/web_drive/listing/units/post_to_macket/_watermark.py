@@ -48,7 +48,7 @@ def _account_name(account_id: Optional[int]) -> Optional[str]:
     if account_id is None:
         return None
     try:
-        from src.db_manage.models.mercari_account import MercariAccountModel
+        from src.db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
 
         acc = MercariAccountModel.find_by_id(id=int(account_id))
         if acc is None:
@@ -64,7 +64,7 @@ def account_avatar_path(account_id: Optional[int]) -> Optional[str]:
     if account_id is None:
         return None
     try:
-        from src.db_manage.models.mercari_account import MercariAccountModel
+        from src.db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
 
         acc = MercariAccountModel.find_by_id(id=int(account_id))
         if acc is None:

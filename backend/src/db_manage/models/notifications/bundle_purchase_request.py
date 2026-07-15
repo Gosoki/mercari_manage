@@ -14,7 +14,7 @@
 
 from typing import Any, Dict, List
 
-from ..base_model import BaseModel
+from ...base_model import BaseModel
 
 
 class BundlePurchaseRequestModel(BaseModel):

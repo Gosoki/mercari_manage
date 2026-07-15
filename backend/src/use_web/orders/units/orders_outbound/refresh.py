@@ -3,7 +3,7 @@
 
 import re
 from fastapi import HTTPException
-from .....db_manage.models.order import OrderModel
+from .....db_manage.models.orders.order import OrderModel
 from .....use_mercari.get_order.get_in_progress_order.get_order_info import apply_item_info_to_order
 from .....use_mercari.sync.sync_data import resolve_account_id_by_seller_id
 from .....use_mercari.sync.sync_progress import clear_sync_progress, get_sync_progress

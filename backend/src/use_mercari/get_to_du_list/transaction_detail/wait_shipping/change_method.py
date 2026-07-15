@@ -6,7 +6,7 @@ import asyncio
 import logging
 import time
 from typing import Any, Dict, List, Optional
-from .....db_manage.models.todo_item import TodoItemModel
+from .....db_manage.models.todos.todo_item import TodoItemModel
 from .....web_drive.core.mitm_session import mitm_automation_browser
 from .....web_drive.core.paths import mercari_todo_key
 from ....sync.sync_progress import make_sync_reporter
