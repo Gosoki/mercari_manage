@@ -14,6 +14,7 @@ from .models import (
     UserModel,
     CostRecordModel,
     CostExpenseModel,
+    SettlementRecordModel,
     OrderModel,
     OrderOutboundLineModel,
     MercariAccountModel,
@@ -574,6 +575,7 @@ class DBManager:
             TransactionModel, # 依赖 inventory, warehouses
             CostRecordModel,  # 依赖 warehouses（可为空）
             CostExpenseModel,  # 成本支出
+            SettlementRecordModel,  # 结算记录（结算快照 + 已结区间）
             OrderModel,       # 订单管理
             OrderOutboundLineModel,  # 订单解析出的待出库明细（依赖 orders / inventory 逻辑）
             MercariAccountModel,  # 煤炉账号

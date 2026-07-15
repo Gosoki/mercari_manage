@@ -1,4 +1,4 @@
-import { defineComponent, computed, ref } from 'vue'
+import { defineComponent, computed, onMounted, ref } from 'vue'
 import { ElMessage } from '@/utils/notify'
 import { useI18n } from 'vue-i18n'
 import { settlementApi } from '@/api/index.js'
@@ -48,9 +48,16 @@ export default defineComponent({
     const exchangeRate = ref(null)
 
     const rows = ref([])
-    const overall = ref({ order_count: 0, sum_amount: 0, sum_service_fee: 0, sum_shipping_fee: 0, net_income: 0 })
+    const overall = ref({ order_count: 0, sum_amount: 0, sum_service_fee: 0, sum_shipping_fee: 0, packaging: 0, net_income: 0 })
     const assignedNet = ref(0)
     const unassignedNet = ref(0)
+
+    // 结算记录 & 已结算区间（用于禁选已结算天数）
+    const saving = ref(false)
+    const settledRanges = ref([])
+    const records = ref([])
+    const detailVisible = ref(false)
+    const detailRecord = ref(null)
 
     const rate = computed(() => Math.max(0, Number(exchangeRate.value) || 0))
     const hasRate = computed(() => rate.value > 0)
@@ -82,10 +89,10 @@ export default defineComponent({
     function rowSubtotalText(row) {
       const amount = rowRawAmount(row)
       if (row.currency === 'CNY') {
-        if (!hasRate.value) return `￥${formatCny(amount)} ${t('system.settlementNeedRate')}`
-        return `￥${formatCny(amount)} ≈ ¥${formatYen(Math.round(amount * rate.value))}`
+        if (!hasRate.value) return `CN¥${formatCny(amount)} ${t('system.settlementNeedRate')}`
+        return `CN¥${formatCny(amount)} ≈ JP¥${formatYen(Math.round(amount * rate.value))}`
       }
-      return `¥${formatYen(amount)}`
+      return `JP¥${formatYen(amount)}`
     }
     function tableTotalJpy(list) {
       return Math.round((list || []).reduce((a, r) => a + rowJpy(r), 0))
@@ -95,6 +102,12 @@ export default defineComponent({
     }
     function removeRow(listRef, index) {
       listRef.value.splice(index, 1)
+    }
+    // 切到日元时单价取整（日元无小数）
+    function onCurrencyChange(row) {
+      if (row.currency !== 'CNY') {
+        row.unit_price = Math.round(Number(row.unit_price) || 0)
+      }
     }
     const addConsumable = () => addRow(consumables)
     const removeConsumable = (index) => removeRow(consumables, index)
@@ -141,6 +154,13 @@ export default defineComponent({
       }
     })
 
+    // 结算区间秒：起始日 0 点 ~ 结束日 23:59:59（含结束当天整天）
+    function rangeSeconds() {
+      const start = Math.floor(Number(dateRange.value[0]) / 1000)
+      const end = Math.floor(Number(dateRange.value[1]) / 1000) + 86399
+      return { start, end }
+    }
+
     async function load() {
       if (dateRange.value?.length !== 2) {
         ElMessage.warning(t('system.settlementSelectDate'))
@@ -148,10 +168,7 @@ export default defineComponent({
       }
       loading.value = true
       try {
-        const params = {
-          start: Math.floor(Number(dateRange.value[0]) / 1000),
-          end: Math.floor(Number(dateRange.value[1]) / 1000),
-        }
+        const params = rangeSeconds()
         const res = await settlementApi.summary(params)
         rows.value = Array.isArray(res?.rows) ? res.rows : []
         overall.value = res?.overall || overall.value
@@ -169,6 +186,105 @@ export default defineComponent({
         loading.value = false
       }
     }
+
+    function formatDate(sec) {
+      if (!sec) return '-'
+      const d = new Date(Number(sec) * 1000)
+      const p = (n) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+    }
+
+    // 禁选已结算天数：候选日的本地 0 点秒落在任一已结区间 [start_date, end_date] 内则禁用
+    function disabledDate(date) {
+      const sec = Math.floor(date.getTime() / 1000)
+      return (settledRanges.value || []).some(
+        (r) => sec >= Number(r.start_date) && sec <= Number(r.end_date)
+      )
+    }
+
+    async function loadSettledRanges() {
+      try {
+        const res = await settlementApi.settledRanges()
+        settledRanges.value = Array.isArray(res?.ranges) ? res.ranges : []
+      } catch {
+        settledRanges.value = []
+      }
+    }
+
+    async function loadRecords() {
+      try {
+        const res = await settlementApi.listRecords()
+        records.value = Array.isArray(res?.items) ? res.items : []
+      } catch {
+        records.value = []
+      }
+    }
+
+    async function saveSettlement() {
+      if (dateRange.value?.length !== 2) {
+        ElMessage.warning(t('system.settlementSelectDate'))
+        return
+      }
+      if (!loaded.value || !tableRows.value.length) {
+        ElMessage.warning(t('system.settlementQueryFirst'))
+        return
+      }
+      const payload = {
+        ...rangeSeconds(),
+        exchange_rate: hasRate.value ? rate.value : null,
+        consumables: consumables.value,
+        equipments: equipments.value,
+        rows: tableRows.value.map((r) => ({
+          owner_user_id: r.owner_user_id,
+          owner_name: r.owner_name,
+          order_count: r.order_count,
+          sum_amount: r.sum_amount,
+          sum_service_fee: r.sum_service_fee,
+          sum_shipping_fee: r.sum_shipping_fee,
+          packaging: r.packaging,
+          net_income: r.net_income,
+          consumable_share: r.consumable_share,
+          equipment_ratio: ratioMap.value[r.owner_user_id] ?? null,
+          equipment_share: r.equipment_share,
+          final_amount: r.final_amount,
+          final_amount_cny: r.final_amount_cny,
+        })),
+        overall: overall.value,
+        assigned_net_income: assignedNet.value,
+        consumable_total: consumableTotalJpy.value,
+        equipment_total: equipmentTotalJpy.value,
+        final_total: totals.value.final_amount,
+      }
+      saving.value = true
+      try {
+        await settlementApi.saveRecord(payload)
+        ElMessage.success(t('system.settlementSaveSuccess'))
+        await Promise.all([loadSettledRanges(), loadRecords()])
+      } finally {
+        saving.value = false
+      }
+    }
+
+    function openDetail(row) {
+      detailRecord.value = row
+      detailVisible.value = true
+    }
+
+    // 明细弹窗里物料行的币种标签（不依赖当前汇率）
+    function currencyLabel(cur) {
+      return cur === 'CNY' ? t('system.settlementCnyUnit') : t('system.settlementRateJpyUnit')
+    }
+
+    async function removeRecord(id) {
+      await settlementApi.deleteRecord(id)
+      ElMessage.success(t('system.settlementDeleteSuccess'))
+      await Promise.all([loadSettledRanges(), loadRecords()])
+    }
+
+    onMounted(() => {
+      loadSettledRanges()
+      loadRecords()
+    })
 
     return {
       t,
@@ -192,11 +308,23 @@ export default defineComponent({
       formatCny,
       displayName,
       rowSubtotalText,
+      onCurrencyChange,
       addConsumable,
       removeConsumable,
       addEquipment,
       removeEquipment,
       load,
+      saving,
+      settledRanges,
+      records,
+      detailVisible,
+      detailRecord,
+      openDetail,
+      currencyLabel,
+      formatDate,
+      disabledDate,
+      saveSettlement,
+      removeRecord,
     }
   },
 })

@@ -9,6 +9,7 @@ from .system.transaction import TransactionModel
 from .system.user import UserModel
 from .system.cost_record import CostRecordModel
 from .system.cost_expense import CostExpenseModel
+from .system.settlement_record import SettlementRecordModel
 from .system.product_type_category_mapping import ProductTypeCategoryMappingModel
 from .system.config_entry import ConfigEntryModel
 from .system.talk_script import TalkScriptModel
@@ -38,6 +39,7 @@ __all__ = [
     'UserModel',
     'CostRecordModel',
     'CostExpenseModel',
+    'SettlementRecordModel',
     'OrderModel',
     'MercariAccountModel',
     'OnSaleItemModel',

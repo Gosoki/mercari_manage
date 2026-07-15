@@ -17,10 +17,19 @@
 .summary-hint { margin-top: 12px; font-size: 12px; color: var(--el-text-color-secondary); }
 
 .cost-card { margin-bottom: 16px; border-radius: 8px; }
+.records-card { margin-top: 16px; border-radius: 8px; }
+.detail-desc { margin-bottom: 16px; }
+.detail-section-title { font-size: 14px; font-weight: 600; margin: 16px 0 8px; color: var(--el-text-color-primary); }
+.detail-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 900px) { .detail-two-col { grid-template-columns: 1fr; } }
 .cost-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .cost-title { font-size: 15px; font-weight: 600; color: var(--el-text-color-primary); }
 .cost-tip { font-size: 12px; color: var(--el-text-color-secondary); margin-right: auto; }
 .fixed-name { font-weight: 600; color: var(--el-text-color-primary); }
+.cost-card .currency-select { width: 100%; }
+/* 防止表格单元格把下拉框右侧裁掉 */
+.cost-card :deep(.el-table .cell) { overflow: visible; }
+.cost-card :deep(.currency-select .el-select__wrapper) { min-height: 28px; }
 .cost-foot {
   display: flex;
   align-items: center;

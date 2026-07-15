@@ -16,6 +16,9 @@ from .....db_manage.models.orders.order import OrderModel
 
 _db = DatabaseManager()
 
+# 结算仅统计「已完成」订单（Mercari 取引完了，与订单管理「已完成」筛选一致）
+COMPLETED_STATUS = "done"
+
 
 def _time_col(by_purchase_time: bool) -> str:
     """与 OrderModel._build_list_filter 一致的时间列口径。"""
@@ -31,7 +34,7 @@ def _list_owners_in_range(
     end_ts: Optional[int],
     by_purchase_time: bool,
 ) -> List[Dict[str, Any]]:
-    """列出该时间段内、有非取消订单商品的归属人（去重）。"""
+    """列出该时间段内、有「已完成」订单商品的归属人（去重）。"""
     tcol = _time_col(by_purchase_time)
     sql = f"""
         SELECT DISTINCT p.[owner_user_id],
@@ -40,10 +43,10 @@ def _list_owners_in_range(
         JOIN [order_outbound_lines] l ON l.[order_no] = o.[order_no]
         JOIN [inventory] p ON p.[id] = l.[inventory_id]
         LEFT JOIN [users] u ON u.[id] = p.[owner_user_id]
-        WHERE o.[status] != 'cancelled'
+        WHERE o.[status] = ?
           AND p.[owner_user_id] IS NOT NULL
     """
-    params: List[Any] = []
+    params: List[Any] = [COMPLETED_STATUS]
     if start_ts is not None:
         sql += f" AND {tcol} >= ?"
         params.append(int(start_ts))
@@ -78,7 +81,7 @@ def settlement_summary(
 
     - rows: 每个归属人的 order_count / sum_amount / sum_service_fee /
       sum_shipping_fee / net_income（净收益，口径与订单管理一致）。
-    - overall: 该时段全部非取消订单的真实合计（含无归属部分，用于对账）。
+    - overall: 该时段全部「已完成」订单的真实合计（含无归属部分，用于对账）。
     - assigned_net_income: 各归属人净收益之和。
     - unassigned_net_income: overall 净收益 - 已归属净收益（无归属商品部分）。
     """
@@ -89,6 +92,7 @@ def settlement_summary(
     for ow in owners:
         oid = int(ow["owner_user_id"])
         agg = OrderModel.aggregate_sums(
+            status=COMPLETED_STATUS,
             start_ts=start,
             end_ts=end,
             owner_user_id=oid,
@@ -100,6 +104,7 @@ def settlement_summary(
         # net_income 已扣除包材，此处仅单独返回用于展示，不再二次扣减。
         packaging = int(
             OrderModel.aggregate_packaging_expense_yen(
+                status=COMPLETED_STATUS,
                 start_ts=start,
                 end_ts=end,
                 owner_user_id=oid,
@@ -124,6 +129,7 @@ def settlement_summary(
     rows.sort(key=lambda r: r["net_income"], reverse=True)
 
     overall = OrderModel.aggregate_sums(
+        status=COMPLETED_STATUS,
         start_ts=start,
         end_ts=end,
         by_purchase_time=by_purchase_time,
@@ -131,6 +137,7 @@ def settlement_summary(
     overall_net = int(overall.get("sum_net_income") or 0)
     overall_packaging = int(
         OrderModel.aggregate_packaging_expense_yen(
+            status=COMPLETED_STATUS,
             start_ts=start,
             end_ts=end,
             by_purchase_time=by_purchase_time,
