@@ -19,6 +19,7 @@ from .mercari_accounts_helpers import (
     _norm_required_text,
     _norm_seller_id,
     _normalize_is_open,
+    _validate_platform,
     _validate_status,
 )
 from .mercari_accounts_models import (
@@ -98,6 +99,7 @@ async def create_mercari_account(
     user: dict = Depends(require_auth),
 ):
     _validate_status(data.status)
+    platform = _validate_platform(data.platform)
     value_json = _value_json_for_create(data)
     name = _norm_required_text(data.account_name, "账号名称")
     lid = (data.login_id or "").strip() or name
@@ -111,10 +113,11 @@ async def create_mercari_account(
     rl = 1 if _normalize_is_open(data.auto_fetch_relist) else 0
     pause_s, pause_e = _norm_pause_window(data.pause_start_time, data.pause_end_time)
     sid = _norm_seller_id(data.seller_id)
-    # 卖家 ID 全表唯一：同一煤炉卖家重复建号会导致重复同步/重复补挂
-    _ensure_seller_id_unique(sid)
+    # 卖家 ID 同平台内唯一：同平台同卖家重复建号会导致重复同步/重复补挂
+    _ensure_seller_id_unique(sid, platform=platform)
     kwargs = dict(
         account_name=name,
+        platform=platform,
         login_id=lid,
         seller_id=sid,
         avatar=(data.avatar or "").strip() or None,
@@ -147,12 +150,16 @@ def update_mercari_account(aid: int, data: MercariAccountUpdate):
 
     if data.account_name is not None:
         item.account_name = _norm_required_text(data.account_name, "账号名称")
+    if data.platform is not None:
+        item.platform = _validate_platform(data.platform)
+    # 生效平台：本次若改了平台用新值，否则用记录原平台（供卖家 ID 唯一性按平台隔离）
+    eff_platform = _validate_platform(getattr(item, "platform", None) or "mercari")
     if data.login_id is not None:
         item.login_id = (data.login_id or "").strip() or item.account_name
     if data.seller_id is not None:
         new_sid = _norm_seller_id(data.seller_id)
-        # 卖家 ID 全表唯一（排除自身）：防止把已有账号的卖家 ID 改到另一条记录上
-        _ensure_seller_id_unique(new_sid, exclude_id=aid)
+        # 卖家 ID 同平台内唯一（排除自身）：防止把同平台已有卖家 ID 改到另一条记录上
+        _ensure_seller_id_unique(new_sid, exclude_id=aid, platform=eff_platform)
         item.seller_id = new_sid
     if data.avatar is not None:
         new_avatar = (data.avatar or "").strip() or None

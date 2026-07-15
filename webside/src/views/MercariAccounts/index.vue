@@ -14,11 +14,16 @@
                 />
                 <div class="card-title">{{ row.account_name || '-' }}</div>
               </div>
-              <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small" effect="light">
-                {{ row.status === 'active' ? t('mercariAccounts.enabled') : t('mercariAccounts.disabled') }}
-              </el-tag>
+              <div class="card-header-tags">
+                <el-tag :type="platformTagType(row.platform)" size="small" effect="plain">
+                  {{ platformName(row.platform) }}
+                </el-tag>
+                <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small" effect="light">
+                  {{ row.status === 'active' ? t('mercariAccounts.enabled') : t('mercariAccounts.disabled') }}
+                </el-tag>
+              </div>
             </div>
-            <div class="card-item"><span>{{ t('mercariAccounts.platformLabel') }}</span>{{ row.value?.x_platform || '-' }}</div>
+            <div class="card-item"><span>{{ t('mercariAccounts.platformLabel') }}</span>{{ platformName(row.platform) }}</div>
             <div class="card-item"><span>{{ t('mercariAccounts.sellerIdLabel') }}</span>{{ row.seller_id || '-' }}</div>
             <div class="card-item">
               <span>{{ t('mercariAccounts.autoFetchLabel') }}</span>
@@ -81,14 +86,33 @@
     </el-card>
 
     <el-dialog
+      v-model="platformPickerVisible"
+      :title="t('mercariAccounts.pickPlatformTitle')"
+      width="420px"
+      destroy-on-close
+      class="mercari-dialog"
+    >
+      <div class="platform-picker">
+        <div
+          v-for="opt in PLATFORM_OPTIONS"
+          :key="opt.value"
+          class="platform-picker-card"
+          @click="pickPlatform(opt.value)"
+        >
+          <el-tag :type="opt.tagType" size="large" effect="plain">{{ t(opt.labelKey) }}</el-tag>
+        </div>
+      </div>
+    </el-dialog>
+
+    <el-dialog
       v-model="dialogVisible"
-      :title="form.id ? t('mercariAccounts.editDialogTitle') : t('mercariAccounts.addDialogTitle')"
+      :title="dialogTitle"
       width="620px"
       top="6vh"
       destroy-on-close
       class="mercari-dialog"
     >
-      <p v-if="!form.id" class="form-intro-tip">
+      <p v-if="!form.id && form.platform === 'mercari'" class="form-intro-tip">
         {{ t('mercariAccounts.formIntroTip') }}
       </p>
       <el-form :model="form" :rules="formRules" ref="formRef" label-width="120px" class="mercari-form">
@@ -125,7 +149,7 @@
             <div v-else class="avatar-placeholder">{{ t('mercariAccounts.avatarPlaceholder') }}</div>
           </div>
         </div>
-        <el-form-item label-width="120px">
+        <el-form-item v-if="form.platform === 'mercari'" label-width="120px">
           <el-button
             type="primary"
             plain
@@ -195,21 +219,28 @@
           </el-popconfirm>
           <div class="mercari-dialog-footer__actions">
             <el-button
-              v-if="!form.id"
+              v-if="!form.id && form.platform === 'mercari'"
               plain
               :loading="browserLoadingKeys.has(MERCARI_PREPARE_KEY)"
               @click="openPrepareLoginBrowser"
             >{{ t('mercariAccounts.openLoginBrowser') }}</el-button>
-            <el-button v-if="!form.id" plain @click="onFetchUserInfoPlaceholder">{{ t('mercariAccounts.fetchUserInfo') }}</el-button>
             <el-button
-              v-if="form.id"
+              v-if="!form.id && form.platform === 'yahoo'"
+              type="warning"
+              plain
+              :loading="browserLoadingKeys.has(YAHOO_PREPARE_KEY)"
+              @click="openYahooLoginBrowser"
+            >{{ t('mercariAccounts.openYahooLoginBrowser') }}</el-button>
+            <el-button v-if="!form.id && form.platform === 'mercari'" plain @click="onFetchUserInfoPlaceholder">{{ t('mercariAccounts.fetchUserInfo') }}</el-button>
+            <el-button
+              v-if="form.id && form.platform === 'mercari'"
               type="success"
               plain
               :loading="syncingIds.has(form.id)"
               @click="fetchHistoryFromForm"
             >{{ t('mercariAccounts.fetchHistory') }}</el-button>
             <el-button
-              v-if="form.id"
+              v-if="form.id && form.platform === 'mercari'"
               type="warning"
               plain
               :loading="cookieInjectKeys.has(browserKeyFor(form.id))"

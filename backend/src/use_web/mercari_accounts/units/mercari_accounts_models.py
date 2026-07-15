@@ -6,6 +6,9 @@ from pydantic import BaseModel as PydanticModel, Field
 
 
 ALLOWED_STATUS = {"active", "disabled"}
+# 所属市集平台：mercari（煤炉，默认）/ yahoo（Yahoo!フリマ，原 PayPayフリマ）
+ALLOWED_PLATFORMS = frozenset({"mercari", "yahoo"})
+DEFAULT_PLATFORM = "mercari"
 # 前端主选项 15/30/1H/3H/6H；保留旧值以便已存数据校验通过
 ALLOWED_FETCH_INTERVALS = frozenset({"15", "30", "60", "3h", "6h", "10", "12h", "24h"})
 
@@ -76,6 +79,8 @@ _HEADER_FIELD_LABELS = [
 
 class MercariAccountCreate(PydanticModel):
     account_name: str
+    # 所属市集平台：mercari（默认）/ yahoo
+    platform: str = "mercari"
     """省略或全空时存 {}，后续可通过 MITM 等写入完整请求头。"""
     value: Optional[Dict[str, Any]] = None
     login_id: Optional[str] = None
@@ -101,6 +106,7 @@ class MercariAccountCreate(PydanticModel):
 
 class MercariAccountUpdate(PydanticModel):
     account_name: Optional[str] = None
+    platform: Optional[str] = None
     login_id: Optional[str] = None
     seller_id: Optional[str] = None
     avatar: Optional[str] = None

@@ -30,6 +30,13 @@ class MercariAccountModel(BaseModel):
                 'not_null': True,
                 'default': None,
             },
+            # 所属市集平台：'mercari'（煤炉，默认）/ 'yahoo'（Yahoo!フリマ）。
+            # 统一账号表按平台区分；历史数据经 ensure_table_exists 自动补列并回填 'mercari'。
+            'platform': {
+                'type': 'TEXT',
+                'not_null': True,
+                'default': "'mercari'",
+            },
             'login_id': {
                 'type': 'TEXT',
                 'not_null': True,
@@ -308,6 +315,7 @@ class MercariAccountModel(BaseModel):
             {'name': 'idx_mercari_accounts_login', 'columns': ['login_id']},
             {'name': 'idx_mercari_accounts_seller_id', 'columns': ['seller_id']},
             {'name': 'idx_mercari_accounts_status', 'columns': ['status']},
+            {'name': 'idx_mercari_accounts_platform', 'columns': ['platform']},
         ]
 
     @classmethod
@@ -331,17 +339,18 @@ class MercariAccountModel(BaseModel):
 
         total = db.execute_query(f"SELECT COUNT(*) {base_sql}", tuple(params))[0][0]
         select_sql = f"""
-            SELECT m.id, m.account_name, m.login_id, m.seller_id, m.avatar, m.login_password, m.status, m.remark, m.[value], m.is_open, m.fetch_interval, m.auto_fetch_last_at, m.auto_fetch_order_list, m.auto_fetch_on_sale, m.auto_fetch_todos, m.auto_fetch_notifications, m.auto_fetch_order_list_interval, m.auto_fetch_on_sale_interval, m.auto_fetch_todos_interval, m.auto_fetch_notifications_interval, m.auto_fetch_relist, m.pause_start_time, m.pause_end_time
+            SELECT m.id, m.account_name, m.platform, m.login_id, m.seller_id, m.avatar, m.login_password, m.status, m.remark, m.[value], m.is_open, m.fetch_interval, m.auto_fetch_last_at, m.auto_fetch_order_list, m.auto_fetch_on_sale, m.auto_fetch_todos, m.auto_fetch_notifications, m.auto_fetch_order_list_interval, m.auto_fetch_on_sale_interval, m.auto_fetch_todos_interval, m.auto_fetch_notifications_interval, m.auto_fetch_relist, m.pause_start_time, m.pause_end_time
             {base_sql}
             ORDER BY m.id ASC
             LIMIT ? OFFSET ?
         """
-        keys = ['id', 'account_name', 'login_id', 'seller_id', 'avatar', 'login_password', 'status', 'remark', 'value', 'is_open', 'fetch_interval', 'auto_fetch_last_at', 'auto_fetch_order_list', 'auto_fetch_on_sale', 'auto_fetch_todos', 'auto_fetch_notifications', 'auto_fetch_order_list_interval', 'auto_fetch_on_sale_interval', 'auto_fetch_todos_interval', 'auto_fetch_notifications_interval', 'auto_fetch_relist', 'pause_start_time', 'pause_end_time']
+        keys = ['id', 'account_name', 'platform', 'login_id', 'seller_id', 'avatar', 'login_password', 'status', 'remark', 'value', 'is_open', 'fetch_interval', 'auto_fetch_last_at', 'auto_fetch_order_list', 'auto_fetch_on_sale', 'auto_fetch_todos', 'auto_fetch_notifications', 'auto_fetch_order_list_interval', 'auto_fetch_on_sale_interval', 'auto_fetch_todos_interval', 'auto_fetch_notifications_interval', 'auto_fetch_relist', 'pause_start_time', 'pause_end_time']
         rows = db.execute_query(select_sql, tuple(params + [page_size, (page - 1) * page_size]))
         items = []
         for row in rows:
             d = dict(zip(keys, row))
             d.pop('login_password', None)
+            d['platform'] = (d.get('platform') or 'mercari')
             raw = d.pop('value', None)
             d['value'] = cls._parse_value_json(raw)
             d['is_open'] = 1 if d.get('is_open') else 0

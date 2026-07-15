@@ -6,7 +6,9 @@ from fastapi import HTTPException
 
 from ....db_manage.models.mercari_accounts.mercari_account import MercariAccountModel
 from .mercari_accounts_models import (
+    ALLOWED_PLATFORMS,
     ALLOWED_STATUS,
+    DEFAULT_PLATFORM,
     _HEADER_FIELD_LABELS,
     normalize_interval,
 )
@@ -15,6 +17,14 @@ from .mercari_accounts_models import (
 def _validate_status(status: str):
     if status not in ALLOWED_STATUS:
         raise HTTPException(status_code=400, detail="账号状态错误")
+
+
+def _validate_platform(platform: str) -> str:
+    """校验并归一市集平台；空值回退默认 mercari。"""
+    p = (platform or "").strip() or DEFAULT_PLATFORM
+    if p not in ALLOWED_PLATFORMS:
+        raise HTTPException(status_code=400, detail="账号平台错误")
+    return p
 
 
 def _norm_required_text(value: str, field_name: str) -> str:
@@ -35,14 +45,22 @@ def _norm_seller_id(value: Optional[str]) -> Optional[str]:
     return text
 
 
-def _ensure_seller_id_unique(sid: Optional[str], exclude_id: Optional[int] = None) -> None:
-    """卖家 ID 全表唯一（空值不校验）：同一煤炉卖家重复建号会导致重复同步/重复补挂。
+def _ensure_seller_id_unique(
+    sid: Optional[str],
+    exclude_id: Optional[int] = None,
+    platform: str = DEFAULT_PLATFORM,
+) -> None:
+    """卖家 ID 同平台内唯一（空值不校验）：同一平台同卖家重复建号会导致重复同步/重复补挂。
 
+    唯一性按 ``platform`` 隔离——不同平台可存在相同 seller_id。
     ``exclude_id``：更新时排除自身记录。命中重复时抛 409。
     """
     if not sid:
         return
-    rows = MercariAccountModel.find_all(where="[seller_id] = ?", params=(sid,))
+    p = (platform or "").strip() or DEFAULT_PLATFORM
+    rows = MercariAccountModel.find_all(
+        where="[seller_id] = ? AND [platform] = ?", params=(sid, p)
+    )
     for r in rows:
         rid = getattr(r, "id", None)
         if exclude_id is not None and rid is not None and int(rid) == int(exclude_id):

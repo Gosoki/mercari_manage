@@ -1,4 +1,4 @@
-import { defineComponent, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { defineComponent, ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
@@ -20,6 +20,19 @@ export default defineComponent({
 
     /** 新增账号前共用的 WebDrive 会话键，与后端抓包/出品等约定一致 */
     const MERCARI_PREPARE_KEY = 'mercari_prepare'
+
+    // 雅虎（Yahoo!フリマ）新增账号预登录会话键 + 登录页 URL（复用通用 /sessions/open）
+    const YAHOO_PREPARE_KEY = 'yahoo_prepare'
+    const YAHOO_FLEA_LOGIN_URL = 'https://paypayfleamarket.yahoo.co.jp/'
+
+    // 支持的市集平台（与后端 ALLOWED_PLATFORMS 一致）
+    const PLATFORM_OPTIONS = [
+      { value: 'mercari', labelKey: 'mercariAccounts.platformMercari', tagType: 'danger' },
+      { value: 'yahoo', labelKey: 'mercariAccounts.platformYahoo', tagType: 'warning' },
+    ]
+    const platformName = (p) =>
+      t(p === 'yahoo' ? 'mercariAccounts.platformYahoo' : 'mercariAccounts.platformMercari')
+    const platformTagType = (p) => (p === 'yahoo' ? 'warning' : 'danger')
 
     function browserKeyFor(accountId) {
       return `mercari_${accountId}`
@@ -120,6 +133,7 @@ export default defineComponent({
     const createDefaultForm = () => ({
       id: null,
       account_name: '',
+      platform: 'mercari',
       seller_id: '',
       avatar: '',
       status: 'disabled',
@@ -189,13 +203,41 @@ export default defineComponent({
       openBrowserByKey(MERCARI_PREPARE_KEY, t('mercariAccounts.prepareLoginBrowserLabel'), { fresh: true })
     }
 
-    function openCreate() {
-      form.value = createDefaultForm()
-      dialogVisible.value = true
-      nextTick(() => {
-        openPrepareLoginBrowser()
+    // 雅虎新增账号：打开 Yahoo!フリマ 登录页由用户人工登录（复用通用 web_drive 会话）
+    function openYahooLoginBrowser() {
+      openBrowserByKey(YAHOO_PREPARE_KEY, t('mercariAccounts.yahooPrepareLoginBrowserLabel'), {
+        fresh: true,
+        startUrl: YAHOO_FLEA_LOGIN_URL,
       })
     }
+
+    // 平台选择弹框：点「添加账号」先选平台（煤炉/雅虎），再进入对应平台的建号弹框
+    const platformPickerVisible = ref(false)
+
+    function openCreate() {
+      platformPickerVisible.value = true
+    }
+
+    function pickPlatform(platform) {
+      platformPickerVisible.value = false
+      form.value = createDefaultForm()
+      form.value.platform = platform
+      dialogVisible.value = true
+      // 煤炉：沿用原「新增前登录」自动打开预登录浏览器；雅虎：由弹框内「打开雅虎登录浏览器」按钮触发
+      if (platform === 'mercari') {
+        nextTick(() => {
+          openPrepareLoginBrowser()
+        })
+      }
+    }
+
+    // 弹框标题随平台变化：新增/编辑 + 平台名
+    const dialogTitle = computed(() =>
+      t(
+        form.value.id ? 'mercariAccounts.editDialogTitleGeneric' : 'mercariAccounts.addDialogTitleGeneric',
+        { platform: platformName(form.value.platform) },
+      ),
+    )
 
     function onFetchUserInfoPlaceholder() {
       fetchSellerIdViaMitm()
@@ -245,6 +287,7 @@ export default defineComponent({
         ...createDefaultForm(),
         id: row.id,
         account_name: row.account_name || '',
+        platform: row.platform || 'mercari',
         seller_id: row.seller_id != null ? String(row.seller_id) : '',
         avatar: row.avatar || '',
         status: row.status || 'active',
@@ -265,6 +308,7 @@ export default defineComponent({
       const name = String(form.value.account_name || '').trim()
       const base = {
         account_name: name,
+        platform: form.value.platform || 'mercari',
         login_id: name,
         seller_id: String(form.value.seller_id || '').trim() || null,
         avatar: String(form.value.avatar || '').trim() || null,
@@ -338,7 +382,7 @@ export default defineComponent({
     const cookieInjectKeys = ref(new Set())
     const fetchSellerIdLoading = ref(false)
 
-    async function openBrowserByKey(accountKey, label, { fresh = false } = {}) {
+    async function openBrowserByKey(accountKey, label, { fresh = false, startUrl = null } = {}) {
       if (browserLoadingKeys.value.has(accountKey)) return
       const next = new Set(browserLoadingKeys.value)
       next.add(accountKey)
@@ -347,7 +391,9 @@ export default defineComponent({
         const res = await webDriveApi.openSession({
           account_key: accountKey,
           headless: false,
-          restore_tabs: true,
+          // 指定 start_url 时仅打开该单页（如雅虎登录页）；否则恢复该 profile 的历史标签
+          restore_tabs: startUrl ? false : true,
+          start_url: startUrl || undefined,
           fresh
         })
         const d = res.data || {}
@@ -587,6 +633,7 @@ export default defineComponent({
       t,
       MERCARI_HOME,
       MERCARI_PREPARE_KEY,
+      YAHOO_PREPARE_KEY,
       browserKeyFor,
       loading,
       submitting,
@@ -597,6 +644,12 @@ export default defineComponent({
       dialogVisible,
       formRef,
       statusOptions,
+      PLATFORM_OPTIONS,
+      platformName,
+      platformTagType,
+      platformPickerVisible,
+      pickPlatform,
+      dialogTitle,
       FETCH_TASKS,
       CUSTOM_INTERVAL,
       fetchIntervalOptions,
@@ -612,6 +665,7 @@ export default defineComponent({
       formRules,
       load,
       openPrepareLoginBrowser,
+      openYahooLoginBrowser,
       openCreate,
       onFetchUserInfoPlaceholder,
       sellerIdCaptureAccountKey,

@@ -99,6 +99,33 @@
   gap: 8px;
   min-width: 0;
 }
+.card-header-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.platform-picker {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+.platform-picker-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 12px;
+  border: 1px solid var(--el-border-color, #3a4658);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.platform-picker-card:hover {
+  border-color: var(--el-color-primary, #409eff);
+  transform: translateY(-2px);
+}
 .card-avatar {
   flex: none;
 }
