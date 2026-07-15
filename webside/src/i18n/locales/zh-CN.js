@@ -102,6 +102,7 @@ export default {
       transactions: "库存记录",
       costRecords: "库存包材",
       costExpenses: "包材使用记录",
+      settlement: "结算",
       warehouses: "仓库管理",
       categories: "游戏分类",
       productTypeMappings: "商品类型映射",

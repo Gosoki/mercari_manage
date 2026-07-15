@@ -249,6 +249,7 @@ const menuItems = [
       { path: '/system/transactions', titleKey: 'layout.menu.transactions', icon: 'List' },
       { path: '/system/cost-records', titleKey: 'layout.menu.costRecords', icon: 'Money' },
       { path: '/system/cost-expenses', titleKey: 'layout.menu.costExpenses', icon: 'Wallet' },
+      { path: '/system/settlement', titleKey: 'layout.menu.settlement', icon: 'Coin' },
       { path: '/system/warehouses', titleKey: 'layout.menu.warehouses', icon: 'OfficeBuilding' },
       { path: '/system/categories', titleKey: 'layout.menu.categories', icon: 'Collection' },
       { path: '/system/product-type-category-mappings', titleKey: 'layout.menu.productTypeMappings', icon: 'Connection' },

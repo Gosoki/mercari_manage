@@ -54,6 +54,7 @@ from .warehouses.API import router as warehouses_router
 from .categories.API import router as categories_router
 from .transactions.API import router as transactions_router
 from .product_type_category_mappings.API import router as ptcm_router
+from .settlement.API import router as settlement_router
 
 router = APIRouter()
 
@@ -104,3 +105,4 @@ router.include_router(
     prefix="/product-type-category-mappings",
     tags=["product-type-category-mappings"],
 )
+router.include_router(settlement_router, prefix="/settlement", tags=["settlement"])

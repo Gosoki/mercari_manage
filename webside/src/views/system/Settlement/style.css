@@ -1,0 +1,90 @@
+.search-card { margin-bottom: 16px; border-radius: 8px; }
+.search-left-group { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.search-actions { display: flex; justify-content: flex-end; }
+.summary-card { margin-bottom: 16px; border-radius: 8px; }
+.summary-grid { display: flex; flex-wrap: wrap; gap: 24px 40px; align-items: flex-end; }
+.summary-item { display: flex; flex-direction: column; gap: 6px; }
+.summary-label { font-size: 12px; color: var(--el-text-color-secondary); }
+.summary-value { font-size: 20px; font-weight: 600; color: var(--el-text-color-primary); }
+.summary-value.strong { color: var(--el-color-primary); }
+.summary-value.warn, .warn { color: var(--el-color-danger); }
+.consumable-item .consumable-input { width: 160px; }
+.summary-sub { font-size: 12px; color: var(--el-color-success); margin-top: 2px; }
+.rate-input-wrap { display: flex; align-items: center; gap: 6px; }
+.rate-input-wrap .rate-prefix,
+.rate-input-wrap .rate-suffix { font-size: 12px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.rate-input-wrap .rate-input { width: 110px; }
+.summary-hint { margin-top: 12px; font-size: 12px; color: var(--el-text-color-secondary); }
+
+.cost-card { margin-bottom: 16px; border-radius: 8px; }
+.cost-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.cost-title { font-size: 15px; font-weight: 600; color: var(--el-text-color-primary); }
+.cost-tip { font-size: 12px; color: var(--el-text-color-secondary); margin-right: auto; }
+.fixed-name { font-weight: 600; color: var(--el-text-color-primary); }
+.cost-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  font-size: 14px;
+}
+.cost-foot strong { font-size: 16px; color: var(--el-color-primary); font-variant-numeric: tabular-nums; }
+.cost-empty { color: var(--el-text-color-secondary); font-size: 13px; }
+
+.settlement-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  min-height: 120px;
+}
+.owner-card { border-radius: 10px; }
+.owner-card :deep(.el-card__body) { padding: 0; }
+.owner-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.owner-name { font-size: 16px; font-weight: 600; color: var(--el-text-color-primary); }
+.owner-orders {
+  font-size: 12px;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  padding: 2px 10px;
+  border-radius: 12px;
+}
+.owner-card-body { padding: 12px 18px; }
+.stat-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.stat-label { color: var(--el-text-color-secondary); }
+.stat-val { color: var(--el-text-color-primary); font-variant-numeric: tabular-nums; }
+.stat-val.minus { color: var(--el-text-color-regular); }
+.net-line { border-top: 1px dashed var(--el-border-color-lighter); margin-top: 2px; padding-top: 8px; }
+.net-line .stat-label { font-weight: 600; color: var(--el-text-color-primary); }
+.net-line .stat-val { font-weight: 600; }
+.ratio-line { padding: 4px 0; }
+.ratio-line .ratio-input { width: 90px; }
+.ratio-line :deep(.el-input__inner) { text-align: right; }
+.owner-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  background: var(--el-fill-color-light);
+}
+.foot-label { font-size: 13px; color: var(--el-text-color-secondary); }
+.foot-amounts { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.foot-val { font-size: 20px; font-weight: 700; color: var(--el-color-primary); font-variant-numeric: tabular-nums; }
+.foot-val-cny { font-size: 13px; color: var(--el-color-success); font-variant-numeric: tabular-nums; }
+.warn, .stat-val.warn, .foot-val.warn, .foot-val-cny.warn { color: var(--el-color-danger); }
+.cards-empty { grid-column: 1 / -1; }
